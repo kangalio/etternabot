@@ -1,0 +1,27 @@
+[package]
+name = "etternabot"
+version = "0.1.0"
+authors = ["james <jamesguessis@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+reqwest = "*"
+serde = "*"
+serde_json = "*"
+serde_derive = "*"
+lazy_static = "*"
+
+[dependencies.serenity]
+default-features = false
+features = [
+    "builder",
+    "client",
+    "framework",
+    "gateway",
+    "http",
+    "model",
+    "standard_framework",
+    "utils",
+    "rustls_backend",
+]
+version = "0.6"
