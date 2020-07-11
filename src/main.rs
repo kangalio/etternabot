@@ -1,78 +1,54 @@
-use serenity::client::Client;
-use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
-use serenity::model::gateway::Activity;
-use serenity::model::user::OnlineStatus;
-use serenity::prelude::{EventHandler, Context};
-use serenity::framework::standard::{
-    StandardFramework,
-    CommandResult,
-    Args,
-    macros::{
-        command,
-        group
-    }
-};
-
+mod commands;
+mod auth;
 mod api;
-mod config;
 
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate lazy_static;
+use serenity::{
+  framework::{
+    StandardFramework,
+    standard::macros::group,
+  },
+  model::{event::ResumedEvent, gateway::Ready},
+  prelude::*,
+};
+use log::{error, info};
 
-lazy_static! {
-    static ref KEY: String = api::login()
-        .expect("Unable to log in to Etterna Online api");
-}
-
-group!({
-    name: "general",
-    options: {},
-    commands: [user],
-});
+use commands::{
+  etterna::*,
+  utils::*,
+};
+use api::*;
 
 struct Handler;
 
 impl EventHandler for Handler {
-    fn ready(&self, ctx: Context, ready: Ready) {
-        println!("Connnected as {}#{}", ready.user.name, ready.user.discriminator);
-        ctx.set_presence(Some(Activity::playing("Etterna")), OnlineStatus::DoNotDisturb);
-    }
+  fn ready(&self, _: Context, ready: Ready) {
+    info!("Connected as {}", ready.user.name);
+  }
 
-    fn message(&self, _: Context, msg: Message) {
-        println!("{}#{}: {}", msg.author.name, msg.author.discriminator, msg.content);
-    }
+  fn resume(&self, _: Context, _: ResumedEvent) {
+    info!("Resumed");
+  }
 }
+
+#[group]
+#[commands(ping, user)]
+struct General;
 
 fn main() {
-    let mut client = Client::new(&config::token, Handler)
-        .expect("Error creating client");
-    client.with_framework(StandardFramework::new()
-        .configure(|c| c.prefix("~"))
-        .group(&GENERAL_GROUP));
+  let token = auth::TOKEN;
 
-    if let Err(why) = client.start() {
-        println!("An error occurred while running the client: {:?}", why);
-    }
-}
+  let mut client = Client::new(&token, Handler).expect("Unable to create client");
 
-#[command]
-fn user(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
-    let data = api::get_user(&KEY, &args.rest());
-    match data {
-        Ok(u) => {
-            let user = u;
-            let reply = format!("{} {} ({})",
-                                    user.attributes.userName,
-                                    user.attributes.playerRating,
-                                    user.r#type);
-            msg.reply(ctx, &reply)?;
+  {
+    let mut data = client.data.write();
+    data.insert::<Api>(login().expect("Invalid login credentials, probably"));
+  }
 
-            Ok(())
-        },
-        Err(why) => {
-            println!("{:?}", why);
-            Ok(())
-        }
-    }
+  client.with_framework(StandardFramework::new()
+    .configure(|c| c.prefix("~"))
+    .group(&GENERAL_GROUP));
+
+  if let Err(why) = client.start() {
+    error!("Client error: {:?}", why);
+  }
 }

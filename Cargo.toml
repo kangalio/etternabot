@@ -1,27 +1,28 @@
 [package]
 name = "etternabot"
-version = "0.1.0"
-authors = ["james <jamesguessis@gmail.com>"]
+version = "0.0.69"
+authors = ["James Guess <jamesguessis@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-reqwest = "*"
-serde = "*"
-serde_json = "*"
-serde_derive = "*"
-lazy_static = "*"
+log = "*"
+
+[dependencies.tokio]
+version = "0.2.21"
+features = ["full"]
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dependencies.reqwest]
+version = "0.10"
+features = ["json", "blocking"]
+
+[dependencies.sfsdb]
+git = "https://github.com/simvux/sfsdb.git"
 
 [dependencies.serenity]
-default-features = false
-features = [
-    "builder",
-    "client",
-    "framework",
-    "gateway",
-    "http",
-    "model",
-    "standard_framework",
-    "utils",
-    "rustls_backend",
-]
-version = "0.6"
+git = "https://github.com/serenity-rs/serenity.git"
+branch = "current"
+version = "0.8"
