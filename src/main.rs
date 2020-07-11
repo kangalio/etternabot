@@ -31,7 +31,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(ping, user)]
+#[commands(ping, user, pattern)]
 struct General;
 
 fn main() {

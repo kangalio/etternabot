@@ -1,3 +1,5 @@
+mod pattern_visualize;
+
 use serenity::prelude::*;
 use serenity::model::prelude::*;
 use serenity::framework::standard::{
@@ -22,3 +24,12 @@ pub fn user(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
   Ok(())
 }
 
+#[command]
+pub fn pattern(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
+  pattern_visualize::generate("noteskin.png", "output.png", &args.message())?;
+  
+  // Send the image into the channel where the summoning message comes from
+  msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+
+  Ok(())
+}

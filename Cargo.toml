@@ -1,11 +1,12 @@
 [package]
 name = "etternabot"
 version = "0.0.69"
-authors = ["James Guess <jamesguessis@gmail.com>"]
+authors = ["James Guess <jamesguessis@gmail.com>", "kangalioo <jannik.a.schaper@web.de>"]
 edition = "2018"
 
 [dependencies]
 log = "*"
+image = "0.23"
 
 [dependencies.tokio]
 version = "0.2.21"
