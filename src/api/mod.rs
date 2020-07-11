@@ -1,39 +1,21 @@
+#![allow(non_snake_case)] // eh
+
+// Authentication data, i.e. passwords and stuff are saved there
+mod config;
+
 use reqwest::blocking;
 use reqwest::blocking::Response;
 use serde::Deserialize;
 
-use serenity::prelude::*;
 
-mod config;
-
-pub struct Api {
-  pub key: String,
+pub struct Session {
+  key: String,
   // TODO: Implement arbitrary rate limit
 }
 
-impl TypeMapKey for Api {
-  type Value = String;
-}
-
-impl Api {
-  fn get(key: &str, path: &str) -> Result<Response, reqwest::Error> {
-    blocking::Client::new()
-      .get(&format!("https://api.etternaonline.com/v2/{}", path))
-      .bearer_auth(key)
-      .send()
-  }
-
-  pub fn get_user(key: &str, username: &str) -> Result<User, Error> {
-    let data: UserData = Self::get(key, &format!("user/{}", username))?.json()?;
-    match data.data {
-      Some(user) => Ok(user),
-      None => Err(Error::from("User not found"))
-    }
-  }
-}
-
-pub fn login() -> Result<String, Error> {
-  let resp: Login = blocking::Client::new()
+impl Session {
+  pub fn login() -> Result<Self, Error> {
+    let resp: Login = blocking::Client::new()
     .post("https://api.etternaonline.com/v2/login")
     .form(&[
       ("username", &config::username),
@@ -42,9 +24,28 @@ pub fn login() -> Result<String, Error> {
     ])
     .send()?
     .json()?;
-  match resp.data {
-    Some(data) => Ok(data.attributes.accessToken.to_string()),
-    None => Err(Error::from("Incorrect login data, probably."))
+    
+    let key = match resp.data {
+      Some(data) => data.attributes.accessToken,
+      None => return Err(Error::from("Incorrect login data, probably.")),
+    };
+
+    Ok(Self { key })
+  }
+
+  fn get(&self, path: &str) -> Result<Response, reqwest::Error> {
+    blocking::Client::new()
+      .get(&format!("https://api.etternaonline.com/v2/{}", path))
+      .bearer_auth(&self.key)
+      .send()
+  }
+
+  pub fn get_user(&self, username: &str) -> Result<User, Error> {
+    let data: UserData = self.get(&format!("user/{}", username))?.json()?;
+    match data.data {
+      Some(user) => Ok(user),
+      None => Err(Error::from("User not found"))
+    }
   }
 }
 

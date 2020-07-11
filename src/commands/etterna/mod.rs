@@ -7,13 +7,11 @@ use serenity::framework::standard::{
   macros::command,
 };
 
-use crate::api::Api;
-
 #[command]
 pub fn user(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
-  let mut data = ctx.data.write();
-  let token = data.get_mut::<crate::api::Api>().expect("expected api token in ShareMap.");
-  let user = Api::get_user(&token, args.rest()).expect("User doesn't exist or there was a problem with the api");
+  let session = ctx.data.read();
+  let user = session.get::<crate::SessionKey>().unwrap().get_user(args.rest())
+      .expect("User doesn't exist or there was a problem with the api");
   let reply = format!("{} {} ({})",
     user.attributes.userName,
     user.attributes.playerRating,

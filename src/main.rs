@@ -34,6 +34,11 @@ impl EventHandler for Handler {
 #[commands(ping, user, pattern)]
 struct General;
 
+struct SessionKey;
+impl TypeMapKey for SessionKey {
+  type Value = api::Session;
+}
+
 fn main() {
   let token = auth::TOKEN;
 
@@ -41,7 +46,7 @@ fn main() {
 
   {
     let mut data = client.data.write();
-    data.insert::<Api>(login().expect("Invalid login credentials, probably"));
+    data.insert::<SessionKey>(Session::login().expect("Invalid login credentials, probably"));
   }
 
   client.with_framework(StandardFramework::new()
