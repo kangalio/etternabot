@@ -1,5 +1,3 @@
-#![allow(non_snake_case)] // eh
-
 // Authentication data, i.e. passwords and stuff are saved there
 mod config;
 
@@ -26,7 +24,7 @@ impl Session {
     .json()?;
     
     let key = match resp.data {
-      Some(data) => data.attributes.accessToken,
+      Some(data) => data.attributes.access_token,
       None => return Err(Error::from("Incorrect login data, probably.")),
     };
 
@@ -84,26 +82,38 @@ pub struct User {
 
 #[derive(Deserialize, Debug)]
 pub struct Attributes {
-  pub userName: String,
-  pub aboutMe: String,
+  #[serde(rename = "userName")]
+  pub user_name: String,
+  #[serde(rename = "aboutMe")]
+  pub about_me: String,
   pub moderator: bool,
   pub patreon: bool,
   pub avatar: String,
-  pub countryCode: String,
-  pub playerRating: f64,
-  pub defaultModifiers: String,
+  #[serde(rename = "countryCode")]
+  pub country_code: String,
+  #[serde(rename = "playerRating")]
+  pub player_rating: f64,
+  #[serde(rename = "defaultModifiers")]
+  pub default_modifiers: String,
   pub skillsets: Skillsets
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Skillsets {
-  pub Stream: f64,
-  pub Jumpstream: f64,
-  pub Handstream: f64,
-  pub Stamina: f64,
-  pub JackSpeed: f64,
-  pub Chordjack: f64,
-  pub Technical: f64
+  #[serde(rename = "Stream")]
+  pub stream: f64,
+  #[serde(rename = "Jumpstream")]
+  pub jumpstream: f64,
+  #[serde(rename = "Handstream")]
+  pub handstream: f64,
+  #[serde(rename = "Stamina")]
+  pub stamina: f64,
+  #[serde(rename = "JackSpeed")]
+  pub jackspeed: f64,
+  #[serde(rename = "Chordjack")]
+  pub chordjack: f64,
+  #[serde(rename = "Technical")]
+  pub technical: f64
 }
 
 #[derive(Deserialize, Debug)]
@@ -121,13 +131,15 @@ pub struct EOError {
 
 #[derive(Deserialize, Debug)]
 pub struct LoginData {
-  pub r#type: String,
-  pub id: String,
+  #[serde(rename = "id")]
+  pub user_id: String,
   pub attributes: LoginAttributes,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct LoginAttributes {
-  pub accessToken: String,
-  pub expiresAt: i32
+  #[serde(rename = "accessToken")]
+  pub access_token: String,
+  #[serde(rename = "expiresAt")]
+  pub expires_at: i32
 }

@@ -13,8 +13,8 @@ pub fn user(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
   let user = session.get::<crate::SessionKey>().unwrap().get_user(args.rest())
       .expect("User doesn't exist or there was a problem with the api");
   let reply = format!("{} {} ({})",
-    user.attributes.userName,
-    user.attributes.playerRating,
+    user.attributes.user_name,
+    user.attributes.player_rating,
     user.r#type
   );
   msg.channel_id.say(&ctx.http, &reply)?;
