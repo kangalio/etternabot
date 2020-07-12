@@ -1,59 +1,28 @@
-mod commands;
+mod discord_handler;
 mod auth;
 mod api;
 
-use serenity::{
-  framework::{
-    StandardFramework,
-    standard::macros::group,
-  },
-  model::{event::ResumedEvent, gateway::Ready},
-  prelude::*,
-};
-use log::{error, info};
-
-use commands::{
-  etterna::*,
-  utils::*,
-};
-use api::*;
-
-struct Handler;
-
-impl EventHandler for Handler {
-  fn ready(&self, _: Context, ready: Ready) {
-    info!("Connected as {}", ready.user.name);
-  }
-
-  fn resume(&self, _: Context, _: ResumedEvent) {
-    info!("Resumed");
-  }
+// This is my custom serenity prelude module
+mod serenity {
+	pub use serenity::{
+		prelude::*,
+		model::{gateway::Ready, channel::Message}
+	};
 }
 
-#[group]
-#[commands(ping, user, pattern)]
-struct General;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+	// Login to EO
+	let session = api::Session::new_from_login(
+		auth::EO_USERNAME.to_owned(),
+		auth::EO_PASSWORD.to_owned(),
+		auth::EO_CLIENT_DATA.to_owned(),
+	)?;
+	let handler = discord_handler::Handler::from_session(session);
 
-struct SessionKey;
-impl TypeMapKey for SessionKey {
-  type Value = api::Session;
-}
+	// Login to Discord and start bot
+	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
+		.expect("Unable to create Discord client");
+	client.start()?;
 
-fn main() {
-  let token = auth::TOKEN;
-
-  let mut client = Client::new(&token, Handler).expect("Unable to create client");
-
-  {
-    let mut data = client.data.write();
-    data.insert::<SessionKey>(Session::login().expect("Invalid login credentials, probably"));
-  }
-
-  client.with_framework(StandardFramework::new()
-    .configure(|c| c.prefix("~"))
-    .group(&GENERAL_GROUP));
-
-  if let Err(why) = client.start() {
-    error!("Client error: {:?}", why);
-  }
+	Ok(())
 }
