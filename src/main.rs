@@ -1,6 +1,5 @@
 mod discord_handler;
 mod auth;
-mod api;
 
 // This is my custom serenity prelude module
 mod serenity {
@@ -12,7 +11,7 @@ mod serenity {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Login to EO
-	let session = api::Session::new_from_login(
+	let session = etternaonline_api::Session::new_from_login(
 		auth::EO_USERNAME.to_owned(),
 		auth::EO_PASSWORD.to_owned(),
 		auth::EO_CLIENT_DATA.to_owned(),

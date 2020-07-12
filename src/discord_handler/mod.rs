@@ -1,12 +1,12 @@
 mod pattern_visualize;
 
 use crate::serenity; // use my custom serenity prelude
-use crate::api::*;
+use etternaonline_api::{Session, Error as EOError};
 
 const BOT_PREFIX: &str = "+";
 
 pub struct Handler {
-	session: std::sync::Mutex<crate::api::Session>,
+	session: std::sync::Mutex<Session>,
 }
 
 impl Handler {
@@ -29,7 +29,7 @@ impl Handler {
 			"user" => {
 				let reply = match session.user_details(text) {
 					Ok(user) => format!("{} {}", user.username, user.player_rating),
-					Err(Error::UserNotFound) => format!("User '{}' was not found", text),
+					Err(EOError::UserNotFound) => format!("User '{}' was not found", text),
 					Err(other) => format!("{:?}", other),
 				};
 				msg.channel_id.say(&ctx.http, &reply)?;
