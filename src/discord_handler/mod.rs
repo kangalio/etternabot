@@ -23,35 +23,28 @@ impl Config {
 	}
 }
 
-struct State {
+pub struct State {
 	config: Config,
 	session: eo::Session,
 }
 
-pub struct Handler {
-	state: std::sync::Mutex<State>,
-}
-
-impl Handler {
+impl State {
 	pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-		let state = State {
+		Ok(State {
 			session: eo::Session::new_from_login(
 				crate::auth::EO_USERNAME.to_owned(),
 				crate::auth::EO_PASSWORD.to_owned(),
 				crate::auth::EO_CLIENT_DATA.to_owned(),
 				std::time::Duration::from_millis(1000),
-				Some(std::time::Duration::from_millis(5000)),
+				Some(std::time::Duration::from_millis(30000)),
 			)?,
 			config: Config::load(),
-		};
-
-		Ok(Self { state: std::sync::Mutex::new(state) })
+		})
 	}
 
-	fn top_scores(&self,
+	fn top_scores(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-		mut state: impl std::ops::DerefMut<Target=State>,
 		text: &str,
 		mut limit: u32,
 	) -> Result<(), Box<dyn std::error::Error>> {
@@ -61,12 +54,12 @@ impl Handler {
 		let eo_username;
 		if args.len() == 0 {
 			skillset = None;
-			eo_username = state.config.eo_username(&msg.author.name);
+			eo_username = self.config.eo_username(&msg.author.name);
 		} else if args.len() == 1 {
 			match eo::Skillset::from_user_input(args[0]) {
 				Some(parsed_skillset) => {
 					skillset = Some(parsed_skillset);
-					eo_username = state.config.eo_username(&msg.author.name);
+					eo_username = self.config.eo_username(&msg.author.name);
 				},
 				None => {
 					skillset = None;
@@ -91,8 +84,8 @@ impl Handler {
 
 		// Download top scores
 		let top_scores = match skillset {
-			None => state.session.user_top_10_scores(&eo_username),
-			Some(skillset) => state.session.user_top_skillset_scores(&eo_username, skillset, limit),
+			None => self.session.user_top_10_scores(&eo_username),
+			Some(skillset) => self.session.user_top_skillset_scores(&eo_username, skillset, limit),
 		};
 		if let Err(eo::Error::UserNotFound) = top_scores {
 			msg.channel_id.say(&ctx.http, format!("No such user \"{}\"", eo_username))?;
@@ -100,7 +93,7 @@ impl Handler {
 		}
 		let top_scores = top_scores?;
 
-		let country_code = state.session.user_details(&eo_username)?.country_code;
+		let country_code = self.session.user_details(&eo_username)?.country_code;
 
 		let mut response = String::from("```");
 		for (i, entry) in top_scores.iter().enumerate() {
@@ -139,17 +132,15 @@ impl Handler {
 		Ok(())
 	}
 
-	fn command(&self,
+	fn command(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		cmd: &str,
 		text: &str
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let mut state = self.state.lock().unwrap();
-
 		if cmd.starts_with("top") {
 			if let Ok(limit @ 1..=100) = cmd[3..].parse() {
-				self.top_scores(ctx, msg, state, text, limit)?;
+				self.top_scores(ctx, msg, text, limit)?;
 			} else {
 				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
 			}
@@ -162,13 +153,13 @@ impl Handler {
 			},
 			"user" => {
 				let eo_username = if text.is_empty() {
-					Some(state.config.eo_username(&msg.author.name))
+					Some(self.config.eo_username(&msg.author.name))
 				} else {
 					None
 				};
 				let eo_username = eo_username.as_deref().unwrap_or(text);
 
-				let reply = match state.session.user_details(&eo_username) {
+				let reply = match self.session.user_details(&eo_username) {
 					Ok(user) => format!("{} {}", user.username, user.player_rating),
 					Err(eo::Error::UserNotFound) => format!("User '{}' was not found", eo_username), // TODO: add "maybe you need to add your EO username" msg here
 					Err(other) => format!("An error occurred ({})", other),
@@ -185,32 +176,107 @@ impl Handler {
 		}
 		Ok(())
 	}
-}
 
-impl serenity::EventHandler for Handler {
-	fn ready(&self, _: serenity::Context, ready: serenity::Ready) {
-		println!("Connected to Discord as {}", ready.user.name);
+	fn score_card(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		scorekey: &str,
+	) -> Result<(), Box<dyn std::error::Error>> {
+		let score = self.session.score_data(scorekey)?;
+
+		let ssrs_string = format!(r#"
+```Prolog
+      Wife: {:.2}%
+   Overall: {:.2}
+    Stream: {:.2}
+   Stamina: {:.2}
+Jumpstream: {:.2}
+Handstream: {:.2}
+     Jacks: {:.2}
+ Chordjack: {:.2}
+ Technical: {:.2}
+```
+			"#,
+			score.wifescore * 100.0,
+			score.ssr.overall(),
+			score.ssr.stream,
+			score.ssr.stamina,
+			score.ssr.jumpstream,
+			score.ssr.handstream,
+			score.ssr.jackspeed,
+			score.ssr.chordjack,
+			score.ssr.technical,
+		);
+		let ssrs_string = ssrs_string.trim();
+
+		let judgements_string = format!(r#"
+```Prolog
+Marvelous: {}
+  Perfect: {}
+    Great: {}
+     Good: {}
+      Bad: {}
+     Miss: {}
+```
+			"#,
+			score.judgements.marvelouses,
+			score.judgements.perfects,
+			score.judgements.greats,
+			score.judgements.goods,
+			score.judgements.bads,
+			score.judgements.misses,
+		);
+		let judgements_string = judgements_string.trim();
+
+		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
+			.color(crate::ETTERNA_COLOR)
+			.thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
+			.author(|a| a
+				.name(&score.song_name)
+				.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
+				.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
+			)
+			.description(format!("```\n{}\n```", score.modifiers))
+			.field("SSRs", ssrs_string, true)
+			.field("Judgements", judgements_string, true)
+			.footer(|f| f
+				.text(format!("Played by {}", &score.user.username))
+			)
+		))?;
+		Ok(())
 	}
 
-	fn message(&self, ctx: serenity::Context, msg: serenity::Message) {
-		if !msg.content.starts_with(BOT_PREFIX) { return }
-		let text = &msg.content[BOT_PREFIX.len()..];
-
+	pub fn message(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+	) -> Result<(), Box<dyn std::error::Error>> {
 		// Let's not do this, because if a non existing command is called (e.g. `+asdfg`) there'll
 		// be typing broadcasted, but no actual response, which is stupid
 		// if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http) {
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
-		// Split message into command part and parameter part
-		let mut a = text.splitn(2, ' ');
-		let command_name = a.next().unwrap().trim();
-		let parameters = a.next().unwrap_or("").trim();
-
-		if let Err(e) = self.command(&ctx, &msg, command_name, parameters) {
-			if let Err(inner_e) = msg.channel_id.say(&ctx.http, format!("{}", e)) {
-				println!("Failed with '{}' while sending error message '{}'", inner_e, e);
+		for captures in regex::Regex::new(r"https://etternaonline.com/score/view/([A-Z]\w+)")
+			.unwrap()
+			.captures_iter(&msg.content)
+		{
+			let scorekey = &captures[1];
+			if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
+				println!("Error while showing score card for {}: {}", scorekey, e);
 			}
 		}
+
+		if msg.content.starts_with(BOT_PREFIX) {
+			let text = &msg.content[BOT_PREFIX.len()..];
+
+			// Split message into command part and parameter part
+			let mut a = text.splitn(2, ' ');
+			let command_name = a.next().unwrap().trim();
+			let parameters = a.next().unwrap_or("").trim();
+	
+			self.command(&ctx, &msg, command_name, parameters)?;
+		}
+
+		Ok(())
 	}
 }
