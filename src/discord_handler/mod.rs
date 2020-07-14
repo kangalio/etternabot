@@ -329,11 +329,12 @@ Marvelous: {}
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
-		for captures in regex::Regex::new(r"https://etternaonline.com/score/view/([A-Z]\w+)")
+		for captures in regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)")
 			.unwrap()
 			.captures_iter(&msg.content)
 		{
 			let scorekey = &captures[1];
+			let _user_id = &captures[2];
 			if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
 				println!("Error while showing score card for {}: {}", scorekey, e);
 			}
