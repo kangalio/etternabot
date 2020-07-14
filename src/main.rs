@@ -1,3 +1,5 @@
+#[allow(clippy::len_zero, clippy::tabs_in_doc_comments)]
+
 mod discord_handler;
 mod auth;
 
@@ -5,18 +7,16 @@ mod auth;
 mod serenity {
 	pub use serenity::{
 		prelude::*,
-		model::{gateway::Ready, channel::Message}
+		model::{gateway::Ready, channel::Message},
+		framework::standard::{Args, Delimiter},
+		utils::Colour as Color,
 	};
 }
 
+pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146);
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	// Login to EO
-	let session = etternaonline_api::Session::new_from_login(
-		auth::EO_USERNAME.to_owned(),
-		auth::EO_PASSWORD.to_owned(),
-		auth::EO_CLIENT_DATA.to_owned(),
-	)?;
-	let handler = discord_handler::Handler::from_session(session);
+	let handler = discord_handler::Handler::load()?;
 
 	// Login to Discord and start bot
 	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
