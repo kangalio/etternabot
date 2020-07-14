@@ -6,6 +6,16 @@ use etternaonline_api as eo;
 const BOT_PREFIX: &str = "+";
 
 const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]` (both params optional)";
+const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
+
+fn country_code_to_flag_emoji(country_code: &str) -> String {
+	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
+	country_code
+		.to_lowercase()
+		.chars()
+		.map(|c| std::char::from_u32(c as u32 + regional_indicator_value_offset).unwrap_or(c))
+		.collect()
+}
 
 struct Config {
 
@@ -132,6 +142,66 @@ impl State {
 		Ok(())
 	}
 
+	fn profile_compare(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		text: &str,
+	) -> Result<(), Box<dyn std::error::Error>> {
+		let args: Vec<&str> = text.split_whitespace().collect();
+
+		let me;
+		let you;
+		if args.len() == 1 {
+			me = self.config.eo_username(&msg.author.name);
+			you = args[0];
+		} else if args.len() == 2 {
+			me = args[0].to_owned();
+			you = args[1];
+		} else {
+			msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
+			return Ok(());
+		}
+
+		let me = self.session.user_details(&me)?;
+		let you = self.session.user_details(you)?;
+
+		let string = format!(
+			r#"
+```Prolog
+   Overall:   {:.2}  <  {:.2}   {:.2}
+    Stream:   {:.2}  <  {:.2}   {:.2}
+Jumpstream:   {:.2}  <  {:.2}   {:.2}
+Handstream:   {:.2}  <  {:.2}   {:.2}
+   Stamina:   {:.2}  <  {:.2}   {:.2}
+     Jacks:   {:.2}  <  {:.2}   {:.2}
+ Chordjack:   {:.2}  <  {:.2}   {:.2}
+ Technical:   {:.2}  <  {:.2}   {:.2}
+```			
+			"#,
+			me.rating.overall(), you.rating.overall(), me.rating.overall() - you.rating.overall(),
+			me.rating.stream, you.rating.stream, me.rating.stream - you.rating.stream,
+			me.rating.jumpstream, you.rating.jumpstream, me.rating.jumpstream - you.rating.jumpstream,
+			me.rating.handstream, you.rating.handstream, me.rating.handstream - you.rating.handstream,
+			me.rating.stamina, you.rating.stamina, me.rating.stamina - you.rating.stamina,
+			me.rating.jackspeed, you.rating.jackspeed, me.rating.jackspeed - you.rating.jackspeed,
+			me.rating.chordjack, you.rating.chordjack, me.rating.chordjack - you.rating.chordjack,
+			me.rating.technical, you.rating.technical, me.rating.technical - you.rating.technical,
+		);
+
+		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
+			.title(format!(
+				"{} {} vs. {} {}",
+				country_code_to_flag_emoji(&me.country_code),
+				me.username,
+				you.username,
+				country_code_to_flag_emoji(&you.country_code),
+			))
+			.description(string)
+		))?;
+
+		Ok(())
+	}
+
 	fn command(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -171,6 +241,9 @@ impl State {
 
 				// Send the image into the channel where the summoning message comes from
 				msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+			},
+			"compare" => {
+				self.profile_compare(ctx, msg, text)?;
 			}
 			_ => {},
 		}
