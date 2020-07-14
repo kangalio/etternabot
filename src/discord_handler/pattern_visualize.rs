@@ -1,5 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
+use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
 
 
@@ -49,8 +50,15 @@ fn render_pattern(note_imgs: &[RgbaImage], pattern: &Pattern) -> Result<RgbaImag
 		let y = i * 64;
 
 		for lane in row {
-			buffer.copy_from(note_img, 64 * lane, y as u32)
-					.expect("Note image is too large");
+			let note_img = match lane {
+				0 => Cow::Owned(image::imageops::rotate90(note_img)),
+				1 => Cow::Borrowed(note_img),
+				2 => Cow::Owned(image::imageops::rotate180(note_img)),
+				3 => Cow::Owned(image::imageops::rotate270(note_img)),
+				_ => Cow::Borrowed(note_img),
+			};
+			buffer.copy_from(note_img.as_ref(), 64 * lane, y as u32)
+				.expect("Note image is too large");
 		}
 	}
 	
