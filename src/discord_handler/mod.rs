@@ -237,7 +237,13 @@ Handstream:   {:.2}  <  {:.2}   {:.2}
 				msg.channel_id.say(&ctx.http, &reply)?;
 			},
 			"pattern" => {
-				let scroll_type = pattern_visualize::ScrollType::Upscroll;
+				let scroll_type = if text.to_lowercase().starts_with("up") {
+					pattern_visualize::ScrollType::Upscroll
+				} else if text.starts_with("down") {
+					pattern_visualize::ScrollType::Downscroll
+				} else {
+					pattern_visualize::ScrollType::Upscroll
+				};
 				pattern_visualize::generate("output.png", text, scroll_type)?;
 
 				// Send the image into the channel where the summoning message comes from

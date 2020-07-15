@@ -64,35 +64,42 @@ fn render_pattern(
 ) -> Result<RgbaImage, Box<dyn std::error::Error>> {
 	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
 	let keymode = 1 + *pattern.rows.iter().flatten().max()
-			.ok_or(StringError("Given pattern is empty"))?;
+		.ok_or(StringError("Given pattern is empty"))?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
-	// Note that we need one more space vertically to fit the receptors
 	let width = 64 * keymode;
-	let height = 64 * (pattern.rows.len() + 1);
+	let height = 64 * pattern.rows.len();
 	let mut buffer = image::ImageBuffer::new(width as u32, height as u32);
 
-	buffer.copy_from(&image::imageops::rotate90(noteskin.receptor()), 0, 0)?;
-	buffer.copy_from(noteskin.receptor(), 64, 0)?;
-	buffer.copy_from(&image::imageops::rotate180(noteskin.receptor()), 128, 0)?;
-	buffer.copy_from(&image::imageops::rotate270(noteskin.receptor()), 192, 0)?;
+	let mut place_note = |note_img: &RgbaImage, x, mut y| {
+		// Flip y if downscroll
+		if scroll_type == ScrollType::Downscroll {
+			y = (buffer.height() / 64) - y - 1;
+		}
+
+		// Rotate appropriately
+		let note_img = match x {
+			0 => Cow::Owned(image::imageops::rotate90(note_img)),
+			1 => Cow::Borrowed(note_img),
+			2 => Cow::Owned(image::imageops::rotate180(note_img)),
+			3 => Cow::Owned(image::imageops::rotate270(note_img)),
+			_ => Cow::Borrowed(note_img),
+		};
+
+		buffer.copy_from(note_img.as_ref(), x * 64, y * 64)
+			.expect("Note image is too large");
+	};
+
+	for x in 0..keymode {
+		place_note(noteskin.receptor(), x, 0);
+	}
 
 	for (i, row) in pattern.rows.iter().enumerate() {
 		// Select a note image in the order of 4th-16th-8th-16th (cycle repeats)
 		let note_img = noteskin.note([0, 3, 1, 3][i % 4]);
 
-		let y = (i + 1) * 64;
-
-		for lane in row {
-			let note_img = match lane {
-				0 => Cow::Owned(image::imageops::rotate90(note_img)),
-				1 => Cow::Borrowed(note_img),
-				2 => Cow::Owned(image::imageops::rotate180(note_img)),
-				3 => Cow::Owned(image::imageops::rotate270(note_img)),
-				_ => Cow::Borrowed(note_img),
-			};
-			buffer.copy_from(note_img.as_ref(), 64 * lane, y as u32)
-				.expect("Note image is too large");
+		for &lane in row {
+			place_note(note_img, lane, i as u32);
 		}
 	}
 	
