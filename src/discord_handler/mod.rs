@@ -257,6 +257,16 @@ Handstream:   {:.2}  <  {:.2}   {:.2}
 		Ok(())
 	}
 
+	fn song_card(&mut self,
+		_ctx: &serenity::Context,
+		_msg: &serenity::Message,
+		song_id: u32,
+	) -> Result<(), Box<dyn std::error::Error>> {
+		println!("Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
+			the required functions :(", song_id);
+		Ok(())
+	}
+
 	fn score_card(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -344,6 +354,19 @@ Marvelous: {}
 			let _user_id = &captures[2];
 			if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
 				println!("Error while showing score card for {}: {}", scorekey, e);
+			}
+		}
+
+		for captures in regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?")
+			.unwrap()
+			.captures_iter(&msg.content)
+		{
+			let song_id = match captures[1].parse() {
+				Ok(song_id) => song_id,
+				Err(_) => continue, // this wasn't a valid song view url after all
+			};
+			if let Err(e) = self.song_card(&ctx, &msg, song_id) {
+				println!("Error while showing song card for {}: {}", song_id, e);
 			}
 		}
 
