@@ -237,7 +237,8 @@ Handstream:   {:.2}  <  {:.2}   {:.2}
 				msg.channel_id.say(&ctx.http, &reply)?;
 			},
 			"pattern" => {
-				pattern_visualize::generate("noteskin.png", "output.png", text)?;
+				let scroll_type = pattern_visualize::ScrollType::Upscroll;
+				pattern_visualize::generate("output.png", text, scroll_type)?;
 
 				// Send the image into the channel where the summoning message comes from
 				msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;

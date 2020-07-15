@@ -14,17 +14,39 @@ impl std::fmt::Display for StringError {
 }
 impl std::error::Error for StringError {}
 
-/// Read the given noteskin image path and split it into multiple note images, each of size 64x64
-fn read_noteskin(noteskin_path: &str) -> Result<Vec<RgbaImage>, Box<dyn std::error::Error>> {
-	let mut img = image::open(noteskin_path)?;
-	assert_eq!(img.width(), 64);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ScrollType {
+	Upscroll,
+	Downscroll,
+}
 
-	let mut notes = Vec::new();
-	for y in (0..img.height()).step_by(64) {
-		notes.push(img.crop(0, y, 64, 64).into_rgba());
+struct NoteSkin {
+	notes: Vec<RgbaImage>,
+	receptor: RgbaImage,
+}
+
+impl NoteSkin {
+	/// Read the given noteskin image path and split it into multiple note images, each of size
+	/// 64x64
+	pub fn from_files(
+		noteskin_path: &str,
+		noteskin_receptor_path: &str,
+	) -> Result<Self, Box<dyn std::error::Error>> {
+		let mut img = image::open(noteskin_path)?;
+		assert_eq!(img.width(), 64);
+	
+		let mut notes = Vec::new();
+		for y in (0..img.height()).step_by(64) {
+			notes.push(img.crop(0, y, 64, 64).into_rgba());
+		}
+
+		let receptor = image::open(noteskin_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+
+		Ok(Self { notes, receptor })
 	}
 
-	Ok(notes)
+	pub fn receptor(&self) -> &RgbaImage { &self.receptor }
+	pub fn note(&self, index: usize) -> &RgbaImage { &self.notes[index] }
 }
 
 struct Pattern {
@@ -35,19 +57,31 @@ struct Pattern {
 
 /// Parameter `note_imgs`: a slice of 64x64 images, in the following order: 4ths, 8ths, 12ths,
 /// 16ths, 24ths, 32nds, 48ths, 64ths, 192nds
-fn render_pattern(note_imgs: &[RgbaImage], pattern: &Pattern) -> Result<RgbaImage, Box<dyn std::error::Error>> {
-	// Determines the keymode (e.g. 4k/5k/6k/...) by finding the rightmost mentioned lane and adding 1
+fn render_pattern(
+	noteskin: &NoteSkin,
+	pattern: &Pattern,
+	scroll_type: ScrollType,
+) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
 	let keymode = 1 + *pattern.rows.iter().flatten().max()
 			.ok_or(StringError("Given pattern is empty"))?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
-	let mut buffer = image::ImageBuffer::new(64 * keymode, 64 * pattern.rows.len() as u32);
+	// Note that we need one more space vertically to fit the receptors
+	let width = 64 * keymode;
+	let height = 64 * (pattern.rows.len() + 1);
+	let mut buffer = image::ImageBuffer::new(width as u32, height as u32);
+
+	buffer.copy_from(&image::imageops::rotate90(noteskin.receptor()), 0, 0)?;
+	buffer.copy_from(noteskin.receptor(), 64, 0)?;
+	buffer.copy_from(&image::imageops::rotate180(noteskin.receptor()), 128, 0)?;
+	buffer.copy_from(&image::imageops::rotate270(noteskin.receptor()), 192, 0)?;
 
 	for (i, row) in pattern.rows.iter().enumerate() {
-		// Select a note image in the order of 4th-16th-8th-16th-(cycle repeats)
-		let note_img = &note_imgs[[0, 3, 1, 3][i % 4]];
+		// Select a note image in the order of 4th-16th-8th-16th (cycle repeats)
+		let note_img = noteskin.note([0, 3, 1, 3][i % 4]);
 
-		let y = i * 64;
+		let y = (i + 1) * 64;
 
 		for lane in row {
 			let note_img = match lane {
@@ -115,14 +149,14 @@ fn parse_pattern(mut string: &str) -> Result<Pattern, Box<dyn std::error::Error>
 /// Read noteskin from `noteskin_path`, read the pattern from `pattern_str` and write the generated
 /// image into `output_path`
 pub fn generate(
-	noteskin_path: &str,
 	output_path: &str,
-	pattern_str: &str
+	pattern_str: &str,
+	scroll_type: ScrollType,
 ) -> Result<(), Box<dyn std::error::Error>> {
 
-	let note_imgs = read_noteskin(noteskin_path)?;
+	let noteskin = NoteSkin::from_files("noteskin/notes.png", "noteskin/receptor.png")?;
 	let pattern = parse_pattern(pattern_str)?;
-	let buffer = render_pattern(&note_imgs, &pattern)?;
+	let buffer = render_pattern(&noteskin, &pattern, scroll_type)?;
 	
 	buffer.save(output_path)?;
 
