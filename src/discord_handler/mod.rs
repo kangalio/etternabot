@@ -9,7 +9,7 @@ use config::Config;
 
 const BOT_PREFIX: &str = "+";
 
-const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]` (both params optional)";
+const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
@@ -53,6 +53,11 @@ impl State {
 		text: &str,
 		mut limit: u32,
 	) -> Result<(), Box<dyn std::error::Error>> {
+		if !(1..=30).contains(&limit) {
+			msg.channel_id.say(&ctx.http, "Only limits up to 30 are supported")?;
+			return Ok(());
+		}
+
 		let args: Vec<&str> = text.split_whitespace().collect();
 
 		let skillset;
@@ -293,7 +298,7 @@ impl State {
 		text: &str
 	) -> Result<(), Box<dyn std::error::Error>> {
 		if cmd.starts_with("top") {
-			if let Ok(limit @ 1..=100) = cmd[3..].parse() {
+			if let Ok(limit) = cmd[3..].parse() {
 				self.top_scores(ctx, msg, text, limit)?;
 			} else {
 				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
