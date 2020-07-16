@@ -84,6 +84,14 @@ Here are my commands: (Descriptions by Fission)
 **+userset [username]**
 *Don't you dare set your user to* {} *you imposter*
 
+More commands:
+**+pattern [down/up] [pattern string]**
+*Visualize note patterns, for example* `[14][23][14]` *or* `4321234`
+**+lastsession [username]**
+*Show the last 10 scores*
+**+help**
+*Print this message*
+
 You can also post links to scores and songs and I will show info about them
 			",
 			self.minanyms[self.minanym_index]
