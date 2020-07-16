@@ -13,6 +13,27 @@ const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 
+const DESCRIPTION: &str = "
+Here are my commands: (Descriptions by Fission)
+
+**+profile [username]**
+*Show your fabulously superberful profile*
+**+top10 [username] [skillset]**
+*For when top9 isn't enough*
+**+top[nn] [username] [skillset]**
+*Sometimes we take things too far*
+**+compare [user1] [user2]**
+*One person is an objectively better person than the other, find out which one!*
+~~**+rival**~~
+*But are you an objectively better person than gary oak?*
+~~**+rivalset [username]**~~
+*Replace gary oak with a more suitable rival*
+**+userset [username]**
+*Don't you dare set your user to {} you imposter*
+
+You can also post links to scores and songs and I will show info about them
+";
+
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
 	country_code
@@ -60,7 +81,7 @@ impl State {
 			skillset = None;
 			eo_username = self.config.eo_username(&msg.author.name);
 		} else if args.len() == 1 {
-			match eo::Skillset::from_user_input(args[0]) {
+			match eo::Skillset7::from_user_input(args[0]) {
 				Some(parsed_skillset) => {
 					skillset = Some(parsed_skillset);
 					eo_username = self.config.eo_username(&msg.author.name);
@@ -71,7 +92,7 @@ impl State {
 				},
 			}
 		} else if args.len() == 2 {
-			skillset = match eo::Skillset::from_user_input(args[0]) {
+			skillset = match eo::Skillset7::from_user_input(args[0]) {
 				Some(parsed_skillset) => Some(parsed_skillset),
 				None => {
 					msg.channel_id.say(
@@ -136,6 +157,28 @@ impl State {
 		Ok(())
 	}
 
+	fn profile(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		text: &str,
+	) -> Result<(), Box<dyn std::error::Error>> {
+		let eo_username = if text.is_empty() {
+			Some(self.config.eo_username(&msg.author.name))
+		} else {
+			None
+		};
+		let eo_username = eo_username.as_deref().unwrap_or(text);
+
+		let reply = match self.session.user_details(&eo_username) {
+			Ok(user) => format!("{} {}", user.username, user.player_rating),
+			Err(eo::Error::UserNotFound) => format!("User '{}' was not found", eo_username), // TODO: add "maybe you need to add your EO username" msg here
+			Err(other) => format!("An error occurred ({})", other),
+		};
+		msg.channel_id.say(&ctx.http, &reply)?;
+
+		Ok(())
+	}
+	
 	fn profile_compare(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -159,60 +202,18 @@ impl State {
 		let me = self.session.user_details(&me)?;
 		let you = self.session.user_details(you)?;
 
-		let string = format!(
-			r#"
-```Prolog
-   Overall:   {:.2}  {}  {:.2}   {:.2}
-    Stream:   {:.2}  {}  {:.2}   {:.2}
-Jumpstream:   {:.2}  {}  {:.2}   {:.2}
-Handstream:   {:.2}  {}  {:.2}   {:.2}
-   Stamina:   {:.2}  {}  {:.2}   {:.2}
-     Jacks:   {:.2}  {}  {:.2}   {:.2}
- Chordjack:   {:.2}  {}  {:.2}   {:.2}
- Technical:   {:.2}  {}  {:.2}   {:.2}
-```			
-			"#,
-			me.rating.overall(),
-			if me.rating.overall() < you.rating.overall() { "<" } else { ">" },
-			you.rating.overall(),
-			me.rating.overall() - you.rating.overall(),
-			
-			me.rating.stream,
-			if me.rating.stream < you.rating.stream { "<" } else { ">" },
-			you.rating.stream,
-			me.rating.stream - you.rating.stream,
-
-			me.rating.jumpstream,
-			if me.rating.jumpstream < you.rating.jumpstream { "<" } else { ">" },
-			you.rating.jumpstream,
-			me.rating.jumpstream - you.rating.jumpstream,
-
-			me.rating.handstream,
-			if me.rating.handstream < you.rating.handstream { "<" } else { ">" },
-			you.rating.handstream,
-			me.rating.handstream - you.rating.handstream,
-
-			me.rating.stamina,
-			if me.rating.stamina < you.rating.stamina { "<" } else { ">" },
-			you.rating.stamina,
-			me.rating.stamina - you.rating.stamina,
-
-			me.rating.jackspeed,
-			if me.rating.jackspeed < you.rating.jackspeed { "<" } else { ">" },
-			you.rating.jackspeed,
-			me.rating.jackspeed - you.rating.jackspeed,
-
-			me.rating.chordjack,
-			if me.rating.chordjack < you.rating.chordjack { "<" } else { ">" },
-			you.rating.chordjack,
-			me.rating.chordjack - you.rating.chordjack,
-
-			me.rating.technical,
-			if me.rating.technical < you.rating.technical { "<" } else { ">" },
-			you.rating.technical,
-			me.rating.technical - you.rating.technical,
-
-		);
+		let mut string = "```Prolog\n".to_owned();
+		for skillset in eo::Skillset8::iter() {
+			string += &format!(
+				"{: >10}:   {:05.2}  {}  {:05.2}   {:+.2}\n",
+				skillset.to_string(), // to_string, or the padding won't work
+				me.rating.get8(skillset),
+				if me.rating.get8(skillset) < you.rating.get8(skillset) { "<" } else { ">" },
+				you.rating.get8(skillset),
+				me.rating.get8(skillset) - you.rating.get8(skillset),
+			);
+		}
+		string += "```";
 
 		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
 			.title(format!(
@@ -247,20 +248,11 @@ Handstream:   {:.2}  {}  {:.2}   {:.2}
 			"ping" => {
 				msg.channel_id.say(&ctx.http, "Pong!")?;
 			},
-			"user" => {
-				let eo_username = if text.is_empty() {
-					Some(self.config.eo_username(&msg.author.name))
-				} else {
-					None
-				};
-				let eo_username = eo_username.as_deref().unwrap_or(text);
-
-				let reply = match self.session.user_details(&eo_username) {
-					Ok(user) => format!("{} {}", user.username, user.player_rating),
-					Err(eo::Error::UserNotFound) => format!("User '{}' was not found", eo_username), // TODO: add "maybe you need to add your EO username" msg here
-					Err(other) => format!("An error occurred ({})", other),
-				};
-				msg.channel_id.say(&ctx.http, &reply)?;
+			"help" => {
+				msg.channel_id.say(&ctx.http, DESCRIPTION)?;
+			}
+			"profile" => {
+				self.profile(ctx, msg, text)?;
 			},
 			"userset" => {
 				if text.is_empty() {
