@@ -13,27 +13,6 @@ const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 
-const DESCRIPTION: &str = "
-Here are my commands: (Descriptions by Fission)
-
-**+profile [username]**
-*Show your fabulously superberful profile*
-**+top10 [username] [skillset]**
-*For when top9 isn't enough*
-**+top[nn] [username] [skillset]**
-*Sometimes we take things too far*
-**+compare [user1] [user2]**
-*One person is an objectively better person than the other, find out which one!*
-~~**+rival**~~
-*But are you an objectively better person than gary oak?*
-~~**+rivalset [username]**~~
-*Replace gary oak with a more suitable rival*
-**+userset [username]**
-*Don't you dare set your user to {} you imposter*
-
-You can also post links to scores and songs and I will show info about them
-";
-
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
 	country_code
@@ -249,7 +228,7 @@ impl State {
 				msg.channel_id.say(&ctx.http, "Pong!")?;
 			},
 			"help" => {
-				msg.channel_id.say(&ctx.http, DESCRIPTION)?;
+				msg.channel_id.say(&ctx.http, self.config.make_description())?;
 			}
 			"profile" => {
 				self.profile(ctx, msg, text)?;

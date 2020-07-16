@@ -7,12 +7,16 @@ static CONFIG_PATH: &str = "config.json";
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Config {
 	discord_eo_username_mapping: HashMap<String, String>,
+	
+	minanyms: Vec<String>,
+	#[serde(default)]
+	minanym_index: usize,
 }
 
 impl Config {
 	pub fn load() -> Self {
 		let config_path = Path::new(CONFIG_PATH);
-		if config_path.exists() {
+		let config: Self = if config_path.exists() {
 			let config_contents = std::fs::read_to_string(config_path)
 				.expect("Couldn't read config JSON file");
 			
@@ -20,7 +24,13 @@ impl Config {
 				.expect("Config JSON had invalid format")
 		} else {
 			std::default::Default::default()
+		};
+
+		if config.minanyms.is_empty() {
+			panic!("Empty minanyms!");
 		}
+		
+		config
 	}
 
 	pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -45,5 +55,35 @@ impl Config {
 			Some(username) => username.to_owned(),
 			None => discord_username.to_owned(),
 		}
+	}
+
+	pub fn make_description(&mut self) -> String {
+		let description = format!(
+			"
+Here are my commands: (Descriptions by Fission)
+
+**+profile [username]**
+*Show your fabulously superberful profile*
+**+top10 [username] [skillset]**
+*For when top9 isn't enough*
+**+top[nn] [username] [skillset]**
+*Sometimes we take things too far*
+**+compare [user1] [user2]**
+*One person is an objectively better person than the other, find out which one!*
+~~**+rival**~~
+*But are you an objectively better person than gary oak?*
+~~**+rivalset [username]**~~
+*Replace gary oak with a more suitable rival*
+**+userset [username]**
+*Don't you dare set your user to* {} *you imposter*
+
+You can also post links to scores and songs and I will show info about them
+			",
+			self.minanyms[self.minanym_index]
+		);
+
+		self.minanym_index = (self.minanym_index + 1) % self.minanyms.len();
+
+		description
 	}
 }
