@@ -137,6 +137,54 @@ impl State {
 		Ok(())
 	}
 
+	fn latest_scores(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		text: &str,
+	) -> Result<(), Box<dyn std::error::Error>> {
+		let eo_username = if text.is_empty() {
+			self.config.eo_username(&msg.author.name)
+		} else {
+			text.to_owned()
+		};
+
+		let latest_scores = self.session.user_latest_scores(&eo_username);
+		if let Err(eo::Error::UserNotFound) = latest_scores {
+			msg.channel_id.say(&ctx.http, format!("No such user \"{}\"", eo_username))?;
+			return Ok(());
+		}
+		let latest_scores = latest_scores?;
+
+		let country_code = self.session.user_details(&eo_username)?.country_code;
+
+		let mut response = String::from("```");
+		for (i, entry) in latest_scores.iter().enumerate() {
+			response += &format!(
+				"{}. {}: {:.2}x\n  ▸ Score: {:.2} Wife: {:.2}%\n",
+				i + 1,
+				&entry.song_name,
+				entry.rate,
+				entry.ssr_overall,
+				entry.wifescore * 100.0,
+			);
+		}
+		response += "```";
+
+		let title = format!("{}'s Last 10 Scores", eo_username);
+
+		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
+			.color(crate::ETTERNA_COLOR)
+			.description(&response)
+			.author(|a| a
+				.name(title)
+				.url(format!("https://etternaonline.com/user/profile/{}", eo_username))
+				.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", country_code))
+			)
+		))?;
+
+		Ok(())
+	}
+
 	fn profile(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -220,6 +268,9 @@ impl State {
 			"profile" => {
 				self.profile(ctx, msg, text)?;
 			},
+			"lastsession" => {
+				self.latest_scores(ctx, msg, text)?;
+			}
 			"userset" => {
 				if text.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
