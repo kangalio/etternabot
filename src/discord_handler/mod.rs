@@ -168,24 +168,56 @@ impl State {
 		let string = format!(
 			r#"
 ```Prolog
-   Overall:   {:.2}  <  {:.2}   {:.2}
-    Stream:   {:.2}  <  {:.2}   {:.2}
-Jumpstream:   {:.2}  <  {:.2}   {:.2}
-Handstream:   {:.2}  <  {:.2}   {:.2}
-   Stamina:   {:.2}  <  {:.2}   {:.2}
-     Jacks:   {:.2}  <  {:.2}   {:.2}
- Chordjack:   {:.2}  <  {:.2}   {:.2}
- Technical:   {:.2}  <  {:.2}   {:.2}
+   Overall:   {:.2}  {}  {:.2}   {:.2}
+    Stream:   {:.2}  {}  {:.2}   {:.2}
+Jumpstream:   {:.2}  {}  {:.2}   {:.2}
+Handstream:   {:.2}  {}  {:.2}   {:.2}
+   Stamina:   {:.2}  {}  {:.2}   {:.2}
+     Jacks:   {:.2}  {}  {:.2}   {:.2}
+ Chordjack:   {:.2}  {}  {:.2}   {:.2}
+ Technical:   {:.2}  {}  {:.2}   {:.2}
 ```			
 			"#,
-			me.rating.overall(), you.rating.overall(), me.rating.overall() - you.rating.overall(),
-			me.rating.stream, you.rating.stream, me.rating.stream - you.rating.stream,
-			me.rating.jumpstream, you.rating.jumpstream, me.rating.jumpstream - you.rating.jumpstream,
-			me.rating.handstream, you.rating.handstream, me.rating.handstream - you.rating.handstream,
-			me.rating.stamina, you.rating.stamina, me.rating.stamina - you.rating.stamina,
-			me.rating.jackspeed, you.rating.jackspeed, me.rating.jackspeed - you.rating.jackspeed,
-			me.rating.chordjack, you.rating.chordjack, me.rating.chordjack - you.rating.chordjack,
-			me.rating.technical, you.rating.technical, me.rating.technical - you.rating.technical,
+			me.rating.overall(),
+			if me.rating.overall() < you.rating.overall() { "<" } else { ">" },
+			you.rating.overall(),
+			me.rating.overall() - you.rating.overall(),
+			
+			me.rating.stream,
+			if me.rating.stream < you.rating.stream { "<" } else { ">" },
+			you.rating.stream,
+			me.rating.stream - you.rating.stream,
+
+			me.rating.jumpstream,
+			if me.rating.jumpstream < you.rating.jumpstream { "<" } else { ">" },
+			you.rating.jumpstream,
+			me.rating.jumpstream - you.rating.jumpstream,
+
+			me.rating.handstream,
+			if me.rating.handstream < you.rating.handstream { "<" } else { ">" },
+			you.rating.handstream,
+			me.rating.handstream - you.rating.handstream,
+
+			me.rating.stamina,
+			if me.rating.stamina < you.rating.stamina { "<" } else { ">" },
+			you.rating.stamina,
+			me.rating.stamina - you.rating.stamina,
+
+			me.rating.jackspeed,
+			if me.rating.jackspeed < you.rating.jackspeed { "<" } else { ">" },
+			you.rating.jackspeed,
+			me.rating.jackspeed - you.rating.jackspeed,
+
+			me.rating.chordjack,
+			if me.rating.chordjack < you.rating.chordjack { "<" } else { ">" },
+			you.rating.chordjack,
+			me.rating.chordjack - you.rating.chordjack,
+
+			me.rating.technical,
+			if me.rating.technical < you.rating.technical { "<" } else { ">" },
+			you.rating.technical,
+			me.rating.technical - you.rating.technical,
+
 		);
 
 		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
