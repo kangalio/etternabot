@@ -12,6 +12,7 @@ const BOT_PREFIX: &str = "+";
 const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
+const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
@@ -161,23 +162,9 @@ impl State {
 	fn profile_compare(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-		text: &str,
+		me: &str,
+		you: &str,
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let args: Vec<&str> = text.split_whitespace().collect();
-
-		let me;
-		let you;
-		if args.len() == 1 {
-			me = self.config.eo_username(&msg.author.name);
-			you = args[0];
-		} else if args.len() == 2 {
-			me = args[0].to_owned();
-			you = args[1];
-		} else {
-			msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
-			return Ok(());
-		}
-
 		let me = self.session.user_details(&me)?;
 		let you = self.session.user_details(you)?;
 
@@ -243,7 +230,10 @@ impl State {
 					return Ok(());
 				}
 
-				let response = match self.config.set_eo_username(&msg.author.name, text) {
+				let response = match self.config.set_eo_username(
+					msg.author.name.to_owned(),
+					text.to_owned()
+				) {
 					Some(old_eo_username) => format!(
 						"Successfully updated username from `{}` to `{}`",
 						old_eo_username,
@@ -253,6 +243,41 @@ impl State {
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
 				self.config.save()?;
+			},
+			"rivalset" => {
+				if text.is_empty() {
+					msg.channel_id.say(&ctx.http, CMD_RIVALSET_HELP)?;
+					return Ok(());
+				}
+				if let Err(eo::Error::UserNotFound) = self.session.user_details(text) {
+					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
+					return Ok(());
+				}
+
+				let response = match self.config.set_rival(
+					msg.author.name.to_owned(),
+					text.to_owned()
+				) {
+					Some(old_rival) => format!(
+						"Successfully updated your rival from `{}` to `{}`",
+						old_rival,
+						text,
+					),
+					None => format!("Successfully set your rival to `{}`", text),
+				};
+				msg.channel_id.say(&ctx.http, &response)?;
+				self.config.save()?;
+			},
+			"rival" => {
+				let me = &self.config.eo_username(&msg.author.name);
+				let you = match self.config.rival(&msg.author.name) {
+					Some(rival) => rival.to_owned(),
+					None => {
+						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+						return Ok(());
+					}
+				};
+				self.profile_compare(ctx, msg, me, &you)?;
 			}
 			"pattern" => {
 				let scroll_type = if text.to_lowercase().starts_with("up") {
@@ -268,7 +293,22 @@ impl State {
 				msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 			},
 			"compare" => {
-				self.profile_compare(ctx, msg, text)?;
+				let args: Vec<&str> = text.split_whitespace().collect();
+
+				let me;
+				let you;
+				if args.len() == 1 {
+					me = self.config.eo_username(&msg.author.name);
+					you = args[0];
+				} else if args.len() == 2 {
+					me = args[0].to_owned();
+					you = args[1];
+				} else {
+					msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
+					return Ok(());
+				}
+
+				self.profile_compare(ctx, msg, &me, you)?;
 			}
 			_ => {},
 		}

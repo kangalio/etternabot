@@ -6,7 +6,10 @@ static CONFIG_PATH: &str = "config.json";
 
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Config {
+	#[serde(default)]
 	discord_eo_username_mapping: HashMap<String, String>,
+	#[serde(default)]
+	rival_mapping: HashMap<String, String>, // discord username -> eo username
 	
 	minanyms: Vec<String>,
 	#[serde(default)]
@@ -39,12 +42,8 @@ impl Config {
 	}
 
 	// Returns the old EO username, if there was one registered
-	pub fn set_eo_username(&mut self, discord_username: &str, eo_username: &str) -> Option<String> {
-		// who needs allocation efficiency lul
-		self.discord_eo_username_mapping.insert(
-			discord_username.to_owned(),
-			eo_username.to_owned(),
-		)
+	pub fn set_eo_username(&mut self, discord_username: String, eo_username: String) -> Option<String> {
+		self.discord_eo_username_mapping.insert(discord_username, eo_username)
 
 	}
 
@@ -55,6 +54,14 @@ impl Config {
 			Some(username) => username.to_owned(),
 			None => discord_username.to_owned(),
 		}
+	}
+
+	pub fn set_rival(&mut self, discord_username: String, rival: String) -> Option<String> {
+		self.rival_mapping.insert(discord_username, rival)
+	}
+
+	pub fn rival(&self, discord_username: &str) -> Option<&str> {
+		self.rival_mapping.get(discord_username).map(|x| x as _)
 	}
 
 	pub fn make_description(&mut self) -> String {
@@ -70,9 +77,9 @@ Here are my commands: (Descriptions by Fission)
 *Sometimes we take things too far*
 **+compare [user1] [user2]**
 *One person is an objectively better person than the other, find out which one!*
-~~**+rival**~~
+**+rival**
 *But are you an objectively better person than gary oak?*
-~~**+rivalset [username]**~~
+**+rivalset [username]**
 *Replace gary oak with a more suitable rival*
 **+userset [username]**
 *Don't you dare set your user to* {} *you imposter*
