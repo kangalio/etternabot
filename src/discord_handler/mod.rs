@@ -1,12 +1,17 @@
+mod config;
 mod pattern_visualize;
 
 use crate::serenity; // use my custom serenity prelude
-use etternaonline_api as eo;
+mod eo {
+	pub use etternaonline_api::{Error, v2::*};
+}
+use config::Config;
 
 const BOT_PREFIX: &str = "+";
 
 const CMD_TOP_HELP: &str = "Call this command with `+topNN [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
+const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
@@ -17,22 +22,6 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 		.collect()
 }
 
-struct Config {
-
-}
-
-impl Config {
-	fn load() -> Self {
-		Self { }
-	}
-
-	// we need String here because the string can come either from `self` or from the passed
-	// parameter. So we have differing lifetimes which we can't encode with a `&str`
-	fn eo_username(&self, discord_username: &str) -> String {
-		discord_username.to_owned() // STUB
-	}
-}
-
 pub struct State {
 	config: Config,
 	session: eo::Session,
@@ -40,16 +29,21 @@ pub struct State {
 
 impl State {
 	pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-		Ok(State {
-			session: eo::Session::new_from_login(
-				crate::auth::EO_USERNAME.to_owned(),
-				crate::auth::EO_PASSWORD.to_owned(),
-				crate::auth::EO_CLIENT_DATA.to_owned(),
-				std::time::Duration::from_millis(1000),
-				Some(std::time::Duration::from_millis(30000)),
-			)?,
-			config: Config::load(),
-		})
+		let session = eo::Session::new_from_login(
+			crate::auth::EO_USERNAME.to_owned(),
+			crate::auth::EO_PASSWORD.to_owned(),
+			crate::auth::EO_CLIENT_DATA.to_owned(),
+			std::time::Duration::from_millis(1000),
+			Some(std::time::Duration::from_millis(30000)),
+		)?;
+
+		// etternaonline_api::web::Session::new_from_login(
+		// 	std::time::Duration::from_millis(1000),
+		// 	Some(std::time::Duration::from_millis(30000)),
+		// ).test();
+		// std::process::exit(0);
+
+		Ok(State {  session, config: Config::load() })
 	}
 
 	fn top_scores(&mut self,
@@ -268,6 +262,27 @@ Handstream:   {:.2}  {}  {:.2}   {:.2}
 				};
 				msg.channel_id.say(&ctx.http, &reply)?;
 			},
+			"userset" => {
+				if text.is_empty() {
+					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
+					return Ok(());
+				}
+				if let Err(eo::Error::UserNotFound) = self.session.user_details(text) {
+					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
+					return Ok(());
+				}
+
+				let response = match self.config.set_eo_username(&msg.author.name, text) {
+					Some(old_eo_username) => format!(
+						"Successfully updated username from `{}` to `{}`",
+						old_eo_username,
+						text,
+					),
+					None => format!("Successfully set username to `{}`", text),
+				};
+				msg.channel_id.say(&ctx.http, &response)?;
+				self.config.save()?;
+			}
 			"pattern" => {
 				let scroll_type = if text.to_lowercase().starts_with("up") {
 					pattern_visualize::ScrollType::Upscroll
