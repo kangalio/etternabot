@@ -114,7 +114,7 @@ impl State {
 
 		if limit != 10 && skillset == None {
 			limit = 10;
-			response += "(due to a bug in the EO v2 API, only 10 entries can be shown)";
+			response += "(due to a bug in the EO v2 API, only 10 entries can be shown in Overall mode)";
 		}
 		
 		response += "```";
@@ -191,18 +191,61 @@ impl State {
 		text: &str,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let eo_username = if text.is_empty() {
-			Some(self.config.eo_username(&msg.author.name))
+			self.config.eo_username(&msg.author.name)
 		} else {
-			None
+			text.to_owned()
 		};
-		let eo_username = eo_username.as_deref().unwrap_or(text);
 
-		let reply = match self.session.user_details(&eo_username) {
-			Ok(user) => format!("{} {}", user.username, user.player_rating),
-			Err(eo::Error::UserNotFound) => format!("User '{}' was not found", eo_username), // TODO: add "maybe you need to add your EO username" msg here
-			Err(other) => format!("An error occurred ({})", other),
+		let details = match self.session.user_details(&eo_username) {
+			Ok(details) => details,
+			Err(eo::Error::UserNotFound) => {
+				msg.channel_id.say(
+					&ctx.http,
+					format!("User `{}` was not found (run `+userset`)", eo_username),
+				)?;
+				return Ok(());
+			},
+			Err(e) => return Err(e.into()),
 		};
-		msg.channel_id.say(&ctx.http, &reply)?;
+
+		let ranks = self.session.user_ranks_per_skillset(&eo_username)?;
+
+		let mut title = eo_username.to_owned();
+		if details.is_moderator {
+			title += " (Mod)";
+		}
+		if details.is_patreon {
+			title += " (Patron)";
+		}
+
+		let mut rating_string = "```Prolog\n".to_owned();
+		for skillset in eo::Skillset8::iter() {
+			rating_string += &format!(
+				"{: >10}:   {: >5.2} (#{})\n",
+				skillset.to_string(),
+				details.rating.get(skillset),
+				ranks.get(skillset),
+			);
+		}
+		rating_string += "```";
+
+		msg.channel_id.send_message(&ctx.http, |m| m.embed(|embed| {
+			embed
+				.description(rating_string)
+				.author(|a| a
+					.name(&title)
+					.url(format!("https://etternaonline.com/user/profile/{}", &eo_username))
+					.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", &details.country_code))
+				)
+				.field(format!("About {}:", eo_username), html2md::parse_html(&details.about_me), false)
+				.thumbnail(format!("https://etternaonline.com/avatars/{}", &details.avatar_url))
+				.color(crate::ETTERNA_COLOR);
+			if let Some(modifiers) = &details.default_modifiers {
+				embed.field("Default modifiers:", modifiers, false);
+			}
+			embed
+		}
+		))?;
 
 		Ok(())
 	}
@@ -219,12 +262,12 @@ impl State {
 		let mut string = "```Prolog\n".to_owned();
 		for skillset in eo::Skillset8::iter() {
 			string += &format!(
-				"{: >10}:   {:05.2}  {}  {:05.2}   {:+.2}\n",
+				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work
-				me.rating.get8(skillset),
-				if me.rating.get8(skillset) < you.rating.get8(skillset) { "<" } else { ">" },
-				you.rating.get8(skillset),
-				me.rating.get8(skillset) - you.rating.get8(skillset),
+				me.rating.get(skillset),
+				if me.rating.get(skillset) < you.rating.get(skillset) { "<" } else { ">" },
+				you.rating.get(skillset),
+				me.rating.get(skillset) - you.rating.get(skillset),
 			);
 		}
 		string += "```";
@@ -264,13 +307,13 @@ impl State {
 			},
 			"help" => {
 				msg.channel_id.say(&ctx.http, self.config.make_description())?;
-			}
+			},
 			"profile" => {
 				self.profile(ctx, msg, text)?;
 			},
 			"lastsession" => {
 				self.latest_scores(ctx, msg, text)?;
-			}
+			},
 			"userset" => {
 				if text.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
