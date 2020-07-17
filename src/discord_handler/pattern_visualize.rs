@@ -32,7 +32,7 @@ impl NoteSkin {
 	pub fn from_files(
 		noteskin_path: &str,
 		noteskin_receptor_path: &str,
-	) -> Result<Self, Box<dyn std::error::Error>> {
+	) -> anyhow::Result<Self> {
 		let mut img = image::open(noteskin_path)?;
 		assert_eq!(img.width(), 64);
 	
@@ -62,7 +62,7 @@ fn render_pattern(
 	noteskin: &NoteSkin,
 	pattern: &Pattern,
 	scroll_type: ScrollType,
-) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+) -> anyhow::Result<RgbaImage> {
 	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
 	let keymode = 1 + *pattern.rows.iter().flatten().max()
 		.ok_or(StringError("Given pattern is empty"))?;
@@ -117,7 +117,7 @@ fn first_char_width(string: &str) -> usize {
 	unreachable!();
 }
 
-fn parse_pattern(mut string: &str) -> Result<Pattern, Box<dyn std::error::Error>> {
+fn parse_pattern(mut string: &str) -> anyhow::Result<Pattern> {
 	let mut rows = Vec::new();
 
 	// this parser works by 'popping' characters off the start of the string until the string is empty
@@ -160,7 +160,7 @@ pub fn generate(
 	output_path: &str,
 	pattern_str: &str,
 	scroll_type: ScrollType,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
 
 	let noteskin = NoteSkin::from_files("noteskin/notes.png", "noteskin/receptor.png")?;
 	let mut pattern = parse_pattern(pattern_str)?;

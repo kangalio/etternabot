@@ -28,7 +28,7 @@ pub struct State {
 }
 
 impl State {
-	pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+	pub fn load() -> anyhow::Result<Self> {
 		let session = eo::Session::new_from_login(
 			crate::auth::EO_USERNAME.to_owned(),
 			crate::auth::EO_PASSWORD.to_owned(),
@@ -37,13 +37,29 @@ impl State {
 			Some(std::time::Duration::from_millis(30000)),
 		)?;
 
-		// etternaonline_api::web::Session::new_from_login(
-		// 	std::time::Duration::from_millis(1000),
-		// 	Some(std::time::Duration::from_millis(30000)),
-		// ).test();
-		// std::process::exit(0);
-
 		Ok(State {  session, config: Config::load() })
+	}
+
+	fn get_eo_username(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+	) -> anyhow::Result<String> {
+		if let Some(eo_username) = self.config.eo_username(&msg.author.name) {
+			return Ok(eo_username.to_owned());
+		}
+
+		match self.session.user_details(&msg.author.name) {
+			Ok(_) => Ok(msg.author.name.to_owned()),
+			Err(eo::Error::UserNotFound) => {
+				msg.channel_id.say(&ctx.http, &format!(
+					"User '{}' not found on EO. Please manually specify your EtternaOnline \
+						username with `+userset`",
+					&msg.author.name
+				))?;
+				Err(anyhow::anyhow!("don't print this"))
+			},
+			Err(other) => Err(other.into()),
+		}
 	}
 
 	fn top_scores(&mut self,
@@ -51,7 +67,7 @@ impl State {
 		msg: &serenity::Message,
 		text: &str,
 		mut limit: u32,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		if !(1..=30).contains(&limit) {
 			msg.channel_id.say(&ctx.http, "Only limits up to 30 are supported")?;
 			return Ok(());
@@ -63,12 +79,12 @@ impl State {
 		let eo_username;
 		if args.len() == 0 {
 			skillset = None;
-			eo_username = self.config.eo_username(&msg.author.name);
+			eo_username = self.get_eo_username(ctx, msg)?;
 		} else if args.len() == 1 {
 			match eo::Skillset7::from_user_input(args[0]) {
 				Some(parsed_skillset) => {
 					skillset = Some(parsed_skillset);
-					eo_username = self.config.eo_username(&msg.author.name);
+					eo_username = self.get_eo_username(ctx, msg)?;
 				},
 				None => {
 					skillset = None;
@@ -145,9 +161,9 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		let eo_username = if text.is_empty() {
-			self.config.eo_username(&msg.author.name)
+			self.get_eo_username(ctx, msg)?
 		} else {
 			text.to_owned()
 		};
@@ -193,9 +209,9 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		let eo_username = if text.is_empty() {
-			self.config.eo_username(&msg.author.name)
+			self.get_eo_username(ctx, msg)?
 		} else {
 			text.to_owned()
 		};
@@ -259,7 +275,7 @@ impl State {
 		msg: &serenity::Message,
 		me: &str,
 		you: &str,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		let me = self.session.user_details(&me)?;
 		let you = self.session.user_details(you)?;
 
@@ -301,7 +317,7 @@ impl State {
 		msg: &serenity::Message,
 		cmd: &str,
 		text: &str
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		if cmd.starts_with("top") {
 			if let Ok(limit) = cmd[3..].parse() {
 				self.top_scores(ctx, msg, text, limit)?;
@@ -318,6 +334,7 @@ impl State {
 			"help" => {
 				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
 					.description(self.config.make_description())
+					.color(crate::ETTERNA_COLOR)
 				))?;
 			},
 			"profile" => {
@@ -392,7 +409,7 @@ impl State {
 				self.config.save()?;
 			},
 			"rival" => {
-				let me = &self.config.eo_username(&msg.author.name);
+				let me = &self.get_eo_username(ctx, msg)?;
 				let you = match self.config.rival(&msg.author.name) {
 					Some(rival) => rival.to_owned(),
 					None => {
@@ -421,7 +438,7 @@ impl State {
 				let me;
 				let you;
 				if args.len() == 1 {
-					me = self.config.eo_username(&msg.author.name);
+					me = self.get_eo_username(ctx, msg)?;
 					you = args[0];
 				} else if args.len() == 2 {
 					me = args[0].to_owned();
@@ -442,7 +459,7 @@ impl State {
 		_ctx: &serenity::Context,
 		_msg: &serenity::Message,
 		song_id: u32,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		println!("Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
 			the required functions :(", song_id);
 		Ok(())
@@ -452,7 +469,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		scorekey: &str,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		let score = self.session.score_data(scorekey)?;
 
 		let ssrs_string = format!(r#"
@@ -520,7 +537,7 @@ Marvelous: {}
 	pub fn message(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-	) -> Result<(), Box<dyn std::error::Error>> {
+	) -> anyhow::Result<()> {
 		// Let's not do this, because if a non existing command is called (e.g. `+asdfg`) there'll
 		// be typing broadcasted, but no actual response, which is stupid
 		// if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http) {

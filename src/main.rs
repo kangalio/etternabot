@@ -7,7 +7,7 @@ mod auth;
 mod serenity {
 	pub use serenity::{
 		prelude::*,
-		model::{gateway::Ready, channel::Message, id::UserId},
+		model::{gateway::Ready, channel::Message, id::{UserId, ChannelId}},
 		framework::standard::{Args, Delimiter},
 		utils::Colour as Color,
 	};
@@ -15,7 +15,7 @@ mod serenity {
 
 pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146);
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
 	struct Handler {
 		state: std::sync::Mutex<discord_handler::State>,
 	}
@@ -33,8 +33,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 			let mut state = self.state.lock().unwrap();
 			if let Err(e) = state.message(&ctx, &msg) {
-				if let Err(inner_e) = msg.channel_id.say(&ctx.http, format!("{}", e)) {
-					println!("Failed with '{}' while sending error message '{}'", inner_e, e);
+				let error_msg = e.to_string();
+				if !error_msg.contains("don't print this") {
+					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
+						println!("Failed with '{}' while sending error message '{}'", inner_e, &error_msg);
+					}
 				}
 			}
 		}

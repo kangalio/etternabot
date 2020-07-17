@@ -38,7 +38,7 @@ impl Config {
 		config
 	}
 
-	pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+	pub fn save(&self) -> anyhow::Result<()> {
 		serde_json::to_writer_pretty(std::fs::File::create(CONFIG_PATH)?, self)?;
 		Ok(())
 	}
@@ -51,11 +51,8 @@ impl Config {
 
 	// we need String here because the string can come either from `self` or from the passed
 	// parameter. So we have differing lifetimes which we can't encode with a `&str`
-	pub fn eo_username(&self, discord_username: &str) -> String {
-		match self.discord_eo_username_mapping.get(discord_username) {
-			Some(username) => username.to_owned(),
-			None => discord_username.to_owned(),
-		}
+	pub fn eo_username(&self, discord_username: &str) -> Option<&str> {
+		self.discord_eo_username_mapping.get(discord_username).map(|s| s as _)
 	}
 
 	pub fn set_scroll(&mut self, discord_username: String, scroll: super::pattern_visualize::ScrollType) {
