@@ -544,6 +544,30 @@ Marvelous: {}
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
+		if *msg.channel_id.as_u64() == 374774075865956355 { // presumably #pack-ranking
+			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
+			let num_links = url_regex.find_iter(&msg.content).count();
+			if num_links == 0 && msg.attachments.is_empty() {
+				msg.delete(&ctx.http)?;
+				let notice_msg = msg.channel_id.say(&ctx.http, "Links and attachments only in this channel please")?;
+				std::thread::sleep(std::time::Duration::from_millis(5000));
+				notice_msg.delete(&ctx.http)?;
+				return Ok(());
+			}
+		}
+
+		// If the message is in etternaonline server, and not in an allowed channel, and not sent
+		// by a person with the permission to manage the guild, don't process the command
+		let allowed_channels = [384829579308564480, 352646080346849281, 367466722405515264, 427509181457629184, 424545864351219712];
+		if let (Some(guild_id), Some(guild_member)) = (msg.guild_id, msg.member(&ctx.cache)) {
+			if *guild_id.as_u64() == 339597420239519755
+				&& !allowed_channels.contains(msg.channel_id.as_u64())
+				&& !guild_member.permissions(&ctx.cache)?.manage_guild()
+			{
+				return Ok(());
+			}
+		}
+
 		for captures in regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)")
 			.unwrap()
 			.captures_iter(&msg.content)
