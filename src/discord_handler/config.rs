@@ -10,6 +10,8 @@ pub struct Config {
 	discord_eo_username_mapping: HashMap<String, String>,
 	#[serde(default)]
 	rival_mapping: HashMap<String, String>, // discord username -> eo username
+	#[serde(default)]
+	preferred_scroll: HashMap<String, super::pattern_visualize::ScrollType>,
 	
 	minanyms: Vec<String>,
 	#[serde(default)]
@@ -56,6 +58,14 @@ impl Config {
 		}
 	}
 
+	pub fn set_scroll(&mut self, discord_username: String, scroll: super::pattern_visualize::ScrollType) {
+		self.preferred_scroll.insert(discord_username, scroll);
+	}
+
+	pub fn scroll(&self, discord_username: &str) -> Option<super::pattern_visualize::ScrollType> {
+		self.preferred_scroll.get(discord_username).copied()
+	}
+
 	pub fn set_rival(&mut self, discord_username: String, rival: String) -> Option<String> {
 		self.rival_mapping.insert(discord_username, rival)
 	}
@@ -87,6 +97,8 @@ Here are my commands: (Descriptions by Fission)
 More commands:
 **+pattern [down/up] [pattern string]**
 *Visualize note patterns, for example* `[14][23][14]` *or* `4321234`
+**+scrollset [down/up]**
+*Set your preferred scroll type that will be used as a default*
 **+lastsession [username]**
 *Show the last 10 scores*
 **+help**

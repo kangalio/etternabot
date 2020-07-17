@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
+use serde::{Deserialize, Serialize};
 
 
 /// An ad-hoc error type that fits any string literal
@@ -14,7 +15,7 @@ impl std::fmt::Display for StringError {
 }
 impl std::error::Error for StringError {}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum ScrollType {
 	Upscroll,
 	Downscroll,
@@ -162,7 +163,8 @@ pub fn generate(
 ) -> Result<(), Box<dyn std::error::Error>> {
 
 	let noteskin = NoteSkin::from_files("noteskin/notes.png", "noteskin/receptor.png")?;
-	let pattern = parse_pattern(pattern_str)?;
+	let mut pattern = parse_pattern(pattern_str)?;
+	pattern.rows.truncate(100);
 	let buffer = render_pattern(&noteskin, &pattern, scroll_type)?;
 	
 	buffer.save(output_path)?;

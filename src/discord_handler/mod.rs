@@ -7,12 +7,11 @@ mod eo {
 }
 use config::Config;
 
-const BOT_PREFIX: &str = "+";
-
 const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
+const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
@@ -206,7 +205,7 @@ impl State {
 			Err(eo::Error::UserNotFound) => {
 				msg.channel_id.say(
 					&ctx.http,
-					format!("User `{}` was not found (run `+userset`)", eo_username),
+					format!("User `{}` was not found (maybe run `+userset`)", eo_username),
 				)?;
 				return Ok(());
 			},
@@ -270,7 +269,13 @@ impl State {
 				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work
 				me.rating.get(skillset),
-				if me.rating.get(skillset) < you.rating.get(skillset) { "<" } else { ">" },
+				if (me.rating.get(skillset) - you.rating.get(skillset)).abs() < f64::EPSILON {
+					"="
+				} else if me.rating.get(skillset) > you.rating.get(skillset) { 
+					">"
+				} else {
+					"<"
+				},
 				you.rating.get(skillset),
 				me.rating.get(skillset) - you.rating.get(skillset),
 			);
@@ -311,7 +316,9 @@ impl State {
 				msg.channel_id.say(&ctx.http, "Pong!")?;
 			},
 			"help" => {
-				msg.channel_id.say(&ctx.http, self.config.make_description())?;
+				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
+					.description(self.config.make_description())
+				))?;
 			},
 			"profile" => {
 				self.profile(ctx, msg, text)?;
@@ -319,6 +326,23 @@ impl State {
 			"lastsession" => {
 				self.latest_scores(ctx, msg, text)?;
 			},
+			"scrollset" => {
+				let scroll = match &text.to_lowercase() as &str {
+					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
+					"up" | "upscroll" => pattern_visualize::ScrollType::Upscroll,
+					"" => {
+						msg.channel_id.say(&ctx.http, CMD_SCROLLSET_HELP)?;
+						return Ok(());
+					},
+					_ => {
+						msg.channel_id.say(&ctx.http, format!("No such scroll '{}'", text))?;
+						return Ok(());
+					},
+				};
+				self.config.set_scroll(msg.author.name.to_owned(), scroll);
+				self.config.save()?;
+				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
+			}
 			"userset" => {
 				if text.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
@@ -384,7 +408,7 @@ impl State {
 				} else if text.starts_with("down") {
 					pattern_visualize::ScrollType::Downscroll
 				} else {
-					pattern_visualize::ScrollType::Upscroll
+					self.config.scroll(&msg.author.name).unwrap_or(pattern_visualize::ScrollType::Upscroll)
 				};
 				pattern_visualize::generate("output.png", text, scroll_type)?;
 
@@ -527,8 +551,8 @@ Marvelous: {}
 			}
 		}
 
-		if msg.content.starts_with(BOT_PREFIX) {
-			let text = &msg.content[BOT_PREFIX.len()..];
+		if msg.content.starts_with('+') {
+			let text = &msg.content[1..];
 
 			// Split message into command part and parameter part
 			let mut a = text.splitn(2, ' ');
