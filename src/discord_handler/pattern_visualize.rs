@@ -15,6 +15,8 @@ pub enum Error {
 	EmptyPattern,
 	#[error("Error in the image library")]
 	ImageError(#[from] image::ImageError),
+	#[error("This keymode is not implemented")]
+	KeymodeNotImplemented(u32),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -95,16 +97,16 @@ impl Noteskin5k {
 		let center_receptor = image::open(center_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
 		let corner_receptor = image::open(corner_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
 
-		let mut img = image::open(center_notes_path)?;
+		let img = image::open(center_notes_path)?;
 		let center_notes: Vec<_> = (0..img.height())
 			.step_by(64)
-			.map(|y| img.crop(0, y, 64, 64).into_rgba())
+			.map(|y| img.crop_imm(0, y, 64, 64).into_rgba())
 			.collect();
 		
-		let mut img = image::open(corner_notes_path)?;
+		let img = image::open(corner_notes_path)?;
 		let corner_notes: Vec<_> = (0..img.height())
 			.step_by(64)
-			.map(|y| img.crop(0, y, 64, 64).into_rgba())
+			.map(|y| img.crop_imm(0, y, 64, 64).into_rgba())
 			.collect();
 
 		Ok(Self { center_notes, center_receptor, corner_notes, corner_receptor })
@@ -129,6 +131,63 @@ impl Noteskin for Noteskin5k {
 	
     fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
         Self::get_img(&self.corner_notes[index], &self.center_notes[index], lane)
+    }
+}
+
+struct Noteskin6k {
+	up_notes: Vec<RgbaImage>,
+	up_receptor: RgbaImage,
+	down_left_notes: Vec<RgbaImage>,
+	down_left_receptor: RgbaImage,
+}
+
+impl Noteskin6k {
+	pub fn read(
+		up_notes_path: &str,
+		up_receptor_path: &str,
+	) -> Result<Self, Error> {
+		let up_to_down_left = |img: &RgbaImage| imageproc::geometric_transformations::rotate_about_center(
+			img,
+			std::f32::consts::PI * 1.25,
+			imageproc::geometric_transformations::Interpolation::Bilinear,
+			image::Rgba::from([0, 0, 0, 0]),
+		);
+
+		let up_receptor = image::open(up_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+		let down_left_receptor = up_to_down_left(&up_receptor);
+
+		let img = image::open(up_notes_path)?;
+		let mut up_notes = Vec::new();
+		let mut down_left_notes = Vec::new();
+		for y in (0..img.height()).step_by(64) {
+			let up_note = img.crop_imm(0, y, 64, 64).into_rgba();
+			down_left_notes.push(up_to_down_left(&up_note));
+			up_notes.push(up_note);
+		}
+
+		Ok(Self { down_left_notes, down_left_receptor, up_notes, up_receptor })
+	}
+
+	fn rotate<'a>(up_arrow: &'a RgbaImage, down_left_arrow: &'a RgbaImage, lane: u32) -> Cow<'a, RgbaImage> {
+		match lane {
+			0 => Cow::Owned(image::imageops::rotate90(up_arrow)),
+			1 => Cow::Owned(image::imageops::rotate90(down_left_arrow)),
+			2 => Cow::Borrowed(up_arrow),
+			3 => Cow::Owned(image::imageops::rotate180(up_arrow)),
+			4 => Cow::Owned(image::imageops::rotate180(down_left_arrow)),
+			5 => Cow::Owned(image::imageops::rotate270(up_arrow)),
+			_ => unimplemented!(),
+		}
+	}
+}
+
+impl Noteskin for Noteskin6k {
+	fn receptor(&self, lane: u32) -> Cow<RgbaImage> {
+        Self::rotate(&self.up_receptor, &self.down_left_receptor, lane)
+	}
+	
+    fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+        Self::rotate(&self.up_notes[index], &self.down_left_notes[index], lane)
     }
 }
 
@@ -260,8 +319,10 @@ pub fn generate(
 			"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
 			false,
 		)?),
-		6 => todo!(),
-		10..=u32::MAX => unimplemented!(),
+		6 => Box::new(Noteskin6k::read(
+			"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+		)?),
+		other @ 10..=u32::MAX => return Err(Error::KeymodeNotImplemented(other)),
 	};
 
 	pattern.rows.truncate(100);

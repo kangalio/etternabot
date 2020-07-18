@@ -14,4 +14,5 @@ html2md = "0.2.9"
 thiserror = "1.0.20"
 anyhow = "1.0.31"
 rand = "0.7.3"
+imageproc = "0.21.0"
 etternaonline_api = { path = "../eo-api" }
