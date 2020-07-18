@@ -47,9 +47,6 @@ pub struct Data {
 	rival_mapping: HashMap<String, String>, // discord username -> eo username
 	#[serde(default)]
 	preferred_scroll: HashMap<String, super::pattern_visualize::ScrollType>,
-	
-	#[serde(default)]
-	minanym_index: usize,
 }
 
 impl Data {
@@ -132,10 +129,8 @@ More commands:
 
 You can also post links to scores and songs and I will show info about them
 			",
-			minanyms[self.minanym_index]
+			minanyms[(rand::random::<f64>() * minanyms.len() as f64) as usize]
 		);
-
-		self.minanym_index = (self.minanym_index + 1) % minanyms.len();
 
 		description
 	}
