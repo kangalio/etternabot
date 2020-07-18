@@ -23,33 +23,113 @@ pub enum ScrollType {
 	Downscroll,
 }
 
-struct NoteSkin {
-	notes: Vec<RgbaImage>,
-	receptor: RgbaImage,
+trait Noteskin {
+	fn receptor(&self, lane: u32) -> Cow<RgbaImage>;
+	fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage>;
 }
 
-impl NoteSkin {
+struct NoteskinLdur {
+	notes: Vec<RgbaImage>,
+	receptor: RgbaImage,
+	rotate: bool,
+}
+
+impl NoteskinLdur {
 	/// Read the given noteskin image path and split it into multiple note images, each of size
 	/// 64x64
-	pub fn from_files(
-		noteskin_path: &str,
-		noteskin_receptor_path: &str,
+	pub fn read(
+		notes_path: &str,
+		receptor_path: &str,
+		rotate: bool,
 	) -> Result<Self, Error> {
-		let mut img = image::open(noteskin_path)?;
-		assert_eq!(img.width(), 64);
+		let mut img = image::open(notes_path)?;
 	
 		let notes: Vec<_> = (0..img.height())
 			.step_by(64)
 			.map(|y| img.crop(0, y, 64, 64).into_rgba())
 			.collect();
 
-		let receptor = image::open(noteskin_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+		let receptor = image::open(receptor_path)?.crop(0, 0, 64, 64).into_rgba();
 
-		Ok(Self { notes, receptor })
+		Ok(Self { notes, receptor, rotate })
 	}
 
-	pub fn receptor(&self) -> &RgbaImage { &self.receptor }
-	pub fn note(&self, index: usize) -> &RgbaImage { &self.notes[index] }
+	fn rotate(img: &RgbaImage, lane: u32, rotate: bool) -> Cow<RgbaImage> {
+		if !rotate { return Cow::Borrowed(img) }
+
+		match lane % 4 {
+			0 => Cow::Owned(image::imageops::rotate90(img)),
+			1 => Cow::Borrowed(img),
+			2 => Cow::Owned(image::imageops::rotate180(img)),
+			3 => Cow::Owned(image::imageops::rotate270(img)),
+			_ => unreachable!(),
+		}
+	}
+}
+
+impl Noteskin for NoteskinLdur {
+	fn receptor(&self, lane: u32) -> Cow<RgbaImage> {
+		Self::rotate(&self.receptor, lane, self.rotate)
+	}
+
+	fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+		Self::rotate(&self.notes[index], lane, self.rotate)
+	}
+}
+
+struct Noteskin5k {
+	center_notes: Vec<RgbaImage>,
+	center_receptor: RgbaImage,
+	// corner images point left-down
+	corner_notes: Vec<RgbaImage>,
+	corner_receptor: RgbaImage,
+}
+
+impl Noteskin5k {
+	pub fn read(
+		center_notes_path: &str,
+		center_receptor_path: &str,
+		corner_notes_path: &str,
+		corner_receptor_path: &str,
+	) -> Result<Self, Error> {
+		let center_receptor = image::open(center_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+		let corner_receptor = image::open(corner_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+
+		let mut img = image::open(center_notes_path)?;
+		let center_notes: Vec<_> = (0..img.height())
+			.step_by(64)
+			.map(|y| img.crop(0, y, 64, 64).into_rgba())
+			.collect();
+		
+		let mut img = image::open(corner_notes_path)?;
+		let corner_notes: Vec<_> = (0..img.height())
+			.step_by(64)
+			.map(|y| img.crop(0, y, 64, 64).into_rgba())
+			.collect();
+
+		Ok(Self { center_notes, center_receptor, corner_notes, corner_receptor })
+	}
+
+	fn get_img<'a>(corner: &'a RgbaImage, center: &'a RgbaImage, lane: u32) -> Cow<'a, RgbaImage> {
+		match lane {
+			0 => Cow::Borrowed(corner),
+			1 => Cow::Owned(image::imageops::rotate90(corner)),
+			2 => Cow::Borrowed(center),
+			3 => Cow::Owned(image::imageops::rotate180(corner)),
+			4 => Cow::Owned(image::imageops::rotate270(corner)),
+			other => panic!("Out of bounds 5k lane {}", other),
+		}
+	}
+}
+
+impl Noteskin for Noteskin5k {
+    fn receptor(&self, lane: u32) -> Cow<RgbaImage> {
+        Self::get_img(&self.corner_receptor, &self.center_receptor, lane)
+	}
+	
+    fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+        Self::get_img(&self.corner_notes[index], &self.center_notes[index], lane)
+    }
 }
 
 struct Pattern {
@@ -58,16 +138,23 @@ struct Pattern {
 	pub rows: Vec<Vec<u32>>,
 }
 
+impl Pattern {
+	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
+	pub fn keymode(&self) -> Result<u32, Error> {
+		let keymode = 1 + self.rows.iter().flatten().max()
+			.ok_or(Error::EmptyPattern)?;
+		Ok(keymode)
+	}
+}
+
 /// Parameter `note_imgs`: a slice of 64x64 images, in the following order: 4ths, 8ths, 12ths,
 /// 16ths, 24ths, 32nds, 48ths, 64ths, 192nds
 fn render_pattern(
-	noteskin: &NoteSkin,
+	noteskin: &dyn Noteskin,
 	pattern: &Pattern,
 	scroll_type: ScrollType,
 ) -> Result<RgbaImage, Error> {
-	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
-	let keymode = 1 + *pattern.rows.iter().flatten().max()
-		.ok_or(Error::EmptyPattern)?;
+	let keymode = pattern.keymode()?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
 	let width = 64 * keymode;
@@ -80,29 +167,20 @@ fn render_pattern(
 			y = (buffer.height() / 64) - y - 1;
 		}
 
-		// Rotate appropriately
-		let note_img = match x {
-			0 => Cow::Owned(image::imageops::rotate90(note_img)),
-			1 => Cow::Borrowed(note_img),
-			2 => Cow::Owned(image::imageops::rotate180(note_img)),
-			3 => Cow::Owned(image::imageops::rotate270(note_img)),
-			_ => Cow::Borrowed(note_img),
-		};
-
-		buffer.copy_from(note_img.as_ref(), x * 64, y * 64)
-			.expect("Note image is too large");
+		buffer.copy_from(note_img, x * 64, y * 64)
+			.expect("Note image is too large (shouldn't happen)");
 	};
 
-	for x in 0..keymode {
-		place_note(noteskin.receptor(), x, 0);
+	for lane in 0..keymode {
+		place_note(&noteskin.receptor(lane), lane, 0);
 	}
 
 	for (i, row) in pattern.rows.iter().enumerate() {
-		// Select a note image in the order of 4th-16th-8th-16th (cycle repeats)
-		let note_img = noteskin.note([0, 3, 1, 3][i % 4]);
-
 		for &lane in row {
-			place_note(note_img, lane, i as u32);
+			// Select a note image in the order of 4th-16th-8th-16th (cycle repeats)
+			let note_img = noteskin.note([0, 3, 1, 3][i % 4], lane);
+
+			place_note(&note_img, lane, i as u32);
 		}
 	}
 	
@@ -120,12 +198,12 @@ fn first_char_width(string: &str) -> usize {
 }
 
 fn char_to_lane(c: u8) -> Option<u32> {
-	match c {
+	match c.to_ascii_lowercase() {
 		b'1'..=b'9' => Some((c - b'1') as u32),
-		b'l' | b'L' => Some(0),
-		b'd' | b'D' => Some(1),
-		b'u' | b'U' => Some(2),
-		b'r' | b'R' => Some(3),
+		b'l' => Some(0),
+		b'd' => Some(1),
+		b'u' => Some(2),
+		b'r' => Some(3),
 		_ => None,
 	}
 }
@@ -167,10 +245,27 @@ pub fn generate(
 	scroll_type: ScrollType,
 ) -> Result<(), Error> {
 
-	let noteskin = NoteSkin::from_files("noteskin/notes.png", "noteskin/receptor.png")?;
 	let mut pattern = parse_pattern(pattern_str)?;
+
+	let noteskin: Box<dyn Noteskin> = match pattern.keymode()? {
+		0..=4 | 8 => Box::new(NoteskinLdur::read(
+			"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+			true,
+		)?),
+		5 => Box::new(Noteskin5k::read(
+			"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
+			"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png"
+		)?),
+		7 | 9 => Box::new(NoteskinLdur::read(
+			"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
+			false,
+		)?),
+		6 => todo!(),
+		10..=u32::MAX => unimplemented!(),
+	};
+
 	pattern.rows.truncate(100);
-	let buffer = render_pattern(&noteskin, &pattern, scroll_type)?;
+	let buffer = render_pattern(noteskin.as_ref(), &pattern, scroll_type)?;
 	
 	buffer.save(output_path)?;
 
