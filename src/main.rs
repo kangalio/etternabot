@@ -7,7 +7,7 @@ mod auth;
 mod serenity {
 	pub use serenity::{
 		prelude::*,
-		model::{gateway::Ready, channel::Message, id::{UserId, ChannelId}},
+		model::{gateway::Ready, channel::Message, id::{UserId, ChannelId}, guild::Member},
 		framework::standard::{Args, Delimiter},
 		utils::Colour as Color,
 	};
@@ -27,8 +27,8 @@ fn main() -> anyhow::Result<()> {
 	
 		fn message(&self, ctx: serenity::Context, msg: serenity::Message) {
 			// hehe no, we don't want endless message chains
-			// (originally I wanted to just ignore own messages, but that's awkward so let's just
-			// ignore all bot messages)
+			// (originally I wanted to just ignore own messages, but that's awkward to implement so
+			// let's just ignore all bot messages)
 			if msg.author.bot { return }
 
 			let mut state = self.state.lock().unwrap();
@@ -36,9 +36,20 @@ fn main() -> anyhow::Result<()> {
 				let error_msg = e.to_string();
 				if !error_msg.contains("don't print this") {
 					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
-						println!("Failed with '{}' while sending error message '{}'", inner_e, &error_msg);
+						println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
 					}
 				}
+			}
+		}
+
+		fn guild_member_update(&self,
+			ctx: serenity::Context,
+			old: Option<serenity::Member>,
+			new: serenity::Member
+		) {
+			let mut state = self.state.lock().unwrap();
+			if let Err(e) = state.guild_member_update(ctx, old, new) {
+				println!("Error in guild member update: {:?}", e);
 			}
 		}
 	}

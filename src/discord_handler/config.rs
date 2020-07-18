@@ -16,6 +16,11 @@ pub struct Config {
 	minanyms: Vec<String>,
 	#[serde(default)]
 	minanym_index: usize,
+
+	pub promotion_gratulations_channel: u64,
+	pub link_and_attachments_only_channel: u64,
+	pub allowed_channels: Vec<u64>,
+	pub etterna_online_guild_id: u64,
 }
 
 impl Config {

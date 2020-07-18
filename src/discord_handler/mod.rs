@@ -544,7 +544,7 @@ Marvelous: {}
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
-		if *msg.channel_id.as_u64() == 374774075865956355 { // presumably #pack-ranking
+		if msg.channel_id.0 == self.config.link_and_attachments_only_channel { // presumably #pack-ranking
 			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
 			let num_links = url_regex.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
@@ -558,10 +558,9 @@ Marvelous: {}
 
 		// If the message is in etternaonline server, and not in an allowed channel, and not sent
 		// by a person with the permission to manage the guild, don't process the command
-		let allowed_channels = [384829579308564480, 352646080346849281, 367466722405515264, 427509181457629184, 424545864351219712];
 		if let (Some(guild_id), Some(guild_member)) = (msg.guild_id, msg.member(&ctx.cache)) {
-			if *guild_id.as_u64() == 339597420239519755
-				&& !allowed_channels.contains(msg.channel_id.as_u64())
+			if *guild_id.as_u64() == self.config.etterna_online_guild_id
+				&& !self.config.allowed_channels.contains(msg.channel_id.as_u64())
 				&& !guild_member.permissions(&ctx.cache)?.manage_guild()
 			{
 				return Ok(());
@@ -601,6 +600,33 @@ Marvelous: {}
 			let parameters = a.next().unwrap_or("").trim();
 	
 			self.command(&ctx, &msg, command_name, parameters)?;
+		}
+
+		Ok(())
+	}
+
+	pub fn guild_member_update(&mut self,
+		ctx: serenity::Context,
+		old: Option<serenity::Member>,
+		new: serenity::Member
+	) -> anyhow::Result<()> {
+		let old = match old { Some(a) => a, None => return Ok(()) };
+		
+		let guild = new.guild_id.to_partial_guild(&ctx.http)?;
+		
+		let has_max_300_now = new.roles.iter()
+			.any(|r| guild.roles[r].name.as_str() == "MAX 300");
+		let had_max_300_previously = old.roles.iter()
+			.any(|r| guild.roles[r].name.as_str() == "MAX 300");
+		
+		if has_max_300_now && !had_max_300_previously {
+			ctx.http.get_channel(self.config.promotion_gratulations_channel)?
+				.guild().unwrap().read()
+				.say(
+					&ctx.http,
+					format!("Congrats on the promotion, <@{}>!", old.user_id()
+				)
+			)?;
 		}
 
 		Ok(())
