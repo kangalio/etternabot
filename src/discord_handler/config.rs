@@ -119,15 +119,17 @@ Here are my commands: (Descriptions by Fission)
 
 More commands:
 **+pattern [down/up] [pattern string]**
-*Visualize note patterns, for example* `[14][23][14]` *or* `4321234`
+*Visualize note patterns, for example `lrlr` or `[14]3[12]`. Supports 4k-9k*
 **+scrollset [down/up]**
 *Set your preferred scroll type that will be used as a default*
+**+quote**
+*Print one of various random quotes, phrases and memes from various rhythm gaming communities*
 **+lastsession [username]**
 *Show the last 10 scores*
 **+help**
 *Print this message*
 
-You can also post links to scores and songs and I will show info about them
+You can also post links to scores and I will show info about them
 			",
 			minanyms[(rand::random::<f64>() * minanyms.len() as f64) as usize]
 		);
