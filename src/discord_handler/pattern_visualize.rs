@@ -3,17 +3,19 @@
 use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 
 /// An ad-hoc error type that fits any string literal
-#[derive(Debug)]
-pub struct StringError(&'static str);
-impl std::fmt::Display for StringError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.0.fmt(f)
-	}
+#[derive(Debug, Error)]
+pub enum Error {
+	#[error("There was an open bracket without a corresponding closing bracket")]
+	UnterminatedOpenBracket,
+	#[error("Given pattern is empty")]
+	EmptyPattern,
+	#[error("Error in the image library")]
+	ImageError(#[from] image::ImageError),
 }
-impl std::error::Error for StringError {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum ScrollType {
@@ -32,14 +34,14 @@ impl NoteSkin {
 	pub fn from_files(
 		noteskin_path: &str,
 		noteskin_receptor_path: &str,
-	) -> anyhow::Result<Self> {
+	) -> Result<Self, Error> {
 		let mut img = image::open(noteskin_path)?;
 		assert_eq!(img.width(), 64);
 	
-		let mut notes = Vec::new();
-		for y in (0..img.height()).step_by(64) {
-			notes.push(img.crop(0, y, 64, 64).into_rgba());
-		}
+		let notes: Vec<_> = (0..img.height())
+			.step_by(64)
+			.map(|y| img.crop(0, y, 64, 64).into_rgba())
+			.collect();
 
 		let receptor = image::open(noteskin_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
 
@@ -62,10 +64,10 @@ fn render_pattern(
 	noteskin: &NoteSkin,
 	pattern: &Pattern,
 	scroll_type: ScrollType,
-) -> anyhow::Result<RgbaImage> {
+) -> Result<RgbaImage, Error> {
 	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
 	let keymode = 1 + *pattern.rows.iter().flatten().max()
-		.ok_or(StringError("Given pattern is empty"))?;
+		.ok_or(Error::EmptyPattern)?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
 	let width = 64 * keymode;
@@ -128,7 +130,7 @@ fn char_to_lane(c: u8) -> Option<u32> {
 	}
 }
 
-fn parse_pattern(mut string: &str) -> anyhow::Result<Pattern> {
+fn parse_pattern(mut string: &str) -> Result<Pattern, Error> {
 	let mut rows = Vec::new();
 
 	// this parser works by 'popping' characters off the start of the string until the string is empty
@@ -140,7 +142,7 @@ fn parse_pattern(mut string: &str) -> anyhow::Result<Pattern> {
 		// the lane specified by the number
 		if string.starts_with('[') {
 			let end = string.find(']')
-				.ok_or(StringError("Unterminated ["))?;
+				.ok_or(Error::UnterminatedOpenBracket)?;
 			
 			rows.push(string[1..end].bytes().filter_map(char_to_lane).collect::<Vec<_>>());
 	
@@ -163,7 +165,7 @@ pub fn generate(
 	output_path: &str,
 	pattern_str: &str,
 	scroll_type: ScrollType,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
 
 	let noteskin = NoteSkin::from_files("noteskin/notes.png", "noteskin/receptor.png")?;
 	let mut pattern = parse_pattern(pattern_str)?;
