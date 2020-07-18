@@ -135,47 +135,47 @@ impl Noteskin for Noteskin5k {
 }
 
 struct Noteskin6k {
-	up_notes: Vec<RgbaImage>,
-	up_receptor: RgbaImage,
+	down_notes: Vec<RgbaImage>,
+	down_receptor: RgbaImage,
 	down_left_notes: Vec<RgbaImage>,
 	down_left_receptor: RgbaImage,
 }
 
 impl Noteskin6k {
 	pub fn read(
-		up_notes_path: &str,
-		up_receptor_path: &str,
+		down_notes_path: &str,
+		down_receptor_path: &str,
 	) -> Result<Self, Error> {
-		let up_to_down_left = |img: &RgbaImage| imageproc::geometric_transformations::rotate_about_center(
+		let down_to_down_left = |img: &RgbaImage| imageproc::geometric_transformations::rotate_about_center(
 			img,
-			std::f32::consts::PI * 1.25,
+			std::f32::consts::PI * 0.25,
 			imageproc::geometric_transformations::Interpolation::Bilinear,
 			image::Rgba::from([0, 0, 0, 0]),
 		);
 
-		let up_receptor = image::open(up_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
-		let down_left_receptor = up_to_down_left(&up_receptor);
+		let down_receptor = image::open(down_receptor_path)?.crop(0, 0, 64, 64).into_rgba();
+		let down_left_receptor = down_to_down_left(&down_receptor);
 
-		let img = image::open(up_notes_path)?;
-		let mut up_notes = Vec::new();
+		let img = image::open(down_notes_path)?;
+		let mut down_notes = Vec::new();
 		let mut down_left_notes = Vec::new();
 		for y in (0..img.height()).step_by(64) {
-			let up_note = img.crop_imm(0, y, 64, 64).into_rgba();
-			down_left_notes.push(up_to_down_left(&up_note));
-			up_notes.push(up_note);
+			let down_note = img.crop_imm(0, y, 64, 64).into_rgba();
+			down_left_notes.push(down_to_down_left(&down_note));
+			down_notes.push(down_note);
 		}
 
-		Ok(Self { down_left_notes, down_left_receptor, up_notes, up_receptor })
+		Ok(Self { down_left_notes, down_left_receptor, down_notes, down_receptor })
 	}
 
-	fn rotate<'a>(up_arrow: &'a RgbaImage, down_left_arrow: &'a RgbaImage, lane: u32) -> Cow<'a, RgbaImage> {
+	fn rotate<'a>(down_arrow: &'a RgbaImage, down_left_arrow: &'a RgbaImage, lane: u32) -> Cow<'a, RgbaImage> {
 		match lane {
-			0 => Cow::Owned(image::imageops::rotate90(up_arrow)),
+			0 => Cow::Owned(image::imageops::rotate90(down_arrow)),
 			1 => Cow::Owned(image::imageops::rotate90(down_left_arrow)),
-			2 => Cow::Borrowed(up_arrow),
-			3 => Cow::Owned(image::imageops::rotate180(up_arrow)),
+			2 => Cow::Borrowed(down_arrow),
+			3 => Cow::Owned(image::imageops::rotate180(down_arrow)),
 			4 => Cow::Owned(image::imageops::rotate180(down_left_arrow)),
-			5 => Cow::Owned(image::imageops::rotate270(up_arrow)),
+			5 => Cow::Owned(image::imageops::rotate270(down_arrow)),
 			_ => unimplemented!(),
 		}
 	}
@@ -183,11 +183,11 @@ impl Noteskin6k {
 
 impl Noteskin for Noteskin6k {
 	fn receptor(&self, lane: u32) -> Cow<RgbaImage> {
-        Self::rotate(&self.up_receptor, &self.down_left_receptor, lane)
+        Self::rotate(&self.down_receptor, &self.down_left_receptor, lane)
 	}
 	
     fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
-        Self::rotate(&self.up_notes[index], &self.down_left_notes[index], lane)
+        Self::rotate(&self.down_notes[index], &self.down_left_notes[index], lane)
     }
 }
 
