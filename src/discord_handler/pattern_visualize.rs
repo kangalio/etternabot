@@ -117,6 +117,17 @@ fn first_char_width(string: &str) -> usize {
 	unreachable!();
 }
 
+fn char_to_lane(c: u8) -> Option<u32> {
+	match c {
+		b'1'..=b'9' => Some((c - b'1') as u32),
+		b'l' | b'L' => Some(0),
+		b'd' | b'D' => Some(1),
+		b'u' | b'U' => Some(2),
+		b'r' | b'R' => Some(3),
+		_ => None,
+	}
+}
+
 fn parse_pattern(mut string: &str) -> anyhow::Result<Pattern> {
 	let mut rows = Vec::new();
 
@@ -129,22 +140,14 @@ fn parse_pattern(mut string: &str) -> anyhow::Result<Pattern> {
 		// the lane specified by the number
 		if string.starts_with('[') {
 			let end = string.find(']')
-					.ok_or(StringError("Unterminated ["))?;
+				.ok_or(StringError("Unterminated ["))?;
 			
-			let mut row = Vec::new();
-			for c in string[1..end].bytes() {
-				if c >= b'1' && c <= b'9' {
-					row.push((c - b'1') as u32);
-				}
-			}
-	
-			rows.push(row);
+			rows.push(string[1..end].bytes().filter_map(char_to_lane).collect::<Vec<_>>());
 	
 			string = &string[end+1..];
 		} else {
-			let c = string.as_bytes()[0];
-			if c >= b'1' && c <= b'9' {
-				rows.push(vec![(c - b'1') as u32]);
+			if let Some(lane) = char_to_lane(string.as_bytes()[0]) {
+				rows.push(vec![lane]);
 			}
 
 			string = &string[first_char_width(string)..];
