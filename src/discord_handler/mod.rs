@@ -5,7 +5,7 @@ use crate::serenity; // use my custom serenity prelude
 mod eo {
 	pub use etternaonline_api::{Error, v2::*};
 }
-use config::Config;
+use config::{Config, Data};
 
 const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
@@ -24,6 +24,7 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 
 pub struct State {
 	config: Config,
+	data: Data,
 	session: eo::Session,
 }
 
@@ -37,14 +38,14 @@ impl State {
 			Some(std::time::Duration::from_millis(30000)),
 		)?;
 
-		Ok(State {  session, config: Config::load() })
+		Ok(State { session, config: Config::load(), data: Data::load() })
 	}
 
 	fn get_eo_username(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> anyhow::Result<String> {
-		if let Some(eo_username) = self.config.eo_username(&msg.author.name) {
+		if let Some(eo_username) = self.data.eo_username(&msg.author.name) {
 			return Ok(eo_username.to_owned());
 		}
 
@@ -333,7 +334,7 @@ impl State {
 			},
 			"help" => {
 				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-					.description(self.config.make_description())
+					.description(self.data.make_description(&self.config.minanyms))
 					.color(crate::ETTERNA_COLOR)
 				))?;
 			},
@@ -356,8 +357,8 @@ impl State {
 						return Ok(());
 					},
 				};
-				self.config.set_scroll(msg.author.name.to_owned(), scroll);
-				self.config.save()?;
+				self.data.set_scroll(msg.author.name.to_owned(), scroll);
+				self.data.save()?;
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
@@ -365,12 +366,16 @@ impl State {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(eo::Error::UserNotFound) = self.session.user_details(text) {
-					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
-					return Ok(());
+				if let Err(e) = self.session.user_details(text) {
+					if e == eo::Error::UserNotFound {
+						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
+						return Ok(());
+					} else {
+						return Err(e.into());
+					}
 				}
 
-				let response = match self.config.set_eo_username(
+				let response = match self.data.set_eo_username(
 					msg.author.name.to_owned(),
 					text.to_owned()
 				) {
@@ -382,7 +387,7 @@ impl State {
 					None => format!("Successfully set username to `{}`", text),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.config.save()?;
+				self.data.save()?;
 			},
 			"rivalset" => {
 				if text.is_empty() {
@@ -394,7 +399,7 @@ impl State {
 					return Ok(());
 				}
 
-				let response = match self.config.set_rival(
+				let response = match self.data.set_rival(
 					msg.author.name.to_owned(),
 					text.to_owned()
 				) {
@@ -406,11 +411,11 @@ impl State {
 					None => format!("Successfully set your rival to `{}`", text),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.config.save()?;
+				self.data.save()?;
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
-				let you = match self.config.rival(&msg.author.name) {
+				let you = match self.data.rival(&msg.author.name) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -425,7 +430,7 @@ impl State {
 				} else if text.starts_with("down") {
 					pattern_visualize::ScrollType::Downscroll
 				} else {
-					self.config.scroll(&msg.author.name).unwrap_or(pattern_visualize::ScrollType::Upscroll)
+					self.data.scroll(&msg.author.name).unwrap_or(pattern_visualize::ScrollType::Upscroll)
 				};
 				pattern_visualize::generate("output.png", text, scroll_type)?;
 

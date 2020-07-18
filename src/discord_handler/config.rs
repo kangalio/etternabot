@@ -3,19 +3,11 @@ use std::path::Path;
 use serde::{Serialize, Deserialize};
 
 static CONFIG_PATH: &str = "config.json";
+static DATA_PATH: &str = "data.json";
 
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Config {
-	#[serde(default)]
-	discord_eo_username_mapping: HashMap<String, String>,
-	#[serde(default)]
-	rival_mapping: HashMap<String, String>, // discord username -> eo username
-	#[serde(default)]
-	preferred_scroll: HashMap<String, super::pattern_visualize::ScrollType>,
-	
-	minanyms: Vec<String>,
-	#[serde(default)]
-	minanym_index: usize,
+	pub minanyms: Vec<String>,
 
 	pub promotion_gratulations_channel: u64,
 	pub link_and_attachments_only_channel: u64,
@@ -26,15 +18,11 @@ pub struct Config {
 impl Config {
 	pub fn load() -> Self {
 		let config_path = Path::new(CONFIG_PATH);
-		let config: Self = if config_path.exists() {
-			let config_contents = std::fs::read_to_string(config_path)
-				.expect("Couldn't read config JSON file");
+		let config_contents = std::fs::read_to_string(config_path)
+			.expect("Couldn't read config JSON file");
 			
-			serde_json::from_str(&config_contents)
-				.expect("Config JSON had invalid format")
-		} else {
-			std::default::Default::default()
-		};
+		let config: Self = serde_json::from_str(&config_contents)
+			.expect("Config JSON had invalid format");
 
 		if config.minanyms.is_empty() {
 			panic!("Empty minanyms!");
@@ -42,16 +30,45 @@ impl Config {
 		
 		config
 	}
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Data {
+	#[serde(default)]
+	discord_eo_username_mapping: HashMap<String, String>,
+	#[serde(default)]
+	rival_mapping: HashMap<String, String>, // discord username -> eo username
+	#[serde(default)]
+	preferred_scroll: HashMap<String, super::pattern_visualize::ScrollType>,
+	
+	#[serde(default)]
+	minanym_index: usize,
+}
+
+impl Data {
+	pub fn load() -> Self {
+		let data_path = Path::new(DATA_PATH);
+		let data: Self = if data_path.exists() {
+			let config_contents = std::fs::read_to_string(data_path)
+				.expect("Couldn't read data JSON file");
+			
+			serde_json::from_str(&config_contents)
+				.expect("Data JSON had invalid format")
+		} else {
+			std::default::Default::default()
+		};
+		
+		data
+	}
 
 	pub fn save(&self) -> anyhow::Result<()> {
-		serde_json::to_writer_pretty(std::fs::File::create(CONFIG_PATH)?, self)?;
+		serde_json::to_writer_pretty(std::fs::File::create(DATA_PATH)?, self)?;
 		Ok(())
 	}
 
 	// Returns the old EO username, if there was one registered
 	pub fn set_eo_username(&mut self, discord_username: String, eo_username: String) -> Option<String> {
 		self.discord_eo_username_mapping.insert(discord_username, eo_username)
-
 	}
 
 	// we need String here because the string can come either from `self` or from the passed
@@ -76,7 +93,7 @@ impl Config {
 		self.rival_mapping.get(discord_username).map(|x| x as _)
 	}
 
-	pub fn make_description(&mut self) -> String {
+	pub fn make_description(&mut self, minanyms: &[String]) -> String {
 		let description = format!(
 			"
 Here are my commands: (Descriptions by Fission)
@@ -108,10 +125,10 @@ More commands:
 
 You can also post links to scores and songs and I will show info about them
 			",
-			self.minanyms[self.minanym_index]
+			minanyms[self.minanym_index]
 		);
 
-		self.minanym_index = (self.minanym_index + 1) % self.minanyms.len();
+		self.minanym_index = (self.minanym_index + 1) % minanyms.len();
 
 		description
 	}
