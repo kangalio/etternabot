@@ -5,9 +5,16 @@ use serde::{Serialize, Deserialize};
 static CONFIG_PATH: &str = "config.json";
 static DATA_PATH: &str = "data.json";
 
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct Quote {
+	pub quote: String,
+	pub source: Option<String>,
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Config {
 	pub minanyms: Vec<String>,
+	pub quotes: Vec<Quote>,
 
 	pub promotion_gratulations_channel: u64,
 	pub link_and_attachments_only_channel: u64,

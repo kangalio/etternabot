@@ -114,7 +114,7 @@ impl State {
 			Some(skillset) => self.session.user_top_skillset_scores(&eo_username, skillset, limit),
 		};
 		if let Err(eo::Error::UserNotFound) = top_scores {
-			msg.channel_id.say(&ctx.http, format!("No such user \"{}\"", eo_username))?;
+			msg.channel_id.say(&ctx.http, format!("No such user or skillset \"{}\"", eo_username))?;
 			return Ok(());
 		}
 		let top_scores = top_scores?;
@@ -344,6 +344,10 @@ impl State {
 			"lastsession" => {
 				self.latest_scores(ctx, msg, text)?;
 			},
+			"quote" => {
+				let quote_i = (rand::random::<f64>() * self.config.quotes.len() as f64) as usize;
+				msg.channel_id.say(&ctx.http, &self.config.quotes[quote_i].quote)?;
+			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
 					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
