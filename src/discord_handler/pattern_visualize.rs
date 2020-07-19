@@ -256,14 +256,31 @@ fn first_char_width(string: &str) -> usize {
 	unreachable!();
 }
 
-fn char_to_lane(c: u8) -> Option<u32> {
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+enum CharToLane {
+	Some(u32),
+	Invalid,
+	Space,
+}
+
+impl CharToLane {
+	pub fn as_some(self) -> Option<u32> {
+		match self {
+			Self::Some(lane) => Some(lane),
+			_ => None,
+		}
+	}
+}
+
+fn char_to_lane(c: u8) -> CharToLane {
 	match c.to_ascii_lowercase() {
-		b'1'..=b'9' => Some((c - b'1') as u32),
-		b'l' => Some(0),
-		b'd' => Some(1),
-		b'u' => Some(2),
-		b'r' => Some(3),
-		_ => None,
+		b'0' => CharToLane::Space,
+		b'1'..=b'9' => CharToLane::Some((c - b'1') as u32),
+		b'l' => CharToLane::Some(0),
+		b'd' => CharToLane::Some(1),
+		b'u' => CharToLane::Some(2),
+		b'r' => CharToLane::Some(3),
+		_ => CharToLane::Invalid,
 	}
 }
 
@@ -281,12 +298,16 @@ fn parse_pattern(mut string: &str) -> Result<Pattern, Error> {
 			let end = string.find(']')
 				.ok_or(Error::UnterminatedOpenBracket)?;
 			
-			rows.push(string[1..end].bytes().filter_map(char_to_lane).collect::<Vec<_>>());
+			rows.push(string[1..end].bytes()
+				.filter_map(|c| char_to_lane(c).as_some())
+				.collect::<Vec<_>>());
 	
 			string = &string[end+1..];
 		} else {
-			if let Some(lane) = char_to_lane(string.as_bytes()[0]) {
-				rows.push(vec![lane]);
+			match char_to_lane(string.as_bytes()[0]) {
+				CharToLane::Some(lane) => rows.push(vec![lane]),
+				CharToLane::Space => rows.push(vec![]),
+				CharToLane::Invalid => {},
 			}
 
 			string = &string[first_char_width(string)..];
