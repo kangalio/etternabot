@@ -6,6 +6,15 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 
+fn row_to_note_index(row: usize) -> usize {
+    for (i, note_type) in [4, 8, 12, 16, 24, 32, 48, 64, 192].iter().enumerate() {
+        if row % (192 / note_type) == 0 {
+            return i;
+        }
+    }
+    panic!("This can't happen, last loop iteration should cover everything");
+}
+
 /// An ad-hoc error type that fits any string literal
 #[derive(Debug, Error)]
 pub enum Error {
@@ -27,7 +36,11 @@ pub enum ScrollType {
 
 trait Noteskin {
 	fn receptor(&self, lane: u32) -> Cow<RgbaImage>;
-	fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage>;
+	fn note_unchecked(&self, index: usize, lane: u32) -> Cow<RgbaImage>; // this method may panic if index is out of bounds
+
+	fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+		self.note_unchecked(index.min(7), lane)
+	}
 }
 
 struct NoteskinLdur {
@@ -74,7 +87,7 @@ impl Noteskin for NoteskinLdur {
 		Self::rotate(&self.receptor, lane, self.rotate)
 	}
 
-	fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+	fn note_unchecked(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
 		Self::rotate(&self.notes[index], lane, self.rotate)
 	}
 }
@@ -129,7 +142,7 @@ impl Noteskin for Noteskin5k {
         Self::get_img(&self.corner_receptor, &self.center_receptor, lane)
 	}
 	
-    fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+    fn note_unchecked(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
         Self::get_img(&self.corner_notes[index], &self.center_notes[index], lane)
     }
 }
@@ -186,7 +199,7 @@ impl Noteskin for Noteskin6k {
         Self::rotate(&self.down_receptor, &self.down_left_receptor, lane)
 	}
 	
-    fn note(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
+    fn note_unchecked(&self, index: usize, lane: u32) -> Cow<RgbaImage> {
         Self::rotate(&self.down_notes[index], &self.down_left_notes[index], lane)
     }
 }
@@ -212,6 +225,7 @@ fn render_pattern(
 	noteskin: &dyn Noteskin,
 	pattern: &Pattern,
 	scroll_type: ScrollType,
+	interval_num_rows: usize,
 ) -> Result<RgbaImage, Error> {
 	let keymode = pattern.keymode()?;
 
@@ -236,8 +250,7 @@ fn render_pattern(
 
 	for (i, row) in pattern.rows.iter().enumerate() {
 		for &lane in row {
-			// Select a note image in the order of 4th-16th-8th-16th (cycle repeats)
-			let note_img = noteskin.note([0, 3, 1, 3][i % 4], lane);
+			let note_img = noteskin.note(row_to_note_index(i * interval_num_rows), lane);
 
 			place_note(&note_img, lane, i as u32);
 		}
@@ -322,6 +335,7 @@ fn parse_pattern(mut string: &str) -> Result<Pattern, Error> {
 pub fn generate(
 	pattern_str: &str,
 	scroll_type: ScrollType,
+	interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
 ) -> Result<Vec<u8>, Error> {
 
 	let mut pattern = parse_pattern(pattern_str)?;
@@ -346,7 +360,7 @@ pub fn generate(
 	};
 
 	pattern.rows.truncate(100);
-	let buffer = render_pattern(noteskin.as_ref(), &pattern, scroll_type)?;
+	let buffer = render_pattern(noteskin.as_ref(), &pattern, scroll_type, interval_num_rows)?;
 	
 	let mut output_buffer = Vec::with_capacity(1_000_000); // allocate 1 MB for the img
 	image::DynamicImage::ImageRgba8(buffer).write_to(

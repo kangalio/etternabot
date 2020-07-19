@@ -276,14 +276,45 @@ impl State {
 		msg: &serenity::Message,
 		args: &str,
 	) -> anyhow::Result<()> {
-		let scroll_type = if args.to_lowercase().starts_with("up") {
-			pattern_visualize::ScrollType::Upscroll
-		} else if args.starts_with("down") {
-			pattern_visualize::ScrollType::Downscroll
-		} else {
+		let mut args: Vec<&str> = args.split_whitespace().collect();
+		let mut arg_indices_to_remove = vec![];
+
+		let mut interval_num_rows = 192 / 16;
+		for (i, token) in args.iter().enumerate() {
+			let ending = ["st", "sts", "nd", "nds", "th", "ths"].iter()
+				.find(|&e| token.ends_with(e));
+			let ending = match ending { Some(a) => a, None => continue };
+
+			let note_type: usize = match token[..(token.len() - ending.len())].parse() {
+				Ok(n) => n,
+				Err(_) => continue,
+			};
+			if 192 % note_type != 0 { continue }
+
+			interval_num_rows = 192 / note_type;
+			
+			arg_indices_to_remove.push(i);
+		}
+
+		let mut scroll_type = None;
+		for (i, arg) in args.iter().enumerate() {
+			match arg.to_lowercase().as_str() {
+				"up" => scroll_type = Some(pattern_visualize::ScrollType::Upscroll),
+				"down" => scroll_type = Some(pattern_visualize::ScrollType::Downscroll),
+				_ => continue,
+			}
+			arg_indices_to_remove.push(i);
+		}
+		let scroll_type = scroll_type.unwrap_or_else(||
 			self.data.scroll(msg.author.id.0).unwrap_or(pattern_visualize::ScrollType::Upscroll)
-		};
-		let bytes = pattern_visualize::generate(args, scroll_type)?;
+		);
+
+		// this is super fucking hacky
+		let mut i = 0;
+		args.retain(|_| (!arg_indices_to_remove.contains(&i), i += 1).0);
+		let args_string = args.join("");
+
+		let bytes = pattern_visualize::generate(&args_string, scroll_type, interval_num_rows)?;
 
 		// Send the image into the channel where the summoning message comes from
 		msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
