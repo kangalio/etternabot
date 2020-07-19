@@ -118,7 +118,7 @@ Here are my commands: (Descriptions by Fission)
 *Don't you dare set your user to* {} *you imposter*
 
 More commands:
-**+pattern [down/up] [pattern string]**
+**+pattern [NNths] [down/up] [pattern string]**
 *Visualize note patterns, for example `lrlr` or `[14]3[12]`. Supports 4k-9k*
 **+scrollset [down/up]**
 *Set your preferred scroll type that will be used as a default*
