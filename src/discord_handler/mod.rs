@@ -271,6 +271,26 @@ impl State {
 		Ok(())
 	}
 	
+	fn pattern(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		args: &str,
+	) -> anyhow::Result<()> {
+		let scroll_type = if args.to_lowercase().starts_with("up") {
+			pattern_visualize::ScrollType::Upscroll
+		} else if args.starts_with("down") {
+			pattern_visualize::ScrollType::Downscroll
+		} else {
+			self.data.scroll(msg.author.id.0).unwrap_or(pattern_visualize::ScrollType::Upscroll)
+		};
+		let bytes = pattern_visualize::generate(args, scroll_type)?;
+
+		// Send the image into the channel where the summoning message comes from
+		msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
+
+		Ok(())
+	}
+
 	fn profile_compare(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -348,6 +368,9 @@ impl State {
 				let quote_i = (rand::random::<f64>() * self.config.quotes.len() as f64) as usize;
 				msg.channel_id.say(&ctx.http, &self.config.quotes[quote_i].quote)?;
 			}
+			"pattern" => {
+				self.pattern(ctx, msg, text)?;
+			},
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
 					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
@@ -378,7 +401,7 @@ impl State {
 						return Err(e.into());
 					}
 				}
-
+				
 				let response = match self.data.set_eo_username(
 					msg.author.id.0,
 					text.to_owned()
@@ -428,19 +451,6 @@ impl State {
 				};
 				self.profile_compare(ctx, msg, me, &you)?;
 			}
-			"pattern" => {
-				let scroll_type = if text.to_lowercase().starts_with("up") {
-					pattern_visualize::ScrollType::Upscroll
-				} else if text.starts_with("down") {
-					pattern_visualize::ScrollType::Downscroll
-				} else {
-					self.data.scroll(msg.author.id.0).unwrap_or(pattern_visualize::ScrollType::Upscroll)
-				};
-				let bytes = pattern_visualize::generate(text, scroll_type)?;
-
-				// Send the image into the channel where the summoning message comes from
-				msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
-			},
 			"compare" => {
 				let args: Vec<&str> = text.split_whitespace().collect();
 
@@ -553,12 +563,13 @@ Marvelous: {}
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
-		if msg.channel_id.0 == self.config.link_and_attachments_only_channel { // presumably #pack-ranking
+		if msg.channel_id.0 == self.config.link_and_attachments_only_channel { // #work-in-progress
 			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
 			let num_links = url_regex.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
-				let notice_msg = msg.channel_id.say(&ctx.http, "Links and attachments only in this channel please")?;
+				let notice_msg = msg.channel_id.say(&ctx.http, "Only links and attachments are \
+					allowed in this channel. For discussions use <#374775369330589696>")?;
 				std::thread::sleep(std::time::Duration::from_millis(5000));
 				notice_msg.delete(&ctx.http)?;
 				return Ok(());
