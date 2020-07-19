@@ -45,7 +45,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> anyhow::Result<String> {
-		if let Some(eo_username) = self.data.eo_username(&msg.author.name) {
+		if let Some(eo_username) = self.data.eo_username(msg.author.id.0) {
 			return Ok(eo_username.to_owned());
 		}
 
@@ -361,7 +361,7 @@ impl State {
 						return Ok(());
 					},
 				};
-				self.data.set_scroll(msg.author.name.to_owned(), scroll);
+				self.data.set_scroll(msg.author.id.0, scroll);
 				self.data.save()?;
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
@@ -380,7 +380,7 @@ impl State {
 				}
 
 				let response = match self.data.set_eo_username(
-					msg.author.name.to_owned(),
+					msg.author.id.0,
 					text.to_owned()
 				) {
 					Some(old_eo_username) => format!(
@@ -404,7 +404,7 @@ impl State {
 				}
 
 				let response = match self.data.set_rival(
-					msg.author.name.to_owned(),
+					msg.author.id.0,
 					text.to_owned()
 				) {
 					Some(old_rival) => format!(
@@ -419,7 +419,7 @@ impl State {
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
-				let you = match self.data.rival(&msg.author.name) {
+				let you = match self.data.rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -434,7 +434,7 @@ impl State {
 				} else if text.starts_with("down") {
 					pattern_visualize::ScrollType::Downscroll
 				} else {
-					self.data.scroll(&msg.author.name).unwrap_or(pattern_visualize::ScrollType::Upscroll)
+					self.data.scroll(msg.author.id.0).unwrap_or(pattern_visualize::ScrollType::Upscroll)
 				};
 				let bytes = pattern_visualize::generate(text, scroll_type)?;
 

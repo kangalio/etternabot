@@ -42,11 +42,11 @@ impl Config {
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Data {
 	#[serde(default)]
-	discord_eo_username_mapping: HashMap<String, String>,
+	discord_eo_username_mapping: HashMap<u64, String>,
 	#[serde(default)]
-	rival_mapping: HashMap<String, String>, // discord username -> eo username
+	rival_mapping: HashMap<u64, String>, // discord username -> eo username
 	#[serde(default)]
-	preferred_scroll: HashMap<String, super::pattern_visualize::ScrollType>,
+	preferred_scroll: HashMap<u64, super::pattern_visualize::ScrollType>,
 }
 
 impl Data {
@@ -71,30 +71,30 @@ impl Data {
 	}
 
 	// Returns the old EO username, if there was one registered
-	pub fn set_eo_username(&mut self, discord_username: String, eo_username: String) -> Option<String> {
-		self.discord_eo_username_mapping.insert(discord_username, eo_username)
+	pub fn set_eo_username(&mut self, discord_user: u64, eo_username: String) -> Option<String> {
+		self.discord_eo_username_mapping.insert(discord_user, eo_username)
 	}
 
 	// we need String here because the string can come either from `self` or from the passed
 	// parameter. So we have differing lifetimes which we can't encode with a `&str`
-	pub fn eo_username(&self, discord_username: &str) -> Option<&str> {
-		self.discord_eo_username_mapping.get(discord_username).map(|s| s as _)
+	pub fn eo_username(&self, discord_user: u64) -> Option<&str> {
+		self.discord_eo_username_mapping.get(&discord_user).map(|s| s as _)
 	}
 
-	pub fn set_scroll(&mut self, discord_username: String, scroll: super::pattern_visualize::ScrollType) {
-		self.preferred_scroll.insert(discord_username, scroll);
+	pub fn set_scroll(&mut self, discord_user: u64, scroll: super::pattern_visualize::ScrollType) {
+		self.preferred_scroll.insert(discord_user, scroll);
 	}
 
-	pub fn scroll(&self, discord_username: &str) -> Option<super::pattern_visualize::ScrollType> {
-		self.preferred_scroll.get(discord_username).copied()
+	pub fn scroll(&self, discord_user: u64) -> Option<super::pattern_visualize::ScrollType> {
+		self.preferred_scroll.get(&discord_user).copied()
 	}
 
-	pub fn set_rival(&mut self, discord_username: String, rival: String) -> Option<String> {
-		self.rival_mapping.insert(discord_username, rival)
+	pub fn set_rival(&mut self, discord_user: u64, rival: String) -> Option<String> {
+		self.rival_mapping.insert(discord_user, rival)
 	}
 
-	pub fn rival(&self, discord_username: &str) -> Option<&str> {
-		self.rival_mapping.get(discord_username).map(|x| x as _)
+	pub fn rival(&self, discord_user: u64) -> Option<&str> {
+		self.rival_mapping.get(&discord_user).map(|x| x as _)
 	}
 
 	pub fn make_description(&mut self, minanyms: &[String]) -> String {
