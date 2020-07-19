@@ -436,10 +436,10 @@ impl State {
 				} else {
 					self.data.scroll(&msg.author.name).unwrap_or(pattern_visualize::ScrollType::Upscroll)
 				};
-				pattern_visualize::generate("output.png", text, scroll_type)?;
+				let bytes = pattern_visualize::generate(text, scroll_type)?;
 
 				// Send the image into the channel where the summoning message comes from
-				msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+				msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
 			},
 			"compare" => {
 				let args: Vec<&str> = text.split_whitespace().collect();

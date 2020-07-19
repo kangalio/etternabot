@@ -297,12 +297,11 @@ fn parse_pattern(mut string: &str) -> Result<Pattern, Error> {
 }
 
 /// Read noteskin from `noteskin_path`, read the pattern from `pattern_str` and write the generated
-/// image into `output_path`
+/// image into a byte buffer using the PNG format
 pub fn generate(
-	output_path: &str,
 	pattern_str: &str,
 	scroll_type: ScrollType,
-) -> Result<(), Error> {
+) -> Result<Vec<u8>, Error> {
 
 	let mut pattern = parse_pattern(pattern_str)?;
 
@@ -328,7 +327,11 @@ pub fn generate(
 	pattern.rows.truncate(100);
 	let buffer = render_pattern(noteskin.as_ref(), &pattern, scroll_type)?;
 	
-	buffer.save(output_path)?;
+	let mut output_buffer = Vec::with_capacity(1_000_000); // allocate 1 MB for the img
+	image::DynamicImage::ImageRgba8(buffer).write_to(
+		&mut output_buffer,
+		image::ImageOutputFormat::Png
+	)?;
 
-	Ok(())
+	Ok(output_buffer)
 }
