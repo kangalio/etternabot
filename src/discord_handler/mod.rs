@@ -601,6 +601,20 @@ Marvelous: {}
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
+		// If the message is in etternaonline server, and not in an allowed channel, and not sent
+		// by a person with the permission to manage the guild, don't process the command
+		let user_is_allowed_bot_interaction = {
+			if let (Some(guild_id), Some(guild_member)) = (msg.guild_id, msg.member(&ctx.cache)) {
+				*guild_id.as_u64() != self.config.etterna_online_guild_id
+					|| self.config.allowed_channels.contains(msg.channel_id.as_u64())
+					|| guild_member.permissions(&ctx.cache)?.manage_guild()
+			} else {
+				// "true" should really every user be allowed bot usage everyhwere, just because we
+				// failed to retrieve guild information?
+				true
+			}
+		};
+
 		if msg.channel_id.0 == self.config.link_and_attachments_only_channel { // #work-in-progress
 			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
 			let num_links = url_regex.find_iter(&msg.content).count();
@@ -614,38 +628,29 @@ Marvelous: {}
 			}
 		}
 
-		// If the message is in etternaonline server, and not in an allowed channel, and not sent
-		// by a person with the permission to manage the guild, don't process the command
-		if let (Some(guild_id), Some(guild_member)) = (msg.guild_id, msg.member(&ctx.cache)) {
-			if *guild_id.as_u64() == self.config.etterna_online_guild_id
-				&& !self.config.allowed_channels.contains(msg.channel_id.as_u64())
-				&& !guild_member.permissions(&ctx.cache)?.manage_guild()
+		if user_is_allowed_bot_interaction {
+			for captures in regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)")
+				.unwrap()
+				.captures_iter(&msg.content)
 			{
-				return Ok(());
+				let scorekey = &captures[1];
+				let _user_id = &captures[2];
+				if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
+					println!("Error while showing score card for {}: {}", scorekey, e);
+				}
 			}
-		}
-
-		for captures in regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)")
-			.unwrap()
-			.captures_iter(&msg.content)
-		{
-			let scorekey = &captures[1];
-			let _user_id = &captures[2];
-			if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
-				println!("Error while showing score card for {}: {}", scorekey, e);
-			}
-		}
-
-		for captures in regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?")
-			.unwrap()
-			.captures_iter(&msg.content)
-		{
-			let song_id = match captures[1].parse() {
-				Ok(song_id) => song_id,
-				Err(_) => continue, // this wasn't a valid song view url after all
-			};
-			if let Err(e) = self.song_card(&ctx, &msg, song_id) {
-				println!("Error while showing song card for {}: {}", song_id, e);
+	
+			for captures in regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?")
+				.unwrap()
+				.captures_iter(&msg.content)
+			{
+				let song_id = match captures[1].parse() {
+					Ok(song_id) => song_id,
+					Err(_) => continue, // this wasn't a valid song view url after all
+				};
+				if let Err(e) = self.song_card(&ctx, &msg, song_id) {
+					println!("Error while showing song card for {}: {}", song_id, e);
+				}
 			}
 		}
 
@@ -657,7 +662,12 @@ Marvelous: {}
 			let command_name = a.next().unwrap().trim();
 			let parameters = a.next().unwrap_or("").trim();
 	
-			self.command(&ctx, &msg, command_name, parameters)?;
+			// only the pattern command is allowed everywhere
+			// this implementation is bad because this function shouldn't know about the specific
+			// commands that exist...
+			if user_is_allowed_bot_interaction || command_name == "pattern" {
+				self.command(&ctx, &msg, command_name, parameters)?;
+			}
 		}
 
 		Ok(())
