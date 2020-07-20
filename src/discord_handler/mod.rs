@@ -285,15 +285,22 @@ impl State {
 				.find(|&e| token.ends_with(e));
 			let ending = match ending { Some(a) => a, None => continue };
 
+			// at this point, this arg was surely intended to be a notes type arg, so we can already
+			// remove it from the list of parsed arg indices. That's so that `+pattern 57ths 123`
+			// doesn't generate as `5-7-1-2-3`
+			arg_indices_to_remove.push(i);
+
 			let note_type: usize = match token[..(token.len() - ending.len())].parse() {
 				Ok(n) => n,
 				Err(_) => continue,
 			};
+			if note_type == 0 {
+				msg.channel_id.say(&ctx.http, "0ths notes don't exist, you silly goose")?;
+				continue;
+			}
 			if 192 % note_type != 0 { continue }
 
 			interval_num_rows = 192 / note_type;
-			
-			arg_indices_to_remove.push(i);
 		}
 
 		let mut scroll_type = None;
