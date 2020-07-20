@@ -6,12 +6,29 @@ mod eo {
 	pub use etternaonline_api::{Error, v2::*};
 }
 use config::{Config, Data};
+use thiserror::Error;
 
 const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
 const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
+
+#[derive(Error, Debug)]
+pub enum Error {
+	#[error("Attempted to send an invalid Discord message. One or more fields were probably empty")]
+	AttemptedToSendInvalidMessage,
+	#[error("User {discord_username} not found on EO. Please manually specify your EtternaOnline \
+		username with `+userset`")]
+	CouldNotDeriveEoUsername { discord_username: String },
+
+	#[error(transparent)]
+	EoApiError(#[from] eo::Error),
+	#[error(transparent)]
+	SerenityError(#[from] serenity::Error),
+	#[error(transparent)]
+	PatternVisualizeError(#[from] pattern_visualize::Error),
+}
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
@@ -29,7 +46,7 @@ pub struct State {
 }
 
 impl State {
-	pub fn load() -> anyhow::Result<Self> {
+	pub fn load() -> Result<Self, Error> {
 		let session = eo::Session::new_from_login(
 			crate::auth::EO_USERNAME.to_owned(),
 			crate::auth::EO_PASSWORD.to_owned(),
@@ -42,9 +59,9 @@ impl State {
 	}
 
 	fn get_eo_username(&mut self,
-		ctx: &serenity::Context,
+		_ctx: &serenity::Context,
 		msg: &serenity::Message,
-	) -> anyhow::Result<String> {
+	) -> Result<String, Error> {
 		if let Some(eo_username) = self.data.eo_username(msg.author.id.0) {
 			return Ok(eo_username.to_owned());
 		}
@@ -52,12 +69,7 @@ impl State {
 		match self.session.user_details(&msg.author.name) {
 			Ok(_) => Ok(msg.author.name.to_owned()),
 			Err(eo::Error::UserNotFound) => {
-				msg.channel_id.say(&ctx.http, &format!(
-					"User '{}' not found on EO. Please manually specify your EtternaOnline \
-						username with `+userset`",
-					&msg.author.name
-				))?;
-				Err(anyhow::anyhow!("don't print this"))
+				Err(Error::CouldNotDeriveEoUsername { discord_username: msg.author.name.to_owned() })
 			},
 			Err(other) => Err(other.into()),
 		}
@@ -68,7 +80,7 @@ impl State {
 		msg: &serenity::Message,
 		text: &str,
 		mut limit: u32,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		if !(1..=30).contains(&limit) {
 			msg.channel_id.say(&ctx.http, "Only limits up to 30 are supported")?;
 			return Ok(());
@@ -162,7 +174,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let eo_username = if text.is_empty() {
 			self.get_eo_username(ctx, msg)?
 		} else {
@@ -210,7 +222,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let eo_username = if text.is_empty() {
 			self.get_eo_username(ctx, msg)?
 		} else {
@@ -275,7 +287,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let mut args: Vec<&str> = args.split_whitespace().collect();
 		let mut arg_indices_to_remove = vec![];
 
@@ -334,7 +346,7 @@ impl State {
 		msg: &serenity::Message,
 		me: &str,
 		you: &str,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let me = self.session.user_details(&me)?;
 		let you = self.session.user_details(you)?;
 
@@ -376,7 +388,7 @@ impl State {
 		msg: &serenity::Message,
 		cmd: &str,
 		text: &str
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		if cmd.starts_with("top") {
 			if let Ok(limit) = cmd[3..].parse() {
 				self.top_scores(ctx, msg, text, limit)?;
@@ -423,7 +435,7 @@ impl State {
 					},
 				};
 				self.data.set_scroll(msg.author.id.0, scroll);
-				self.data.save()?;
+				self.data.save();
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
@@ -452,7 +464,7 @@ impl State {
 					None => format!("Successfully set username to `{}`", text),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.data.save()?;
+				self.data.save();
 			},
 			"rivalset" => {
 				if text.is_empty() {
@@ -476,7 +488,7 @@ impl State {
 					None => format!("Successfully set your rival to `{}`", text),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.data.save()?;
+				self.data.save();
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
@@ -516,7 +528,7 @@ impl State {
 		_ctx: &serenity::Context,
 		_msg: &serenity::Message,
 		song_id: u32,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		println!("Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
 			the required functions :(", song_id);
 		Ok(())
@@ -526,7 +538,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		scorekey: &str,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let score = self.session.score_data(scorekey)?;
 
 		let ssrs_string = format!(r#"
@@ -594,7 +606,7 @@ Marvelous: {}
 	pub fn message(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		// Let's not do this, because if a non existing command is called (e.g. `+asdfg`) there'll
 		// be typing broadcasted, but no actual response, which is stupid
 		// if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http) {
@@ -609,8 +621,10 @@ Marvelous: {}
 					|| self.config.allowed_channels.contains(msg.channel_id.as_u64())
 					|| guild_member.permissions(&ctx.cache)?.manage_guild()
 			} else {
+				println!("Failed to retrieve guild information.... is this worrisome?");
 				// "true" should really every user be allowed bot usage everyhwere, just because we
-				// failed to retrieve guild information?
+				// failed to retrieve guild information? (probably; the alternative is completely
+				// denying bot usage)
 				true
 			}
 		};
@@ -677,7 +691,7 @@ Marvelous: {}
 		ctx: serenity::Context,
 		old: Option<serenity::Member>,
 		new: serenity::Member
-	) -> anyhow::Result<()> {
+	) -> Result<(), Error> {
 		let old = match old { Some(a) => a, None => return Ok(()) };
 		
 		let guild = new.guild_id.to_partial_guild(&ctx.http)?;

@@ -65,9 +65,12 @@ impl Data {
 		data
 	}
 
-	pub fn save(&self) -> anyhow::Result<()> {
-		serde_json::to_writer_pretty(std::fs::File::create(DATA_PATH)?, self)?;
-		Ok(())
+	pub fn save(&self) {
+		serde_json::to_writer_pretty(
+			std::fs::File::create(DATA_PATH)
+				.expect("Couldn't write to data json file"),
+			self
+		).expect("Couldn't deserialize data into a json");
 	}
 
 	// Returns the old EO username, if there was one registered

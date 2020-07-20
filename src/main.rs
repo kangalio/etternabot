@@ -9,13 +9,15 @@ mod serenity {
 		prelude::*,
 		model::{gateway::Ready, channel::Message, id::{UserId, ChannelId}, guild::Member},
 		framework::standard::{Args, Delimiter},
+		http::error::{ErrorResponse, Error as HttpError, DiscordJsonError},
 		utils::Colour as Color,
+		Error,
 	};
 }
 
 pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146);
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
 	struct Handler {
 		state: std::sync::Mutex<discord_handler::State>,
 	}
@@ -35,12 +37,24 @@ fn main() -> anyhow::Result<()> {
 				Ok(a) => a,
 				Err(std::sync::PoisonError { .. }) => std::process::exit(1),
 			};
-			if let Err(e) = state.message(&ctx, &msg) {
-				let error_msg = e.to_string();
-				if !error_msg.contains("don't print this") {
-					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
-						println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
+			if let Err(e) = state.message(&ctx, &msg).map_err(|e| {
+				// this looks complicated, but all it does is map serenity's confusing
+				// "[Serenity] No correct json was received!" error to one of my (more descriptive)
+				// error types
+				if let discord_handler::Error::SerenityError(serenity::Error::Http(ref e)) = e {
+					if let serenity::HttpError::UnsuccessfulRequest(serenity::ErrorResponse {
+						error: serenity::DiscordJsonError { code: -1, .. },
+						..
+					}) = **e {
+						return discord_handler::Error::AttemptedToSendInvalidMessage;
 					}
+				}
+				e
+			}) {
+				println!("Error {:?}", e);
+				let error_msg = e.to_string();
+				if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
+					println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
 				}
 			}
 		}
