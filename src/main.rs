@@ -31,7 +31,10 @@ fn main() -> anyhow::Result<()> {
 			// let's just ignore all bot messages)
 			if msg.author.bot { return }
 
-			let mut state = self.state.lock().unwrap();
+			let mut state = match self.state.lock() {
+				Ok(a) => a,
+				Err(std::sync::PoisonError { .. }) => std::process::exit(1),
+			};
 			if let Err(e) = state.message(&ctx, &msg) {
 				let error_msg = e.to_string();
 				if !error_msg.contains("don't print this") {
