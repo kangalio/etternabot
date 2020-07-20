@@ -270,12 +270,19 @@ impl State {
 					.url(format!("https://etternaonline.com/user/profile/{}", &eo_username))
 					.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", &details.country_code))
 				)
-				.field(format!("About {}:", eo_username), html2md::parse_html(&details.about_me), false)
 				.thumbnail(format!("https://etternaonline.com/avatars/{}", &details.avatar_url))
 				.color(crate::ETTERNA_COLOR);
 			if let Some(modifiers) = &details.default_modifiers {
 				embed.field("Default modifiers:", modifiers, false);
 			}
+			if !details.about_me.is_empty() {
+				embed.field(
+					format!("About {}:", eo_username),
+					html2md::parse_html(&details.about_me),
+					false
+				);
+			}
+			
 			embed
 		}
 		))?;
