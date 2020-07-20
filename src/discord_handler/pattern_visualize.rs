@@ -213,8 +213,9 @@ struct Pattern {
 impl Pattern {
 	// Determines the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane
 	pub fn keymode(&self) -> Result<u32, Error> {
-		let keymode = 1 + self.rows.iter().flatten().max()
-			.ok_or(Error::EmptyPattern)?;
+		let keymode = (1 + self.rows.iter().flatten().max()
+			.ok_or(Error::EmptyPattern)?)
+			.max(4); // clamp to a minimum of 4 because even if the pattern is `2323`, it's still 4k
 		Ok(keymode)
 	}
 }
