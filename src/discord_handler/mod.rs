@@ -314,7 +314,7 @@ impl State {
 				Err(_) => continue,
 			};
 			if note_type == 0 {
-				msg.channel_id.say(&ctx.http, "0ths notes don't exist, you silly goose")?;
+				// early continue here to prevent crash through `192 % 0` operation
 				continue;
 			}
 			if 192 % note_type != 0 { continue }
