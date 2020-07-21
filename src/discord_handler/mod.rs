@@ -326,7 +326,7 @@ impl State {
 		for (i, arg) in args.iter().enumerate() {
 			match arg.to_lowercase().as_str() {
 				"up" => scroll_type = Some(pattern_visualize::ScrollType::Upscroll),
-				"down" => scroll_type = Some(pattern_visualize::ScrollType::Downscroll),
+				"down" | "reverse" => scroll_type = Some(pattern_visualize::ScrollType::Downscroll),
 				_ => continue,
 			}
 			arg_indices_to_remove.push(i);
