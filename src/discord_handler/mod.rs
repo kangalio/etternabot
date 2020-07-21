@@ -428,6 +428,14 @@ impl State {
 			"pattern" => {
 				self.pattern(ctx, msg, text)?;
 			},
+			"rs" => {
+				let eo_username = match text {
+					"" => self.get_eo_username(ctx, msg)?,
+					username => username.to_owned(),
+				};
+				let latest_scores = self.session.user_latest_scores(&eo_username)?;
+				self.score_card(ctx, msg, &latest_scores[0].scorekey)?;
+			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
 					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
