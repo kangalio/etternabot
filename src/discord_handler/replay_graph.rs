@@ -1,4 +1,6 @@
 use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos} /*style::RGBAColor*/};
+use etternaonline_api::v2 as eo;
+use crate::wife::Wife;
 
 const MARVELOUS_THRESHOLD: f32 = 0.0225;
 const MARVELOUS_COLOR: RGBColor = RGBColor(0x99, 0xCC, 0xFF);
@@ -32,25 +34,40 @@ fn deviation_to_color(deviation: f32) -> RGBColor {
 }
 
 pub fn inner(
-	replay: etternaonline_api::v2::Replay,
+	replay: eo::Replay,
 	output_path: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let notes = replay.notes;
 
-	let mut wifescores = Vec::new();
-	let mut hit_wifescore_sum = 0.0;
+	let mut hits: Vec<(f32, f32)> = Vec::new();
+	let mut points = 0.0;
 	let mut min_wifescore = f32::INFINITY;
 	let mut max_wifescore = f32::NEG_INFINITY;
+	// println!("{} mine entries", notes.iter().filter(|n| n.note_type == eo::NoteType::Mine).count());
 	for note in &notes {
-		let hit_wifescore = crate::wife::wife3(note.deviation as f32) as f32 * 100.0;
-		hit_wifescore_sum += hit_wifescore;
+		match note.note_type {
+			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
+				let hit_points = crate::wife::wife3(note.deviation as f32);
+				points += hit_points;
 
-		let wifescore = hit_wifescore_sum / (wifescores.len() + 1) as f32;
-		wifescores.push(wifescore);
+				// if we miss a hold head, we additionally get the hold drop penalty
+				if (note.deviation - 0.18).abs() < f64::EPSILON && note.note_type == eo::NoteType::HoldHead {
+					points += crate::wife::Wife3::HOLD_DROP_WEIGHT;
+				}
+		
+				let wifescore = points / (hits.len() + 1) as f32 * 100.0;
+				hits.push((note.time as f32, wifescore));
 
-		if wifescore < min_wifescore { min_wifescore = wifescore }
-		if wifescore > max_wifescore { max_wifescore = wifescore }
+				if wifescore < min_wifescore { min_wifescore = wifescore }
+				if wifescore > max_wifescore { max_wifescore = wifescore }
+			},
+			eo::NoteType::Mine => {
+				points += crate::wife::Wife3::MINE_HIT_WEIGHT;
+			},
+			eo::NoteType::HoldTail | eo::NoteType::Fake | eo::NoteType::Keysound => {},
+		}
 	}
+	// println!("final wifescore: {}", hits[hits.len() - 1].1);
 
 	let mut chart_length = 0.0;
 	for note in &notes {
@@ -63,7 +80,8 @@ pub fn inner(
 	root.fill(&BLACK)?;
 	
 	let wifescore_chart_x_range = 0.0f32..chart_length;
-	let wifescore_chart_y_range = (min_wifescore - 1.0)..(max_wifescore + 1.0);
+	let wifescore_range = max_wifescore - min_wifescore;
+	let wifescore_chart_y_range = (min_wifescore - wifescore_range / 10.0)..(max_wifescore + wifescore_range / 10.0);
 
 	let mut wifescore_chart = ChartBuilder::on(&root)
 		.build_ranged(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
@@ -107,14 +125,11 @@ pub fn inner(
 		}))?;
 	
 	wifescore_chart
-		.draw_series(LineSeries::new(
-			notes.iter().zip(&wifescores).map(|(n, &w)| (n.time as f32, w)),
-			ShapeStyle {
-				color: WHITE.to_rgba(),
-				filled: true,
-				stroke_width: 1,
-			},
-		))?;
+		.draw_series(LineSeries::new(hits, ShapeStyle {
+			color: WHITE.to_rgba(),
+			filled: true,
+			stroke_width: 1,
+		}))?;
 
 	ChartBuilder::on(&root)
 		.y_label_area_size(50)

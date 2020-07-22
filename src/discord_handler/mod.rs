@@ -564,8 +564,9 @@ impl State {
 		let score = self.session.score_data(scorekey)?;
 
 		let ssrs_string = format!(r#"
-```Prolog
-      Wife: {:.2}%
+```nim
+	  Wife: {:.2}%
+ Max Combo: {},
    Overall: {:.2}
     Stream: {:.2}
    Stamina: {:.2}
@@ -577,6 +578,7 @@ Handstream: {:.2}
 ```
 			"#,
 			score.wifescore * 100.0,
+			score.max_combo,
 			score.ssr.overall(),
 			score.ssr.stream,
 			score.ssr.stamina,
@@ -589,13 +591,17 @@ Handstream: {:.2}
 		let ssrs_string = ssrs_string.trim();
 
 		let judgements_string = format!(r#"
-```Prolog
-Marvelous: {}
-  Perfect: {}
-    Great: {}
-     Good: {}
-      Bad: {}
-     Miss: {}
+```nim
+    Marvelous: {}
+      Perfect: {}
+        Great: {}
+         Good: {}
+          Bad: {}
+         Miss: {}
+    Hit Mines: {}
+   Held Holds: {}
+Dropped Holds: {}
+ Missed Holds: {}
 ```
 			"#,
 			score.judgements.marvelouses,
@@ -604,6 +610,10 @@ Marvelous: {}
 			score.judgements.goods,
 			score.judgements.bads,
 			score.judgements.misses,
+			score.judgements.hit_mines,
+			score.judgements.held_holds,
+			score.judgements.let_go_holds,
+			score.judgements.missed_holds,
 		);
 		let judgements_string = judgements_string.trim();
 
