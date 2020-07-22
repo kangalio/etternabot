@@ -72,35 +72,33 @@ pub fn inner(
 	let mut wifescore_chart = ChartBuilder::on(&root)
 		.build_ranged(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
 
+	let mut dots_chart = ChartBuilder::on(&root)
+		.build_ranged(0.0f32..chart_length, -0.19..0.19f32)?;
+
 	let draw_horizontal_line = |height: f32, color: &RGBColor| {
 		let path = PathElement::new(vec![
-			// these multipliers and offsets are complete fucking guesswork and I have no idea why I
-			// have to apply these calculations to me coordinates in order for plotters to display
-			// them correctly AAAAAAAAAAAAAAAAA
-			(0.0, height * 17.8 + 97.56),
-			(chart_length, height * 17.8 + 97.56)
+			(0.0, height),
+			(chart_length, height)
 		], ShapeStyle {
 			color: color.to_rgba().mix(0.3),
 			filled: false,
 			stroke_width: 1,
 		});
-		wifescore_chart.plotting_area().draw(&path)
+		dots_chart.plotting_area().draw(&path)
 	};
 	
-	// JAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANK
-	// draw_horizontal_line(MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
-	// draw_horizontal_line(-MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
-	// draw_horizontal_line(PERFECT_THRESHOLD, &PERFECT_COLOR)?;
-	// draw_horizontal_line(-PERFECT_THRESHOLD, &PERFECT_COLOR)?;
-	// draw_horizontal_line(GREAT_THRESHOLD, &GREAT_COLOR)?;
-	// draw_horizontal_line(-GREAT_THRESHOLD, &GREAT_COLOR)?;
-	// draw_horizontal_line(GOOD_THRESHOLD, &GOOD_COLOR)?;
-	// draw_horizontal_line(-GOOD_THRESHOLD, &GOOD_COLOR)?;
-	// draw_horizontal_line(BAD_THRESHOLD, &BAD_COLOR)?;
-	// draw_horizontal_line(-BAD_THRESHOLD, &BAD_COLOR)?;
-	
-	ChartBuilder::on(&root)
-		.build_ranged(0.0f32..chart_length, -0.19..0.19f32)?
+	draw_horizontal_line(MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
+	draw_horizontal_line(-MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
+	draw_horizontal_line(PERFECT_THRESHOLD, &PERFECT_COLOR)?;
+	draw_horizontal_line(-PERFECT_THRESHOLD, &PERFECT_COLOR)?;
+	draw_horizontal_line(GREAT_THRESHOLD, &GREAT_COLOR)?;
+	draw_horizontal_line(-GREAT_THRESHOLD, &GREAT_COLOR)?;
+	draw_horizontal_line(GOOD_THRESHOLD, &GOOD_COLOR)?;
+	draw_horizontal_line(-GOOD_THRESHOLD, &GOOD_COLOR)?;
+	draw_horizontal_line(BAD_THRESHOLD, &BAD_COLOR)?;
+	draw_horizontal_line(-BAD_THRESHOLD, &BAD_COLOR)?;
+
+	dots_chart
 		.draw_series(notes.iter().map(|n| {
 			let x = n.time as f32;
 			let y = n.deviation as f32;
