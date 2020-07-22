@@ -425,8 +425,12 @@ impl State {
 				self.latest_scores(ctx, msg, text)?;
 			},
 			"quote" => {
-				let quote_i = (rand::random::<f64>() * self.config.quotes.len() as f64) as usize;
-				msg.channel_id.say(&ctx.http, &self.config.quotes[quote_i].quote)?;
+				let quote = &self.config.quotes[rand::random::<usize>() % self.config.quotes.len()];
+				let string = match &quote.source {
+					Some(source) => format!("> {}\n~ {}", quote.quote, source),
+					None => format!("> {}", quote.quote),
+				};
+				msg.channel_id.say(&ctx.http, &string)?;
 			}
 			"pattern" => {
 				self.pattern(ctx, msg, text)?;
