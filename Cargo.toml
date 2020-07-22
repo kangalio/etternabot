@@ -15,3 +15,4 @@ thiserror = "1.0.20"
 rand = "0.7.3"
 imageproc = "0.21.0"
 etternaonline_api = { path = "../eo-api" }
+plotters = "0.2.15"

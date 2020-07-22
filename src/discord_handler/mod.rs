@@ -1,5 +1,6 @@
 mod config;
 mod pattern_visualize;
+mod replay_graph;
 
 use crate::serenity; // use my custom serenity prelude
 mod eo {
@@ -28,6 +29,8 @@ pub enum Error {
 	SerenityError(#[from] serenity::Error),
 	#[error(transparent)]
 	PatternVisualizeError(#[from] pattern_visualize::Error),
+	#[error("{0}")]
+	ReplayGraphError(String),
 }
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
@@ -615,6 +618,13 @@ Marvelous: {}
 				.text(format!("Played by {}", &score.user.username))
 			)
 		))?;
+
+		if let Some(replay) = score.replay {
+			replay_graph::generate_replay_graph(replay, "replay_graph.png")
+				.map_err(Error::ReplayGraphError)?;
+			msg.channel_id.send_files(&ctx.http, vec!["replay_graph.png"], |m| m)?;
+		}
+
 		Ok(())
 	}
 
