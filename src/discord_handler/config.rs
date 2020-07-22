@@ -125,6 +125,8 @@ More commands:
 *Visualize note patterns, for example `lrlr` or `[14]3[12]`. Supports 4k-9k*
 **+scrollset [down/up]**
 *Set your preferred scroll type that will be used as a default*
+**+rs**
+*Show your most recent score*
 **+quote**
 *Print one of various random quotes, phrases and memes from various rhythm gaming communities*
 **+lastsession [username]**

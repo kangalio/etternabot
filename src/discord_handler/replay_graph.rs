@@ -12,10 +12,6 @@ const BAD_THRESHOLD: f32 = 0.180;
 const BAD_COLOR: RGBColor = RGBColor(0xFF, 0x1A, 0xB3);
 const MISS_COLOR: RGBColor = RGBColor(0xCC, 0x29, 0x29);
 
-// const WIFESCORE_LINE_COLOR: RGBColor = RGBColor(255, 128, 0);
-// const WIFESCORE_LINE_COLOR: RGBColor = RGBColor(255, 192, 128);
-const WIFESCORE_LINE_COLOR: RGBColor = WHITE;
-
 /// Takes a deviation in seconds, positive or negative, and generates the appropriate judgement
 /// color
 fn deviation_to_color(deviation: f32) -> RGBColor {
@@ -111,10 +107,14 @@ pub fn inner(
 		}))?;
 	
 	wifescore_chart
-	.draw_series(LineSeries::new(
-		notes.iter().zip(&wifescores).map(|(n, &w)| (n.time as f32, w)),
-		&WIFESCORE_LINE_COLOR,
-	))?;
+		.draw_series(LineSeries::new(
+			notes.iter().zip(&wifescores).map(|(n, &w)| (n.time as f32, w)),
+			ShapeStyle {
+				color: WHITE.to_rgba(),
+				filled: true,
+				stroke_width: 1,
+			},
+		))?;
 
 	ChartBuilder::on(&root)
 		.y_label_area_size(50)
@@ -125,9 +125,9 @@ pub fn inner(
 		// .line_style_1(&WHITE.mix(0.5))
 		// .line_style_2(&TRANSPARENT)
 		.disable_x_axis()
-		.axis_style(&WIFESCORE_LINE_COLOR.to_rgba().mix(0.5))
+		.axis_style(&WHITE.to_rgba().mix(0.5))
 		.y_label_style(TextStyle {
-			color: WIFESCORE_LINE_COLOR.to_rgba().mix(0.8),
+			color: WHITE.to_rgba().mix(0.8),
 			pos: Pos::new(HPos::Center, VPos::Center),
 			font: ("sans-serif", 12).into(),
 		})
