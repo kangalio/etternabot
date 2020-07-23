@@ -566,7 +566,7 @@ impl State {
 		let ssrs_string = format!(r#"
 ```nim
 	  Wife: {:.2}%
- Max Combo: {},
+ Max Combo: {}
    Overall: {:.2}
     Stream: {:.2}
    Stamina: {:.2}

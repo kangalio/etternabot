@@ -144,7 +144,7 @@ pub fn inner(
 		.y_label_style(TextStyle {
 			color: WHITE.to_rgba().mix(0.8),
 			pos: Pos::new(HPos::Center, VPos::Center),
-			font: ("sans-serif", 12).into(),
+			font: ("Open Sans", 15).into(),
 		})
 		.y_label_formatter(&|y| format!("{:.1}%", y))
 		.y_labels(5)
