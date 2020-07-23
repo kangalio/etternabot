@@ -164,43 +164,58 @@ fn parse_pattern(mut string: &str) -> Result<Pattern, Error> {
 	Ok(Pattern { rows })
 }
 
-/// Read noteskin from `noteskin_path`, read the pattern from `pattern_str` and write the generated
-/// image into a byte buffer using the PNG format
-pub fn generate(
-	pattern_str: &str,
-	scroll_type: ScrollType,
-	interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
-) -> Result<Vec<u8>, Error> {
+pub struct PatternVisualizer {
+	dbz: NoteskinLdur,
+	delta_note: Noteskin5k,
+	sbz: NoteskinLdur,
+	dbz_6k: Noteskin6k,
+}
 
-	let mut pattern = parse_pattern(pattern_str)?;
+impl PatternVisualizer {
+	pub fn load() -> Result<Self, Error> {
+		Ok(Self {
+			dbz: NoteskinLdur::read(
+				"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+				true,
+			)?,
+			delta_note: Noteskin5k::read(
+				"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
+				"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png"
+			)?,
+			sbz: NoteskinLdur::read(
+				"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
+				false,
+			)?,
+			dbz_6k: Noteskin6k::read(
+				"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+			)?,
+		})
+	}
 
-	let noteskin: Box<dyn Noteskin> = match pattern.keymode()? {
-		0..=4 | 8 => Box::new(NoteskinLdur::read(
-			"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
-			true,
-		)?),
-		5 => Box::new(Noteskin5k::read(
-			"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
-			"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png"
-		)?),
-		7 | 9 => Box::new(NoteskinLdur::read(
-			"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
-			false,
-		)?),
-		6 => Box::new(Noteskin6k::read(
-			"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
-		)?),
-		other @ 10..=u32::MAX => return Err(Error::KeymodeNotImplemented(other)),
-	};
+	pub fn generate(&self,
+		pattern_str: &str,
+		scroll_type: ScrollType,
+		interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
+	) -> Result<Vec<u8>, Error> {
+		let mut pattern = parse_pattern(pattern_str)?;
 
-	pattern.rows.truncate(100);
-	let buffer = render_pattern(noteskin.as_ref(), &pattern, scroll_type, interval_num_rows)?;
-	
-	let mut output_buffer = Vec::with_capacity(1_000_000); // allocate 1 MB for the img
-	image::DynamicImage::ImageRgba8(buffer).write_to(
-		&mut output_buffer,
-		image::ImageOutputFormat::Png
-	)?;
+		let noteskin: &dyn Noteskin = match pattern.keymode()? {
+			0..=4 | 8 => &self.dbz,
+			5 => &self.delta_note,
+			7 | 9 => &self.sbz,
+			6 => &self.dbz_6k,
+			other => return Err(Error::KeymodeNotImplemented(other)),
+		};
 
-	Ok(output_buffer)
+		pattern.rows.truncate(100);
+		let buffer = render_pattern(noteskin, &pattern, scroll_type, interval_num_rows)?;
+		
+		let mut output_buffer = Vec::with_capacity(1_000_000); // allocate 1 MB for the img
+		image::DynamicImage::ImageRgba8(buffer).write_to(
+			&mut output_buffer,
+			image::ImageOutputFormat::Png
+		)?;
+
+		Ok(output_buffer)
+	}
 }

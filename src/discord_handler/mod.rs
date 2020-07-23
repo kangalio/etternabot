@@ -46,6 +46,7 @@ pub struct State {
 	config: Config,
 	data: Data,
 	session: eo::Session,
+	pattern_visualizer: pattern_visualize::PatternVisualizer,
 }
 
 impl State {
@@ -58,7 +59,12 @@ impl State {
 			Some(std::time::Duration::from_millis(30000)),
 		)?;
 
-		Ok(State { session, config: Config::load(), data: Data::load() })
+		Ok(State {
+			session,
+			config: Config::load(),
+			data: Data::load(),
+			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
+		})
 	}
 
 	fn get_eo_username(&mut self,
@@ -343,7 +349,7 @@ impl State {
 		args.retain(|_| (!arg_indices_to_remove.contains(&i), i += 1).0);
 		let args_string = args.join("");
 
-		let bytes = pattern_visualize::generate(&args_string, scroll_type, interval_num_rows)?;
+		let bytes = self.pattern_visualizer.generate(&args_string, scroll_type, interval_num_rows)?;
 
 		// Send the image into the channel where the summoning message comes from
 		msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
