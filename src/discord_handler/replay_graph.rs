@@ -83,6 +83,8 @@ pub fn inner(
 	let wifescore_range = max_wifescore - min_wifescore;
 	let wifescore_chart_y_range = (min_wifescore - wifescore_range / 10.0)..(max_wifescore + wifescore_range / 10.0);
 
+	let acc = wifescore_range < 0.5; // if true, the axis labels are more precise
+
 	let mut wifescore_chart = ChartBuilder::on(&root)
 		.build_ranged(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
 
@@ -132,7 +134,7 @@ pub fn inner(
 		}))?;
 
 	ChartBuilder::on(&root)
-		.y_label_area_size(50)
+		.y_label_area_size(if acc { 75 } else { 55 })
 		.build_ranged(wifescore_chart_x_range, wifescore_chart_y_range)?
 		.configure_mesh()
 		.disable_mesh()
@@ -144,9 +146,9 @@ pub fn inner(
 		.y_label_style(TextStyle {
 			color: WHITE.to_rgba().mix(0.8),
 			pos: Pos::new(HPos::Center, VPos::Center),
-			font: ("Open Sans", 15).into(),
+			font: ("Open Sans", 18).into(),
 		})
-		.y_label_formatter(&|y| format!("{:.1}%", y))
+		.y_label_formatter(&|y| if acc { format!("{:.3}%", y) } else { format!("{:.1}%", y) })
 		.y_labels(5)
 		.draw()?;
 
