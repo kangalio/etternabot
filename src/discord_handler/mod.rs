@@ -560,6 +560,7 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		scorekey: &str,
+		// user_id: u32,
 	) -> Result<(), Error> {
 		let score = self.session.score_data(scorekey)?;
 
@@ -617,27 +618,40 @@ Dropped Holds: {}
 		);
 		let judgements_string = judgements_string.trim();
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-			.color(crate::ETTERNA_COLOR)
-			.thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
-			.author(|a| a
-				.name(&score.song_name)
-				.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
-				.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
-			)
-			.description(format!("```\n{}\n```", score.modifiers))
-			.field("SSRs", ssrs_string, true)
-			.field("Judgements", judgements_string, true)
-			.footer(|f| f
-				.text(format!("Played by {}", &score.user.username))
-			)
-		))?;
-
-		if let Some(replay) = score.replay {
+		let replay_graph_path;
+		if let Some(replay) = &score.replay {
 			replay_graph::generate_replay_graph(replay, "replay_graph.png")
 				.map_err(Error::ReplayGraphError)?;
-			msg.channel_id.send_files(&ctx.http, vec!["replay_graph.png"], |m| m)?;
+			replay_graph_path = Some("replay_graph.png");
+		} else {
+			replay_graph_path = None;
 		}
+
+		msg.channel_id.send_message(&ctx.http, |m| {
+			m.embed(|mut e| {
+				e = e
+					.color(crate::ETTERNA_COLOR)
+					// .description(format!("https://etternaonline.com/score/view/{}{}", scorekey, user_id))
+					.author(|a| a
+						.name(&score.song_name)
+						.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
+						.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
+					)
+					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
+					.description(format!("```\n{}\n```", score.modifiers))
+					.field("SSRs", ssrs_string, true)
+					.field("Judgements", judgements_string, true)
+					.footer(|f| f
+						.text(format!("Played by {}", &score.user.username))
+						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
+					);
+				replay_graph_path.map(|path| e.attachment(path));
+				e
+				}
+			);
+			replay_graph_path.map(|path| m.add_file(path));
+			m
+		})?;
 
 		Ok(())
 	}
@@ -687,7 +701,9 @@ Dropped Holds: {}
 				.captures_iter(&msg.content)
 			{
 				let scorekey = &captures[1];
-				let _user_id = &captures[2];
+				let _user_id: u32 = captures[2].parse()
+					.expect("this HAS to be a number as per the regex..?");
+				
 				if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}

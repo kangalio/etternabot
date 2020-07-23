@@ -34,17 +34,17 @@ fn deviation_to_color(deviation: f32) -> RGBColor {
 }
 
 pub fn inner(
-	replay: eo::Replay,
+	replay: &eo::Replay,
 	output_path: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
-	let notes = replay.notes;
+	let notes = &replay.notes;
 
 	let mut hits: Vec<(f32, f32)> = Vec::new();
 	let mut points = 0.0;
 	let mut min_wifescore = f32::INFINITY;
 	let mut max_wifescore = f32::NEG_INFINITY;
 	// println!("{} mine entries", notes.iter().filter(|n| n.note_type == eo::NoteType::Mine).count());
-	for note in &notes {
+	for note in notes {
 		match note.note_type {
 			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
 				let hit_points = crate::wife::wife3(note.deviation as f32);
@@ -70,7 +70,7 @@ pub fn inner(
 	// println!("final wifescore: {}", hits[hits.len() - 1].1);
 
 	let mut chart_length = 0.0;
-	for note in &notes {
+	for note in notes {
 		if note.time as f32 > chart_length {
 			chart_length = note.time as f32;
 		}
@@ -156,7 +156,7 @@ pub fn inner(
 /// plotters did a GREAT fucking JOB of hiding their error types so that I'm **unable** to handle
 /// them. For that reason, this has a String as an error type.
 pub fn generate_replay_graph(
-	replay: etternaonline_api::v2::Replay,
+	replay: &etternaonline_api::v2::Replay,
 	output_path: &str
 ) -> Result<(), String> {
 	inner(replay, output_path).map_err(|e| e.to_string())
