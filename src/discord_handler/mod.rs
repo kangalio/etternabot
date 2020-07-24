@@ -1,6 +1,7 @@
 mod config;
 mod pattern_visualize;
 mod replay_graph;
+mod score_ocr;
 
 use crate::serenity; // use my custom serenity prelude
 mod eo {
@@ -31,6 +32,8 @@ pub enum Error {
 	PatternVisualizeError(#[from] pattern_visualize::Error),
 	#[error("{0}")]
 	ReplayGraphError(String),
+	#[error("Failed analyzing the score evaluation screenshot: {0:?}")]
+	ScoreOcr(#[from] score_ocr::Error),
 }
 
 fn country_code_to_flag_emoji(country_code: &str) -> String {
@@ -47,10 +50,12 @@ pub struct State {
 	data: Data,
 	session: eo::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
+	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
+	user_id: serenity::UserId,
 }
 
 impl State {
-	pub fn load() -> Result<Self, Error> {
+	pub fn load(bot_user_id: serenity::UserId) -> Result<Self, Error> {
 		let session = eo::Session::new_from_login(
 			crate::auth::EO_USERNAME.to_owned(),
 			crate::auth::EO_PASSWORD.to_owned(),
@@ -64,6 +69,8 @@ impl State {
 			config: Config::load(),
 			data: Data::load(),
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
+			analyzed_score_screenshot_messages: vec![],
+			user_id: bot_user_id,
 		})
 	}
 
@@ -688,13 +695,24 @@ Dropped Holds: {}
 			}
 		};
 
-		if msg.channel_id.0 == self.config.link_and_attachments_only_channel { // #work-in-progress
+		if msg.channel_id.0 == self.config.score_channel {
+			let has_image = msg.attachments.iter().any(|a| a.width.is_some());
+			if has_image {
+				// React with magnifying glass, and when the msg author clicks on it, the image will
+				// be analyzed
+				msg.react(&ctx.http, '🔍')?;
+			}
+		}
+
+		if msg.channel_id.0 == self.config.work_in_progress_channel { // #work-in-progress
 			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
 			let num_links = url_regex.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
-				let notice_msg = msg.channel_id.say(&ctx.http, "Only links and attachments are \
-					allowed in this channel. For discussions use <#374775369330589696>")?;
+				let notice_msg = msg.channel_id.say(&ctx.http, format!(
+					"Only links and attachments are allowed in this channel. For discussions use <#{}>",
+					self.config.work_in_progress_discussion_channel),
+				)?;
 				std::thread::sleep(std::time::Duration::from_millis(5000));
 				notice_msg.delete(&ctx.http)?;
 				return Ok(());
@@ -771,6 +789,78 @@ Dropped Holds: {}
 				)
 			)?;
 		}
+
+		Ok(())
+	}
+
+	pub fn reaction_add(&mut self,
+		ctx: serenity::Context,
+		reaction: serenity::Reaction,
+	) -> Result<(), Error> {
+		if reaction.user_id == self.user_id {
+			return Ok(());
+		}
+
+		if self.analyzed_score_screenshot_messages.contains(&reaction.message_id) {
+			// we don't need to analyze and echo the results twice.
+			// In particularly, we don't want users to be able to overload the server by spam
+			// clicking the reaction button
+			return Ok(());
+		} else {
+			self.analyzed_score_screenshot_messages.push(reaction.message_id);
+		}
+
+		let message = reaction.message(&ctx.http)?;
+
+		// it only counts when the original author reacts
+		if reaction.user_id != message.author.id {
+			return Ok(())
+		}
+
+		let attachment = match message.attachments.iter().find(|a| a.width.is_some()) {
+			Some(a) => a,
+			None => return Ok(()), // some guy reacted with a magnifying glass on a non-image
+		};
+
+		let bytes = attachment.download()?;
+		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
+		
+		let eo_username = match &recognized.eo_username {
+			Some(a) => a.to_owned(),
+			None => self.get_eo_username(&ctx, &message)?,
+		};
+
+		let mut scorekey = None;
+		for score in self.session.user_latest_scores(&eo_username)? {
+			let score_as_eval = score_ocr::EvaluationScreenData {
+				artist: None,
+				eo_username: None, // it's useless to compare EO usernames - it's gonna match anyway
+				judgements: None,
+				song: Some(score.song_name),
+				msd: None,
+				ssr: Some(score.ssr_overall as f32),
+				pack: None,
+				rate: Some(score_ocr::Rate::from_float(score.rate as f32).unwrap()),
+				wifescore: Some(score.wifescore as f32 * 100.0),
+				difficulty: Some(score.difficulty),
+			};
+
+			if recognized.probably_equals(&score_as_eval) {
+				scorekey = Some(score.scorekey);
+				break;
+			}
+		}
+
+		// Check if we actually found the matching score on EO
+		let scorekey = match scorekey {
+			Some(a) => a,
+			None => {
+				message.channel_id.say(&ctx.http, "Can't find score within user's latest scores")?;
+				return Ok(());
+			}
+		};
+
+		self.score_card(&ctx, &message, &scorekey)?;
 
 		Ok(())
 	}
