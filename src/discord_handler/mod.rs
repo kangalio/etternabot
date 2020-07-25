@@ -157,7 +157,7 @@ impl State {
 				&entry.song_name,
 				entry.rate,
 				entry.ssr_overall,
-				entry.wifescore * 100.0,
+				entry.wifescore.as_percent(),
 			);
 		}
 
@@ -214,7 +214,7 @@ impl State {
 				&entry.song_name,
 				entry.rate,
 				entry.ssr_overall,
-				entry.wifescore * 100.0,
+				entry.wifescore.as_percent(),
 			);
 		}
 		response += "```";
@@ -591,7 +591,7 @@ Handstream: {:.2}
  Technical: {:.2}
 ```
 			"#,
-			score.wifescore * 100.0,
+			score.wifescore.as_percent(),
 			score.max_combo,
 			score.ssr.overall(),
 			score.ssr.stream,
@@ -840,8 +840,8 @@ Dropped Holds: {}
 				msd: None,
 				ssr: Some(score.ssr_overall as f32),
 				pack: None,
-				rate: Some(score_ocr::Rate::from_float(score.rate as f32).unwrap()),
-				wifescore: Some(score.wifescore as f32 * 100.0),
+				rate: Some(score.rate),
+				wifescore: Some(score.wifescore.as_percent()),
 				difficulty: Some(score.difficulty),
 			};
 

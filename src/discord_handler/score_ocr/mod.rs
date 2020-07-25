@@ -1,7 +1,7 @@
 #![allow(clippy::match_ref_pats)]
 
 use leptess::LepTess;
-use etternaonline_api::Difficulty;
+use etternaonline_api::{Difficulty, Rate};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,22 +20,6 @@ pub struct Judgements {
 	pub goods: u32,
 	pub bads: u32,
 	pub misses: u32,
-}
-
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Rate {
-	// this value is 100x the real rate, e.g. `1.15x` would be 23
-	x20: u32,
-}
-
-impl Rate {
-	/// Rounds to the nearest valid rate.
-	/// 
-	/// Returns None if the given value is negative
-	pub fn from_float(r: f32) -> Option<Self> {
-		// Some(Self { x20: (r * 20.0).round().try_into().ok()? })
-		Some(Self { x20: (r * 20.0).round() as u32 })
-	}
 }
 
 // not needed rn
@@ -115,7 +99,7 @@ impl EvaluationScreenData {
 
 		Ok(Self {
 			rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
-				Rate::from_float(s.parse().ok()?)
+				Rate::from_f32(s.parse().ok()?)
 			}),
 			pack: recognize_rect(&mut eng_lt, 241, 18, 1677, 55, |s| {
 				Some(s.to_owned())
