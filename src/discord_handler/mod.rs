@@ -379,7 +379,7 @@ impl State {
 				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work
 				me.rating.get(skillset),
-				if (me.rating.get(skillset) - you.rating.get(skillset)).abs() < f64::EPSILON {
+				if (me.rating.get(skillset) - you.rating.get(skillset)).abs() < f32::EPSILON {
 					"="
 				} else if me.rating.get(skillset) > you.rating.get(skillset) { 
 					">"

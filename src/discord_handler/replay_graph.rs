@@ -51,7 +51,7 @@ pub fn inner(
 				points += hit_points;
 
 				// if we miss a hold head, we additionally get the hold drop penalty
-				if (note.deviation - 0.18).abs() < f64::EPSILON && note.note_type == eo::NoteType::HoldHead {
+				if (note.deviation - 0.18).abs() < f32::EPSILON && note.note_type == eo::NoteType::HoldHead {
 					points += crate::wife::Wife3::HOLD_DROP_WEIGHT;
 				}
 		
