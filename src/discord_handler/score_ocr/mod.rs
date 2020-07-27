@@ -1,8 +1,10 @@
 #![allow(clippy::match_ref_pats)]
 
 use leptess::LepTess;
-use etternaonline_api::{Difficulty, Rate};
+use etternaonline_api::{Difficulty, Rate, TapJudgements};
 use thiserror::Error;
+
+pub const MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL: i32 = 10;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -10,16 +12,6 @@ pub enum Error {
 	TesseractInit(#[from] leptess::tesseract::TessInitError),
 	#[error("Leptonica failed reading the provided image")]
 	CouldNotReadImage,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub struct Judgements {
-	pub marvelouses: u32,
-	pub perfects: u32,
-	pub greats: u32,
-	pub goods: u32,
-	pub bads: u32,
-	pub misses: u32,
 }
 
 // not needed rn
@@ -54,7 +46,7 @@ fn recognize_rect<T>(
 	).unwrap());
 	let text = lt.get_utf8_text().ok()?;
 	let text = text.trim();
-	println!("{}", text);
+	println!("Recognized string: {}", text);
 	processor(text)
 }
 
@@ -69,7 +61,7 @@ pub struct EvaluationScreenData {
 	pub wifescore: Option<f32>,
 	pub msd: Option<f32>,
 	pub ssr: Option<f32>,
-	pub judgements: Option<Judgements>,
+	pub judgements: Option<TapJudgements>,
 	pub difficulty: Option<Difficulty>,
 }
 
@@ -131,10 +123,12 @@ impl EvaluationScreenData {
 					.filter_map(|s| s.trim().parse().ok())
 					.collect();
 				
-				if let &[marvelouses, perfects, greats, goods, bads, misses] = judgements.as_slice() {
-					Some(Judgements { marvelouses, perfects, greats, goods, bads, misses })
-				} else {
-					None
+				match judgements.as_slice() {
+					&[marvelouses, perfects, greats, goods, bads, misses] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads, misses }),
+					&[marvelouses, perfects, greats, goods, bads] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads, misses: 0 }),
+					&[marvelouses, perfects, greats, goods] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads: 0, misses: 0 }),
+					&[marvelouses, perfects, greats] => Some(TapJudgements { marvelouses, perfects, greats, goods: 0, bads: 0, misses: 0 }),
+					_ => None,
 				}
 			}),
 			difficulty: recognize_rect(&mut eng_lt, 646, 324, 100, 56, |s| {
@@ -143,16 +137,15 @@ impl EvaluationScreenData {
 		})
 	}
 
-	/// Compare this evaluation screen data to another instance
-	pub fn probably_equals(&self, other: &Self) -> bool {
+	pub fn equality_score(&self, other: &Self) -> i32 {
 		let mut score: i32 = 0;
 
 		macro_rules! compare {
 			($a:expr, $b:expr, $weight:expr, $equality_check:expr) => {
 				if let (Some(a), Some(b)) = (&$a, &$b) {
-					// println!("{:?} == {:?} ?", a, b);
+					println!("{:?} == {:?} ?", a, b);
 					if $equality_check(a, b) {
-						// println!("{} matches! Adding {} points", stringify!($a), $weight);
+						println!("{} matches! Adding {} points", stringify!($a), $weight);
 						score += $weight;
 					} else {
 						// score -= $weight;
@@ -162,8 +155,8 @@ impl EvaluationScreenData {
 			($a:expr, $b:expr, $weight:expr) => {
 				compare!($a, $b, $weight, |a, b| a == b);
 			};
-			($a:expr, $b:expr, $weight:expr, @float) => {
-				compare!($a, $b, $weight, |a: &f32, b: &f32| (a - b).abs() <= 0.01);
+			($a:expr, $b:expr, $weight:expr, ~$epsilon:expr) => {
+				compare!($a, $b, $weight, |a: &f32, b: &f32| (a - b).abs() <= $epsilon);
 			};
 		}
 		compare!(self.rate, other.rate, 2);
@@ -171,24 +164,24 @@ impl EvaluationScreenData {
 		compare!(self.eo_username, other.eo_username, 5);
 		compare!(self.song, other.song, 6);
 		compare!(self.artist, other.artist, 3);
-		compare!(self.wifescore, other.wifescore, 5, @float);
-		compare!(self.msd, other.msd, 6, @float);
-		compare!(self.ssr, other.ssr, 6, @float);
+		compare!(self.wifescore, other.wifescore, 5, ~0.01);
+		compare!(self.msd, other.msd, 6, ~0.01);
+		compare!(self.ssr, other.ssr, 6, ~0.01);
 		compare!(self.difficulty, other.difficulty, 2);
 		compare!(
 			self.judgements.as_ref().map(|j| j.marvelouses),
 			other.judgements.as_ref().map(|j| j.marvelouses),
-			2
+			5
 		);
 		compare!(
 			self.judgements.as_ref().map(|j| j.perfects),
 			other.judgements.as_ref().map(|j| j.perfects),
-			2
+			5
 		);
 		compare!(
 			self.judgements.as_ref().map(|j| j.greats),
 			other.judgements.as_ref().map(|j| j.greats),
-			2
+			5
 		);
 		compare!(
 			self.judgements.as_ref().map(|j| j.goods),
@@ -203,11 +196,12 @@ impl EvaluationScreenData {
 		compare!(
 			self.judgements.as_ref().map(|j| j.misses),
 			other.judgements.as_ref().map(|j| j.misses),
-			2
+			3
 		);
-		// println!("Got a score of {}", score);
-		// println!();
-		
-		score >= 8
+
+		println!("Got total {} points", score);
+		println!();
+
+		score
 	}
 }

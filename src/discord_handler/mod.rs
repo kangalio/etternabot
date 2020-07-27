@@ -4,9 +4,7 @@ mod replay_graph;
 mod score_ocr;
 
 use crate::serenity; // use my custom serenity prelude
-mod eo {
-	pub use etternaonline_api::{Error, v2::*};
-}
+use etternaonline_api as eo;
 use config::{Config, Data};
 use thiserror::Error;
 
@@ -48,7 +46,8 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 pub struct State {
 	config: Config,
 	data: Data,
-	session: eo::Session,
+	v2_session: eo::v2::Session,
+	web_session: eo::web::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
 	user_id: serenity::UserId,
@@ -56,7 +55,7 @@ pub struct State {
 
 impl State {
 	pub fn load(bot_user_id: serenity::UserId) -> Result<Self, Error> {
-		let session = eo::Session::new_from_login(
+		let v2_session = eo::v2::Session::new_from_login(
 			crate::auth::EO_USERNAME.to_owned(),
 			crate::auth::EO_PASSWORD.to_owned(),
 			crate::auth::EO_CLIENT_DATA.to_owned(),
@@ -64,8 +63,14 @@ impl State {
 			Some(std::time::Duration::from_millis(30000)),
 		)?;
 
+		let web_session = eo::web::Session::new(
+			std::time::Duration::from_millis(1000),
+			Some(std::time::Duration::from_millis(30000)),
+		);
+
 		Ok(State {
-			session,
+			v2_session,
+			web_session,
 			config: Config::load(),
 			data: Data::load(),
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
@@ -82,7 +87,7 @@ impl State {
 			return Ok(eo_username.to_owned());
 		}
 
-		match self.session.user_details(&msg.author.name) {
+		match self.v2_session.user_details(&msg.author.name) {
 			Ok(_) => Ok(msg.author.name.to_owned()),
 			Err(eo::Error::UserNotFound) => {
 				Err(Error::CouldNotDeriveEoUsername { discord_username: msg.author.name.to_owned() })
@@ -138,8 +143,8 @@ impl State {
 
 		// Download top scores
 		let top_scores = match skillset {
-			None => self.session.user_top_10_scores(&eo_username),
-			Some(skillset) => self.session.user_top_skillset_scores(&eo_username, skillset, limit),
+			None => self.v2_session.user_top_10_scores(&eo_username),
+			Some(skillset) => self.v2_session.user_top_skillset_scores(&eo_username, skillset, limit),
 		};
 		if let Err(eo::Error::UserNotFound) = top_scores {
 			msg.channel_id.say(&ctx.http, format!("No such user or skillset \"{}\"", eo_username))?;
@@ -147,7 +152,7 @@ impl State {
 		}
 		let top_scores = top_scores?;
 
-		let country_code = self.session.user_details(&eo_username)?.country_code;
+		let country_code = self.v2_session.user_details(&eo_username)?.country_code;
 
 		let mut response = String::from("```");
 		for (i, entry) in top_scores.iter().enumerate() {
@@ -197,14 +202,14 @@ impl State {
 			text.to_owned()
 		};
 
-		let latest_scores = self.session.user_latest_scores(&eo_username);
+		let latest_scores = self.v2_session.user_latest_scores(&eo_username);
 		if let Err(eo::Error::UserNotFound) = latest_scores {
 			msg.channel_id.say(&ctx.http, format!("No such user \"{}\"", eo_username))?;
 			return Ok(());
 		}
 		let latest_scores = latest_scores?;
 
-		let country_code = self.session.user_details(&eo_username)?.country_code;
+		let country_code = self.v2_session.user_details(&eo_username)?.country_code;
 
 		let mut response = String::from("```");
 		for (i, entry) in latest_scores.iter().enumerate() {
@@ -245,7 +250,7 @@ impl State {
 			text.to_owned()
 		};
 
-		let details = match self.session.user_details(&eo_username) {
+		let details = match self.v2_session.user_details(&eo_username) {
 			Ok(details) => details,
 			Err(eo::Error::UserNotFound) => {
 				msg.channel_id.say(
@@ -257,7 +262,7 @@ impl State {
 			Err(e) => return Err(e.into()),
 		};
 
-		let ranks = self.session.user_ranks_per_skillset(&eo_username)?;
+		let ranks = self.v2_session.user_ranks_per_skillset(&eo_username)?;
 
 		let mut title = eo_username.to_owned();
 		if details.is_moderator {
@@ -370,8 +375,8 @@ impl State {
 		me: &str,
 		you: &str,
 	) -> Result<(), Error> {
-		let me = self.session.user_details(&me)?;
-		let you = self.session.user_details(you)?;
+		let me = self.v2_session.user_details(&me)?;
+		let you = self.v2_session.user_details(you)?;
 
 		let mut string = "```Prolog\n".to_owned();
 		for skillset in eo::Skillset8::iter() {
@@ -453,7 +458,7 @@ impl State {
 					"" => self.get_eo_username(ctx, msg)?,
 					username => username.to_owned(),
 				};
-				let latest_scores = self.session.user_latest_scores(&eo_username)?;
+				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 				self.score_card(ctx, msg, &latest_scores[0].scorekey)?;
 			}
 			"scrollset" => {
@@ -478,7 +483,7 @@ impl State {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(e) = self.session.user_details(text) {
+				if let Err(e) = self.v2_session.user_details(text) {
 					if e == eo::Error::UserNotFound {
 						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
 						return Ok(());
@@ -506,7 +511,7 @@ impl State {
 					msg.channel_id.say(&ctx.http, CMD_RIVALSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(eo::Error::UserNotFound) = self.session.user_details(text) {
+				if let Err(eo::Error::UserNotFound) = self.v2_session.user_details(text) {
 					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
 					return Ok(());
 				}
@@ -572,10 +577,10 @@ impl State {
 	fn score_card(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-		scorekey: &str,
+		scorekey: impl AsRef<str>,
 		// user_id: u32,
 	) -> Result<(), Error> {
-		let score = self.session.score_data(scorekey)?;
+		let score = self.v2_session.score_data(scorekey.as_ref())?;
 
 		let ssrs_string = format!(r#"
 ```nim
@@ -824,30 +829,45 @@ Dropped Holds: {}
 
 		let bytes = attachment.download()?;
 		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
+		println!("Recognized score: {:#?}", recognized);
 		
 		let eo_username = match &recognized.eo_username {
 			Some(a) => a.to_owned(),
 			None => self.get_eo_username(&ctx, &message)?,
 		};
 
+		let user_id = self.web_session.user_details(&eo_username)?.user_id;
+
+		let recent_scores = self.web_session.user_scores(
+			user_id,
+			0..10, // check the 10 most recent scores for a match
+			eo::web::UserScoresSortBy::Date,
+			eo::web::SortDirection::Descending,
+		)?;
+		// println!("{:#?}", recent_scores);
+
+		let mut best_equality_score_so_far = i32::MIN;
 		let mut scorekey = None;
-		for score in self.session.user_latest_scores(&eo_username)? {
+		for score in recent_scores {
 			let score_as_eval = score_ocr::EvaluationScreenData {
 				artist: None,
 				eo_username: None, // it's useless to compare EO usernames - it's gonna match anyway
-				judgements: None,
+				judgements: Some(score.judgements),
 				song: Some(score.song_name),
 				msd: None,
-				ssr: Some(score.ssr_overall as f32),
+				ssr: Some(score.ssr.overall()),
 				pack: None,
 				rate: Some(score.rate),
 				wifescore: Some(score.wifescore.as_percent()),
-				difficulty: Some(score.difficulty),
+				difficulty: None,
 			};
 
-			if recognized.probably_equals(&score_as_eval) {
+			let equality_score = recognized.equality_score(&score_as_eval);
+			if equality_score > score_ocr::MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL
+				&& equality_score > best_equality_score_so_far
+			{
+				best_equality_score_so_far = equality_score;
 				scorekey = Some(score.scorekey);
-				break;
 			}
 		}
 
