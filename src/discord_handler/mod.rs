@@ -49,8 +49,9 @@ pub struct State {
 	v2_session: eo::v2::Session,
 	web_session: eo::web::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
-	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
 	user_id: serenity::UserId,
+	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
+	score_screenshot_scorekeys: std::collections::HashMap<serenity::MessageId, eo::Scorekey>,
 }
 
 impl State {
@@ -74,8 +75,9 @@ impl State {
 			config: Config::load(),
 			data: Data::load(),
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
-			analyzed_score_screenshot_messages: vec![],
 			user_id: bot_user_id,
+			analyzed_score_screenshot_messages: vec![],
+			score_screenshot_scorekeys: std::collections::HashMap::new(),
 		})
 	}
 
@@ -701,12 +703,7 @@ Dropped Holds: {}
 		};
 
 		if msg.channel_id.0 == self.config.score_channel {
-			let has_image = msg.attachments.iter().any(|a| a.width.is_some());
-			if has_image {
-				// React with magnifying glass, and when the msg author clicks on it, the image will
-				// be analyzed
-				msg.react(&ctx.http, '🔍')?;
-			}
+			self.check_potential_score_screenshot(ctx, msg)?;
 		}
 
 		if msg.channel_id.0 == self.config.work_in_progress_channel { // #work-in-progress
@@ -798,6 +795,71 @@ Dropped Holds: {}
 		Ok(())
 	}
 
+	pub fn check_potential_score_screenshot(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+	) -> Result<(), Error> {
+		let attachment = match msg.attachments.iter().find(|a| a.width.is_some()) {
+			Some(a) => a,
+			None => return Ok(()), // non-image post in #scores. ignore
+		};
+
+		let bytes = attachment.download()?;
+		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
+		println!("Recognized score: {:#?}", recognized);
+		
+		let eo_username = match &recognized.eo_username {
+			Some(a) => a.to_owned(),
+			None => self.get_eo_username(&ctx, &msg)?,
+		};
+
+		let user_id = self.web_session.user_details(&eo_username)?.user_id;
+
+		let recent_scores = self.web_session.user_scores(
+			user_id,
+			0..10, // check the 10 most recent scores for a match
+			eo::web::UserScoresSortBy::Date,
+			eo::web::SortDirection::Descending,
+		)?;
+		// println!("{:#?}", recent_scores);
+
+		let mut best_equality_score_so_far = i32::MIN;
+		let mut scorekey = None;
+		for score in recent_scores {
+			let score_as_eval = score_ocr::EvaluationScreenData {
+				artist: None,
+				eo_username: None, // no pointcomparing EO usernames - it's gonna match anyway
+				judgements: Some(score.judgements),
+				song: Some(score.song_name),
+				msd: None,
+				ssr: Some(score.ssr.overall()),
+				pack: None,
+				rate: Some(score.rate),
+				wifescore: Some(score.wifescore.as_percent()),
+				difficulty: None,
+			};
+
+			let equality_score = recognized.equality_score(&score_as_eval);
+			if equality_score > score_ocr::MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL
+				&& equality_score > best_equality_score_so_far
+			{
+				best_equality_score_so_far = equality_score;
+				scorekey = Some(score.scorekey);
+			}
+		}
+
+		// Check if we actually found the matching score on EO
+		let scorekey = match scorekey {
+			Some(a) => a,
+			None => return Ok(()),
+		};
+
+		msg.react(&ctx.http, '🔍')?;
+		self.score_screenshot_scorekeys.insert(msg.id, scorekey);
+
+		Ok(())
+	}
+
 	pub fn reaction_add(&mut self,
 		ctx: serenity::Context,
 		reaction: serenity::Reaction,
@@ -822,64 +884,11 @@ Dropped Holds: {}
 			return Ok(())
 		}
 
-		let attachment = match message.attachments.iter().find(|a| a.width.is_some()) {
-			Some(a) => a,
-			None => return Ok(()), // some guy reacted with a magnifying glass on a non-image
+		let scorekey = match self.score_screenshot_scorekeys.get(&message.id) {
+			Some(x) => x.to_owned(),
+			None => return Ok(()),
 		};
-
-		let bytes = attachment.download()?;
-		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
-		println!("Recognized score: {:#?}", recognized);
 		
-		let eo_username = match &recognized.eo_username {
-			Some(a) => a.to_owned(),
-			None => self.get_eo_username(&ctx, &message)?,
-		};
-
-		let user_id = self.web_session.user_details(&eo_username)?.user_id;
-
-		let recent_scores = self.web_session.user_scores(
-			user_id,
-			0..10, // check the 10 most recent scores for a match
-			eo::web::UserScoresSortBy::Date,
-			eo::web::SortDirection::Descending,
-		)?;
-		// println!("{:#?}", recent_scores);
-
-		let mut best_equality_score_so_far = i32::MIN;
-		let mut scorekey = None;
-		for score in recent_scores {
-			let score_as_eval = score_ocr::EvaluationScreenData {
-				artist: None,
-				eo_username: None, // it's useless to compare EO usernames - it's gonna match anyway
-				judgements: Some(score.judgements),
-				song: Some(score.song_name),
-				msd: None,
-				ssr: Some(score.ssr.overall()),
-				pack: None,
-				rate: Some(score.rate),
-				wifescore: Some(score.wifescore.as_percent()),
-				difficulty: None,
-			};
-
-			let equality_score = recognized.equality_score(&score_as_eval);
-			if equality_score > score_ocr::MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL
-				&& equality_score > best_equality_score_so_far
-			{
-				best_equality_score_so_far = equality_score;
-				scorekey = Some(score.scorekey);
-			}
-		}
-
-		// Check if we actually found the matching score on EO
-		let scorekey = match scorekey {
-			Some(a) => a,
-			None => {
-				message.channel_id.say(&ctx.http, "Can't find score within user's latest scores")?;
-				return Ok(());
-			}
-		};
-
 		self.score_card(&ctx, &message, &scorekey)?;
 
 		Ok(())
