@@ -2,8 +2,6 @@
 
 mod discord_handler;
 mod auth;
-#[allow(unused)]
-mod wife;
 
 // This is my custom serenity prelude module
 mod serenity {

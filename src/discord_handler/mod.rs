@@ -638,18 +638,39 @@ Dropped Holds: {}
 		);
 		let judgements_string = judgements_string.trim();
 
-		let replay_graph_path;
+		struct ReplayAnalysis {
+			replay_graph_path: &'static str,
+			wife2_score: f32,
+			wife3_score: f32,
+			wife3_kang_system_score: f32,
+		}
+
+		let replay_analysis;
 		if let Some(replay) = &score.replay {
 			replay_graph::generate_replay_graph(replay, "replay_graph.png")
 				.map_err(Error::ReplayGraphError)?;
-			replay_graph_path = Some("replay_graph.png");
+			
+			replay_analysis = Some(ReplayAnalysis {
+				replay_graph_path: "replay_graph.png",
+				wife2_score: etterna_analysis::rescore::<
+					etterna_analysis::NaiveScorer,
+					etterna_analysis::Wife2
+				>(
+					&note_seconds_columns,
+					&hit_seconds_columns,
+					replay_file_data.num_mine_hits,
+					replay_file_data.num_hold_drops
+				),
+				wife3_score: 0.5555,
+				wife3_kang_system_score: 0.5555,
+			});
 		} else {
-			replay_graph_path = None;
+			replay_analysis = None;
 		}
 
 		msg.channel_id.send_message(&ctx.http, |m| {
-			m.embed(|mut e| {
-				e = e
+			m.embed(|e| {
+				e
 					.color(crate::ETTERNA_COLOR)
 					// .description(format!("https://etternaonline.com/score/view/{}{}", scorekey, user_id))
 					.author(|a| a
@@ -665,11 +686,23 @@ Dropped Holds: {}
 						.text(format!("Played by {}", &score.user.username))
 						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
 					);
-				replay_graph_path.map(|path| e.attachment(path));
-				e
+				
+				if let Some(analysis) = &replay_analysis {
+					e
+						.attachment(analysis.replay_graph_path)
+						.field("Scoring systems comparison", format!(
+							"Wife2: {:.2}\nWife3: {:.2}\nWife3 no bullshit CB rushes: {:.2}\n",
+							analysis.wife2_score,
+							analysis.wife3_score,
+							analysis.wife3_kang_system_score,
+						), false);
 				}
-			);
-			replay_graph_path.map(|path| m.add_file(path));
+
+				e
+			});
+			if let Some(analysis) = &replay_analysis {
+				m.add_file(analysis.replay_graph_path);
+			}
 			m
 		})?;
 

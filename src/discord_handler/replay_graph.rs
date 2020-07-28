@@ -1,6 +1,6 @@
 use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos} /*style::RGBAColor*/};
 use etternaonline_api::v2 as eo;
-use crate::wife::Wife;
+use etterna_analysis::Wife;
 
 const MARVELOUS_THRESHOLD: f32 = 0.0225;
 const MARVELOUS_COLOR: RGBColor = RGBColor(0x99, 0xCC, 0xFF);
@@ -47,12 +47,12 @@ pub fn inner(
 	for note in notes {
 		match note.note_type {
 			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
-				let hit_points = crate::wife::wife3(note.deviation as f32);
+				let hit_points = etterna_analysis::wife3(note.deviation as f32);
 				points += hit_points;
 
 				// if we miss a hold head, we additionally get the hold drop penalty
-				if (note.deviation - 0.18).abs() < f32::EPSILON && note.note_type == eo::NoteType::HoldHead {
-					points += crate::wife::Wife3::HOLD_DROP_WEIGHT;
+				if note.is_miss() && note.note_type == eo::NoteType::HoldHead {
+					points += etterna_analysis::Wife3::HOLD_DROP_WEIGHT;
 				}
 		
 				let wifescore = points / (hits.len() + 1) as f32 * 100.0;
@@ -62,7 +62,7 @@ pub fn inner(
 				if wifescore > max_wifescore { max_wifescore = wifescore }
 			},
 			eo::NoteType::Mine => {
-				points += crate::wife::Wife3::MINE_HIT_WEIGHT;
+				points += etterna_analysis::Wife3::MINE_HIT_WEIGHT;
 			},
 			eo::NoteType::HoldTail | eo::NoteType::Fake | eo::NoteType::Keysound => {},
 		}

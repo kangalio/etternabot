@@ -18,3 +18,4 @@ etternaonline_api = { path = "../eo-api" }
 plotters = "0.2.15"
 text_io = { path = "../rust-si" }
 leptess = { path = "../leptess" }
+etterna_analysis = { path = "../etterna-analysis" }
