@@ -640,9 +640,9 @@ Dropped Holds: {}
 
 		struct ReplayAnalysis {
 			replay_graph_path: &'static str,
-			wife2_score: f32,
-			wife3_score: f32,
-			wife3_kang_system_score: f32,
+			wife2_score: etterna::Wifescore,
+			wife3_score: etterna::Wifescore,
+			wife3_kang_system_score: etterna::Wifescore,
 		}
 
 		let replay_analysis;
@@ -652,17 +652,21 @@ Dropped Holds: {}
 			
 			replay_analysis = Some(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
-				wife2_score: etterna_analysis::rescore::<
-					etterna_analysis::NaiveScorer,
-					etterna_analysis::Wife2
-				>(
-					&note_seconds_columns,
-					&hit_seconds_columns,
-					replay_file_data.num_mine_hits,
-					replay_file_data.num_hold_drops
+				wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
+					replay,
+					score.judgements.hit_mines,
+					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
 				),
-				wife3_score: 0.5555,
-				wife3_kang_system_score: 0.5555,
+				wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+					replay,
+					score.judgements.hit_mines,
+					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
+				),
+				wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
+					replay,
+					score.judgements.hit_mines,
+					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
+				),
 			});
 		} else {
 			replay_analysis = None;
@@ -691,10 +695,10 @@ Dropped Holds: {}
 					e
 						.attachment(analysis.replay_graph_path)
 						.field("Scoring systems comparison", format!(
-							"Wife2: {:.2}\nWife3: {:.2}\nWife3 no bullshit CB rushes: {:.2}\n",
-							analysis.wife2_score,
-							analysis.wife3_score,
-							analysis.wife3_kang_system_score,
+							"_Note: due to external issues, these calculated scores are slightly inaccurate_\n**Wife2**: {:.2}%\n**Wife3**: {:.2}%\n**Wife3**: {:.2}% (no bullshit CB rushes)\n",
+							analysis.wife2_score.as_percent(),
+							analysis.wife3_score.as_percent(),
+							analysis.wife3_kang_system_score.as_percent(),
 						), false);
 				}
 
@@ -861,11 +865,11 @@ Dropped Holds: {}
 		for score in recent_scores {
 			let score_as_eval = score_ocr::EvaluationScreenData {
 				artist: None,
-				eo_username: None, // no pointcomparing EO usernames - it's gonna match anyway
+				eo_username: None, // no point comparing EO usernames - it's gonna match anyway
 				judgements: Some(score.judgements),
 				song: Some(score.song_name),
 				msd: None,
-				ssr: Some(score.ssr.overall()),
+				ssr: score.user_id_and_ssr.map(|x| x.ssr.overall()),
 				pack: None,
 				rate: Some(score.rate),
 				wifescore: Some(score.wifescore.as_percent()),
