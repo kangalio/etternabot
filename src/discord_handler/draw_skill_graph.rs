@@ -71,7 +71,7 @@ fn inner_draw_skill_graph(
 							Some((dt, _ssr)) => parsedate(dt),
 							None => chrono::Utc::now().date(),
 						};
-						let ssr = ssr.get(ss);
+						let ssr = ssr.get_pre_070(ss);
 						vec![ // who needs memory efficiency lolololololol
 							(parsedate(datetime), ssr),
 							(next_datetime, ssr),

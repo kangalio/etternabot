@@ -69,7 +69,7 @@ impl State {
 
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(120000)), // yes two whole fucking minutes
+			Some(std::time::Duration::from_millis(300000)), // yes five whole fucking minutes
 		);
 
 		Ok(State {
