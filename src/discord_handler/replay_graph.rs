@@ -142,9 +142,9 @@ pub fn inner(
 		// .line_style_1(&WHITE.mix(0.5))
 		// .line_style_2(&TRANSPARENT)
 		.disable_x_axis()
-		.axis_style(&WHITE.to_rgba().mix(0.5))
+		.axis_style(&WHITE.mix(0.5))
 		.y_label_style(TextStyle {
-			color: WHITE.to_rgba().mix(0.8),
+			color: WHITE.mix(0.8),
 			pos: Pos::new(HPos::Center, VPos::Center),
 			font: ("Open Sans", 18).into(),
 		})

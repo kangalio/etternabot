@@ -2,6 +2,7 @@ mod config;
 mod pattern_visualize;
 mod replay_graph;
 mod score_ocr;
+mod draw_skill_graph;
 
 use crate::serenity; // use my custom serenity prelude
 use etternaonline_api as eo;
@@ -30,6 +31,8 @@ pub enum Error {
 	PatternVisualizeError(#[from] pattern_visualize::Error),
 	#[error("{0}")]
 	ReplayGraphError(String),
+	#[error("{0}")]
+	SkillGraphError(String),
 	#[error("Failed analyzing the score evaluation screenshot: {0:?}")]
 	ScoreOcr(#[from] score_ocr::Error),
 }
@@ -66,7 +69,7 @@ impl State {
 
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(30000)),
+			Some(std::time::Duration::from_millis(120000)), // yes two whole fucking minutes
 		);
 
 		Ok(State {
@@ -413,6 +416,41 @@ impl State {
 		Ok(())
 	}
 
+	fn skillgraph(&mut self,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+		args: &str,
+	) -> Result<(), Error> {
+		let eo_username = if args.is_empty() {
+			self.get_eo_username(ctx, msg)?
+		} else {
+			args.to_owned()
+		};
+
+		let user_id = self.web_session.user_details(&eo_username)?.user_id;
+		msg.channel_id.say(&ctx.http, "Requesting user score data from EtternaOnline... (this may \
+			take a while, depending on profile size)")?;
+		let scores = self.web_session.user_scores(
+			user_id,
+			..,
+			eo::web::UserScoresSortBy::Date,
+			eo::web::SortDirection::Ascending
+		)?;
+		msg.channel_id.say(&ctx.http, "Received user score data from EtternaOnline")?;
+
+		let skill_graph = etterna::skill_graph(
+			scores.iter()
+				.filter_map(|s| s.user_id_and_ssr.as_ref().map(|u| (s.date.as_str(), u.nerfed_ssr())))
+				.filter(|(_date, ssr)| etterna::Skillset7::iter().map(|ss| ssr.get(ss)).all(|x| x < 40.0))
+		);
+		draw_skill_graph::draw_skill_graph(&skill_graph, "output.png")
+			.map_err(Error::SkillGraphError)?;
+
+		msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+
+		Ok(())
+	}
+
 	fn command(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -444,6 +482,12 @@ impl State {
 			"lastsession" => {
 				self.latest_scores(ctx, msg, text)?;
 			},
+			"pattern" => {
+				self.pattern(ctx, msg, text)?;
+			},
+			"skillgraph" => {
+				self.skillgraph(ctx, msg, text)?;
+			}
 			"quote" => {
 				let quote = &self.config.quotes[rand::random::<usize>() % self.config.quotes.len()];
 				let string = match &quote.source {
@@ -452,9 +496,6 @@ impl State {
 				};
 				msg.channel_id.say(&ctx.http, &string)?;
 			}
-			"pattern" => {
-				self.pattern(ctx, msg, text)?;
-			},
 			"rs" => {
 				let eo_username = match text {
 					"" => self.get_eo_username(ctx, msg)?,
