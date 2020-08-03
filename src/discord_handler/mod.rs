@@ -427,21 +427,26 @@ impl State {
 			args.to_owned()
 		};
 
+		msg.channel_id.say(&ctx.http, format!("Requesting data for {} (this may take a while)", eo_username))?;
 		let user_id = self.web_session.user_details(&eo_username)?.user_id;
-		msg.channel_id.say(&ctx.http, "Requesting user score data from EtternaOnline... (this may \
-			take a while, depending on profile size)")?;
 		let scores = self.web_session.user_scores(
 			user_id,
 			..,
 			eo::web::UserScoresSortBy::Date,
 			eo::web::SortDirection::Ascending
 		)?;
-		msg.channel_id.say(&ctx.http, "Received user score data from EtternaOnline")?;
 
 		let skill_graph = etterna::skill_graph(
 			scores.iter()
-				.filter_map(|s| s.user_id_and_ssr.as_ref().map(|u| (s.date.as_str(), u.nerfed_ssr())))
-				.filter(|(_date, ssr)| etterna::Skillset7::iter().map(|ss| ssr.get(ss)).all(|x| x < 40.0))
+				.filter_map(|s| s
+					.user_id_and_ssr
+					.as_ref()
+					.map(|u| (s.date.as_str(), u.nerfed_ssr()))
+				)
+				.filter(|(_date, ssr)| etterna::Skillset7::iter()
+					.map(|ss| ssr.get(ss)).all(|x| x < 40.0)
+				),
+			true,
 		);
 		draw_skill_graph::draw_skill_graph(&skill_graph, "output.png")
 			.map_err(Error::SkillGraphError)?;

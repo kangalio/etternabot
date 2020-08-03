@@ -18,5 +18,5 @@ etternaonline_api = { path = "../eo-api" }
 plotters = "0.2.15"
 text_io = { path = "../_downloaded/rust-si" }
 leptess = { path = "../_downloaded/leptess" }
-etterna = { package = "etterna_base", path = "../etterna-base" }
+etterna = { package = "etterna_base", path = "../etterna-base", features = ["parallel"] }
 chrono = "0.4.13"
