@@ -433,11 +433,12 @@ impl State {
 			user_id,
 			..,
 			eo::web::UserScoresSortBy::Date,
-			eo::web::SortDirection::Ascending
+			eo::web::SortDirection::Ascending,
+			false, // exclude invalid
 		)?;
 
 		let skill_graph = etterna::skill_graph(
-			scores.iter()
+			scores.scores.iter()
 				.filter_map(|s| s
 					.user_id_and_ssr
 					.as_ref()
@@ -684,6 +685,12 @@ Dropped Holds: {}
 		);
 		let judgements_string = judgements_string.trim();
 
+		let description = format!(
+			"Scorekey: {}\n```\n{}\n```",
+			score.scorekey,
+			score.modifiers,
+		);
+
 		struct ReplayAnalysis {
 			replay_graph_path: &'static str,
 			wife2_score: etterna::Wifescore,
@@ -729,7 +736,7 @@ Dropped Holds: {}
 						.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
 					)
 					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
-					.description(format!("```\n{}\n```", score.modifiers))
+					.description(description)
 					.field("SSRs", ssrs_string, true)
 					.field("Judgements", judgements_string, true)
 					.footer(|f| f
@@ -741,7 +748,10 @@ Dropped Holds: {}
 					e
 						.attachment(analysis.replay_graph_path)
 						.field("Scoring systems comparison", format!(
-							"_Note: due to external issues, these calculated scores are slightly inaccurate_\n**Wife2**: {:.2}%\n**Wife3**: {:.2}%\n**Wife3**: {:.2}% (no bullshit CB rushes)\n",
+							"_Note: these calculated scores are slightly inaccurate_\n\
+								**Wife2**: {:.2}%\n\
+								**Wife3**: {:.2}%\n\
+								**Wife3**: {:.2}% (no bullshit CB rushes)\n",
 							analysis.wife2_score.as_percent(),
 							analysis.wife3_score.as_percent(),
 							analysis.wife3_kang_system_score.as_percent(),
@@ -903,12 +913,13 @@ Dropped Holds: {}
 			0..10, // check the 10 most recent scores for a match
 			eo::web::UserScoresSortBy::Date,
 			eo::web::SortDirection::Descending,
+			true, // also search invalid
 		)?;
 		// println!("{:#?}", recent_scores);
 
 		let mut best_equality_score_so_far = i32::MIN;
 		let mut scorekey = None;
-		for score in recent_scores {
+		for score in recent_scores.scores {
 			let score_as_eval = score_ocr::EvaluationScreenData {
 				artist: None,
 				eo_username: None, // no point comparing EO usernames - it's gonna match anyway
