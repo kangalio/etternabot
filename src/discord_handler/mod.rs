@@ -162,7 +162,7 @@ impl State {
 		let mut response = String::from("```");
 		for (i, entry) in top_scores.iter().enumerate() {
 			response += &format!(
-				"{}. {}: {:.2}x\n  ▸ Score: {:.2} Wife: {:.2}%\n",
+				"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
 				i + 1,
 				&entry.song_name,
 				entry.rate,
@@ -207,19 +207,14 @@ impl State {
 			text.to_owned()
 		};
 
-		let latest_scores = self.v2_session.user_latest_scores(&eo_username);
-		if let Err(eo::Error::UserNotFound) = latest_scores {
-			msg.channel_id.say(&ctx.http, format!("No such user \"{}\"", eo_username))?;
-			return Ok(());
-		}
-		let latest_scores = latest_scores?;
+		let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 
 		let country_code = self.v2_session.user_details(&eo_username)?.country_code;
 
 		let mut response = String::from("```");
 		for (i, entry) in latest_scores.iter().enumerate() {
 			response += &format!(
-				"{}. {}: {:.2}x\n  ▸ Score: {:.2} Wife: {:.2}%\n",
+				"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
 				i + 1,
 				&entry.song_name,
 				entry.rate,
@@ -243,6 +238,15 @@ impl State {
 
 		Ok(())
 	}
+
+	// fn scores_list_card(&mut self,
+	// 	ctx: &serenity::Context,
+	// 	channel_id: serenity::ChannelId,
+	// 	title: &str,
+	// 	eo_username: &str,
+	// ) -> Result<(), Error> {
+
+	// }
 
 	fn profile(&mut self,
 		ctx: &serenity::Context,
