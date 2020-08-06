@@ -710,10 +710,14 @@ Dropped Holds: {}
 			replay_graph::generate_replay_graph(replay, "replay_graph.png")
 				.map_err(Error::ReplayGraphError)?;
 			
+			// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
+			// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
+			// _are_ scaled though.
+
 			let (_note_seconds_lanes, hit_seconds_lanes) = replay.split_into_lanes();
 			let mut max_finger_nps = 0.0;
 			for hit_seconds in &hit_seconds_lanes {
-				let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed * score.rate.as_f32();
+				let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed;
 
 				if this_fingers_max_nps > max_finger_nps {
 					max_finger_nps = this_fingers_max_nps;
@@ -721,7 +725,7 @@ Dropped Holds: {}
 			}
 
 			let (_note_seconds, hit_seconds) = replay.split_into_notes_and_hits();
-			let fastest_nps = etterna::find_fastest_note_subset(&hit_seconds, 100, 100).speed * score.rate.as_f32();
+			let fastest_nps = etterna::find_fastest_note_subset(&hit_seconds, 100, 100).speed;
 
 			replay_analysis = Some(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
