@@ -117,6 +117,12 @@ impl EvaluationScreenData {
 			ssr: recognize_rect(&mut num_lt, 535, 385, 209, 51, |s| {
 				Some(s.trim().parse().ok()?)
 			}),
+			// NOTE - we're reading the judgements from the top-most box from the score boxes in the
+			// top right of the eval screen. The problem with this is that those boxes are ordered
+			// by wifescore. If the score that was just made was not a PB, it's not at the top, and
+			// we're reading _some other score's judgements data here_. HOWEVER!! Due to the fact
+			// that EO doesn't save non-PBs, we wouldn't find the score _anyways_. So it's not
+			// actually a problem that we're not properly recognizing non-PBs.
 			judgements: recognize_rect(&mut num_lt, 1422, 171, 308, 21, |s| {
 				let judgements: Vec<u32> = s
 					.split('/')

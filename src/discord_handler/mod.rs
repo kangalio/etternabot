@@ -54,7 +54,7 @@ pub struct State {
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	user_id: serenity::UserId,
 	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
-	score_screenshot_scorekeys: std::collections::HashMap<serenity::MessageId, eo::Scorekey>,
+	score_screenshot_scorekey_user_ids: std::collections::HashMap<serenity::MessageId, (eo::Scorekey, u32)>,
 }
 
 impl State {
@@ -80,7 +80,7 @@ impl State {
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
 			user_id: bot_user_id,
 			analyzed_score_screenshot_messages: vec![],
-			score_screenshot_scorekeys: std::collections::HashMap::new(),
+			score_screenshot_scorekey_user_ids: std::collections::HashMap::new(),
 		})
 	}
 
@@ -238,15 +238,6 @@ impl State {
 
 		Ok(())
 	}
-
-	// fn scores_list_card(&mut self,
-	// 	ctx: &serenity::Context,
-	// 	channel_id: serenity::ChannelId,
-	// 	title: &str,
-	// 	eo_username: &str,
-	// ) -> Result<(), Error> {
-
-	// }
 
 	fn profile(&mut self,
 		ctx: &serenity::Context,
@@ -441,7 +432,7 @@ impl State {
 			false, // exclude invalid
 		)?;
 
-		let skill_graph = etterna::skill_graph(
+		let skill_timeline = etterna::skill_timeline(
 			scores.scores.iter()
 				.filter_map(|s| s
 					.user_id_and_ssr
@@ -453,7 +444,7 @@ impl State {
 				),
 			true,
 		);
-		draw_skill_graph::draw_skill_graph(&skill_graph, "output.png")
+		draw_skill_graph::draw_skill_graph(&skill_timeline, "output.png")
 			.map_err(Error::SkillGraphError)?;
 
 		msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
@@ -512,7 +503,8 @@ impl State {
 					username => username.to_owned(),
 				};
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
-				self.score_card(ctx, msg, &latest_scores[0].scorekey)?;
+				let user_id = self.web_session.user_details(&eo_username)?.user_id;
+				self.score_card(ctx, msg, &latest_scores[0].scorekey, user_id)?;
 			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
@@ -631,9 +623,11 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		scorekey: impl AsRef<str>,
-		// user_id: u32,
+		user_id: u32,
 	) -> Result<(), Error> {
-		let score = self.v2_session.score_data(scorekey.as_ref())?;
+		let scorekey = scorekey.as_ref();
+
+		let score = self.v2_session.score_data(&scorekey)?;
 
 		let ssrs_string = format!(r#"
 ```nim
@@ -690,8 +684,9 @@ Dropped Holds: {}
 		let judgements_string = judgements_string.trim();
 
 		let description = format!(
-			"Scorekey: {}\n```\n{}\n```",
-			score.scorekey,
+			"https://etternaonline.com/score/view/{}{}\n```\n{}\n```",
+			scorekey,
+			user_id,
 			score.modifiers,
 		);
 
@@ -700,13 +695,34 @@ Dropped Holds: {}
 			wife2_score: etterna::Wifescore,
 			wife3_score: etterna::Wifescore,
 			wife3_kang_system_score: etterna::Wifescore,
+			fastest_finger_jackspeed: f32, // NPS, single finger
+			fastest_nps: f32,
+			longest_100_combo: u32,
+			longest_marv_combo: u32,
+			longest_perf_combo: u32,
+			longest_combo: u32,
 		}
 
 		let replay_analysis;
 		if let Some(replay) = &score.replay {
+			use etterna::SimpleReplay;
+
 			replay_graph::generate_replay_graph(replay, "replay_graph.png")
 				.map_err(Error::ReplayGraphError)?;
 			
+			let (_note_seconds_lanes, hit_seconds_lanes) = replay.split_into_lanes();
+			let mut max_finger_nps = 0.0;
+			for hit_seconds in &hit_seconds_lanes {
+				let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed * score.rate.as_f32();
+
+				if this_fingers_max_nps > max_finger_nps {
+					max_finger_nps = this_fingers_max_nps;
+				}
+			}
+
+			let (_note_seconds, hit_seconds) = replay.split_into_notes_and_hits();
+			let fastest_nps = etterna::find_fastest_note_subset(&hit_seconds, 100, 100).speed * score.rate.as_f32();
+
 			replay_analysis = Some(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
 				wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
@@ -724,6 +740,12 @@ Dropped Holds: {}
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
 				),
+				fastest_finger_jackspeed: max_finger_nps,
+				fastest_nps,
+				longest_100_combo: replay.longest_combo(|deviation| deviation < 0.005),
+				longest_marv_combo: replay.longest_combo(|deviation| deviation < 0.0225),
+				longest_perf_combo: replay.longest_combo(|deviation| deviation < 0.045),
+				longest_combo: replay.longest_combo(|deviation| deviation < 0.09),
 			});
 		} else {
 			replay_analysis = None;
@@ -733,7 +755,6 @@ Dropped Holds: {}
 			m.embed(|e| {
 				e
 					.color(crate::ETTERNA_COLOR)
-					// .description(format!("https://etternaonline.com/score/view/{}{}", scorekey, user_id))
 					.author(|a| a
 						.name(&score.song_name)
 						.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
@@ -755,10 +776,26 @@ Dropped Holds: {}
 							"_Note: these calculated scores are slightly inaccurate_\n\
 								**Wife2**: {:.2}%\n\
 								**Wife3**: {:.2}%\n\
-								**Wife3**: {:.2}% (no bullshit CB rushes)\n",
+								**Wife3**: {:.2}% (no CB rushes)\n",
 							analysis.wife2_score.as_percent(),
 							analysis.wife3_score.as_percent(),
 							analysis.wife3_kang_system_score.as_percent(),
+						), false)
+						.field("Tap speeds", format!(
+							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
+								Fastest total NPS over a course of 100 notes: {:.2} NPS",
+							analysis.fastest_finger_jackspeed,
+							analysis.fastest_nps,
+						), false)
+						.field("Combos", format!(
+							"Longest combo: {}\n\
+								Longest perfect combo: {}\n\
+								Longest marvelous combo: {}\n\
+								Longest 100% combo: {}\n",
+							analysis.longest_combo,
+							analysis.longest_perf_combo,
+							analysis.longest_marv_combo,
+							analysis.longest_100_combo,
 						), false);
 				}
 
@@ -824,10 +861,10 @@ Dropped Holds: {}
 				.captures_iter(&msg.content)
 			{
 				let scorekey = &captures[1];
-				let _user_id: u32 = captures[2].parse()
+				let user_id: u32 = captures[2].parse()
 					.expect("this HAS to be a number as per the regex..?");
 				
-				if let Err(e) = self.score_card(&ctx, &msg, scorekey) {
+				if let Err(e) = self.score_card(&ctx, &msg, scorekey, user_id) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
@@ -953,7 +990,7 @@ Dropped Holds: {}
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.score_screenshot_scorekeys.insert(msg.id, scorekey);
+		self.score_screenshot_scorekey_user_ids.insert(msg.id, (scorekey, user_id));
 
 		Ok(())
 	}
@@ -982,12 +1019,12 @@ Dropped Holds: {}
 			return Ok(())
 		}
 
-		let scorekey = match self.score_screenshot_scorekeys.get(&message.id) {
+		let (scorekey, user_id) = match self.score_screenshot_scorekey_user_ids.get(&message.id) {
 			Some(x) => x.to_owned(),
 			None => return Ok(()),
 		};
 		
-		self.score_card(&ctx, &message, &scorekey)?;
+		self.score_card(&ctx, &message, &scorekey, user_id)?;
 
 		Ok(())
 	}

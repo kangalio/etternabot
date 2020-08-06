@@ -10,7 +10,7 @@ impl std::fmt::Display for StringError {
 impl std::error::Error for StringError {}
 
 fn inner_draw_skill_graph(
-	skill_timeline: &etterna::SkillGraph<&str>,
+	skill_timeline: &etterna::SkillTimeline<&str>,
 	output_path: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let label_text_style = TextStyle {
@@ -102,7 +102,7 @@ fn inner_draw_skill_graph(
 }
 
 pub fn draw_skill_graph(
-	skill_timeline: &etterna::SkillGraph<&str>,
+	skill_timeline: &etterna::SkillTimeline<&str>,
 	output_path: &str
 ) -> Result<(), String> {
 	inner_draw_skill_graph(skill_timeline, output_path).map_err(|e| e.to_string())
