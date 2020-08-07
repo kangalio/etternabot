@@ -733,23 +733,26 @@ Dropped Holds: {}
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
+					&etterna::J4,
 				),
 				wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
+					&etterna::J4,
 				),
 				wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
+					&etterna::J4,
 				),
 				fastest_finger_jackspeed: max_finger_nps,
 				fastest_nps,
 				longest_100_combo: replay.longest_combo(|deviation| deviation < 0.005),
-				longest_marv_combo: replay.longest_combo(|deviation| deviation < 0.0225),
-				longest_perf_combo: replay.longest_combo(|deviation| deviation < 0.045),
-				longest_combo: replay.longest_combo(|deviation| deviation < 0.09),
+				longest_marv_combo: replay.longest_combo(|deviation| deviation < etterna::J4.marvelous_window),
+				longest_perf_combo: replay.longest_combo(|deviation| deviation < etterna::J4.perfect_window),
+				longest_combo: replay.longest_combo(|deviation| deviation < etterna::J4.great_window),
 			});
 		} else {
 			replay_analysis = None;
@@ -764,7 +767,7 @@ Dropped Holds: {}
 						.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
 						.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
 					)
-					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
+					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 					.description(description)
 					.field("SSRs", ssrs_string, true)
 					.field("Judgements", judgements_string, true)

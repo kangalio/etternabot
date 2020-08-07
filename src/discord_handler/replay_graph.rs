@@ -2,34 +2,23 @@ use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos} /*style::RGBACo
 use etternaonline_api::v2 as eo;
 use etterna::Wife;
 
-const MARVELOUS_THRESHOLD: f32 = 0.0225;
 const MARVELOUS_COLOR: RGBColor = RGBColor(0x99, 0xCC, 0xFF);
-const PERFECT_THRESHOLD: f32 = 0.045;
 const PERFECT_COLOR: RGBColor = RGBColor(0xF2, 0xCB, 0x30);
-const GREAT_THRESHOLD: f32 = 0.090;
 const GREAT_COLOR: RGBColor = RGBColor(0x14, 0xCC, 0x8F);
-const GOOD_THRESHOLD: f32 = 0.135;
 const GOOD_COLOR: RGBColor = RGBColor(0x1A, 0xB2, 0xFF);
-const BAD_THRESHOLD: f32 = 0.180;
 const BAD_COLOR: RGBColor = RGBColor(0xFF, 0x1A, 0xB3);
 const MISS_COLOR: RGBColor = RGBColor(0xCC, 0x29, 0x29);
 
 /// Takes a deviation in seconds, positive or negative, and generates the appropriate judgement
 /// color
 fn deviation_to_color(deviation: f32) -> RGBColor {
-	let dev_abs = deviation.abs();
-	if dev_abs < MARVELOUS_THRESHOLD {
-		MARVELOUS_COLOR
-	} else if dev_abs < PERFECT_THRESHOLD {
-		PERFECT_COLOR
-	} else if dev_abs < GREAT_THRESHOLD {
-		GREAT_COLOR
-	} else if dev_abs < GOOD_THRESHOLD {
-		GOOD_COLOR
-	} else if dev_abs < BAD_THRESHOLD {
-		BAD_COLOR
-	} else {
-		MISS_COLOR
+	match etterna::J4.classify(deviation) {
+		etterna::TapJudgement::Marvelous => MARVELOUS_COLOR,
+		etterna::TapJudgement::Perfect => PERFECT_COLOR,
+		etterna::TapJudgement::Great => GREAT_COLOR,
+		etterna::TapJudgement::Good => GOOD_COLOR,
+		etterna::TapJudgement::Bad => BAD_COLOR,
+		etterna::TapJudgement::Miss => MISS_COLOR,
 	}//.to_rgba().mix(0.5)
 }
 
@@ -47,7 +36,7 @@ pub fn inner(
 	for note in notes {
 		match note.note_type {
 			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
-				let hit_points = etterna::wife3(note.deviation as f32);
+				let hit_points = etterna::wife3(note.deviation.unwrap_or(1.0), &etterna::J4);
 				points += hit_points;
 
 				// if we miss a hold head, we additionally get the hold drop penalty
@@ -103,21 +92,21 @@ pub fn inner(
 		dots_chart.plotting_area().draw(&path)
 	};
 	
-	draw_horizontal_line(MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
-	draw_horizontal_line(-MARVELOUS_THRESHOLD, &MARVELOUS_COLOR)?;
-	draw_horizontal_line(PERFECT_THRESHOLD, &PERFECT_COLOR)?;
-	draw_horizontal_line(-PERFECT_THRESHOLD, &PERFECT_COLOR)?;
-	draw_horizontal_line(GREAT_THRESHOLD, &GREAT_COLOR)?;
-	draw_horizontal_line(-GREAT_THRESHOLD, &GREAT_COLOR)?;
-	draw_horizontal_line(GOOD_THRESHOLD, &GOOD_COLOR)?;
-	draw_horizontal_line(-GOOD_THRESHOLD, &GOOD_COLOR)?;
-	draw_horizontal_line(BAD_THRESHOLD, &BAD_COLOR)?;
-	draw_horizontal_line(-BAD_THRESHOLD, &BAD_COLOR)?;
+	draw_horizontal_line(etterna::J4.marvelous_window, &MARVELOUS_COLOR)?;
+	draw_horizontal_line(-etterna::J4.marvelous_window, &MARVELOUS_COLOR)?;
+	draw_horizontal_line(etterna::J4.perfect_window, &PERFECT_COLOR)?;
+	draw_horizontal_line(-etterna::J4.perfect_window, &PERFECT_COLOR)?;
+	draw_horizontal_line(etterna::J4.great_window, &GREAT_COLOR)?;
+	draw_horizontal_line(-etterna::J4.great_window, &GREAT_COLOR)?;
+	draw_horizontal_line(etterna::J4.good_window, &GOOD_COLOR)?;
+	draw_horizontal_line(-etterna::J4.good_window, &GOOD_COLOR)?;
+	draw_horizontal_line(etterna::J4.bad_window, &BAD_COLOR)?;
+	draw_horizontal_line(-etterna::J4.bad_window, &BAD_COLOR)?;
 
 	dots_chart
 		.draw_series(notes.iter().map(|n| {
-			let x = n.time as f32;
-			let y = n.deviation as f32;
+			let x = n.time;
+			let y = n.deviation.unwrap_or(0.18); // show misses as a 180ms late hit
 
 			EmptyElement::at((x, y)) + Circle::new(
 				(0, 0),
