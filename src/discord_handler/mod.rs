@@ -918,10 +918,19 @@ Dropped Holds: {}
 		
 		let guild = new.guild_id.to_partial_guild(&ctx.http)?;
 		
+		let get_guild_role = |guild_id| {
+			if let Some(guild) = guild.roles.get(guild_id) {
+				Some(guild.name.as_str())
+			} else {
+				println!("Couldn't find role {:?} in guild roles ({:?})... weird", guild_id, guild.roles);
+				None
+			}
+		};
+
 		let has_max_300_now = new.roles.iter()
-			.any(|r| guild.roles[r].name.as_str() == "MAX 300");
+			.any(|r| get_guild_role(r) == Some("MAX 300"));
 		let had_max_300_previously = old.roles.iter()
-			.any(|r| guild.roles[r].name.as_str() == "MAX 300");
+			.any(|r| get_guild_role(r) == Some("MAX 300"));
 		
 		if has_max_300_now && !had_max_300_previously {
 			ctx.http.get_channel(self.config.promotion_gratulations_channel)?
