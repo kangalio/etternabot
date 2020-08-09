@@ -106,7 +106,7 @@ pub fn inner(
 	dots_chart
 		.draw_series(notes.iter().map(|n| {
 			let x = n.time;
-			let y = n.deviation.unwrap_or(0.18); // show misses as a 180ms late hit
+			let y = n.deviation.unwrap_or(0.1801); // show misses as a miss instead of a bad
 
 			EmptyElement::at((x, y)) + Circle::new(
 				(0, 0),
