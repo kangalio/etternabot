@@ -529,7 +529,7 @@ impl State {
 					return Ok(());
 				}
 				if let Err(e) = self.v2_session.user_details(text) {
-					if e == eo::Error::UserNotFound {
+					if let eo::Error::UserNotFound = e {
 						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
 						return Ok(());
 					} else {
