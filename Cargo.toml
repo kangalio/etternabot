@@ -14,9 +14,9 @@ html2md = "0.2.9"
 thiserror = "1.0.20"
 rand = "0.7.3"
 imageproc = "0.21.0"
-etternaonline_api = { path = "../eo-api" }
+etternaonline_api = { git = "https://github.com/kangalioo/etternaonline-api" }
 plotters = "0.2.15"
-text_io = { path = "../_downloaded/rust-si" }
-leptess = { path = "../_downloaded/leptess" }
-etterna = { package = "etterna_base", path = "../etterna-base", features = ["parallel"] }
+text_io = { git = "https://github.com/kangalioo/rust-si" }
+leptess = { git = "https://github.com/kangalioo/leptess/" }
+etterna = { package = "etterna_base", git = "https://github.com/kangalioo/etterna-base", features = ["parallel"] }
 chrono = "0.4.13"
