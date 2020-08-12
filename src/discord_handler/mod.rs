@@ -427,7 +427,7 @@ impl State {
 		let scores = self.web_session.user_scores(
 			user_id,
 			..,
-			eo::web::UserScoresSortBy::Date,
+			eo::web::SortCriterium::Date,
 			eo::web::SortDirection::Ascending,
 			false, // exclude invalid
 		)?;
@@ -968,7 +968,7 @@ Dropped Holds: {}
 		let recent_scores = self.web_session.user_scores(
 			user_id,
 			0..10, // check the 10 most recent scores for a match
-			eo::web::UserScoresSortBy::Date,
+			eo::web::SortCriterium::Date,
 			eo::web::SortDirection::Descending,
 			true, // also search invalid
 		)?;
