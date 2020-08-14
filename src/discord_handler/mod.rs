@@ -427,9 +427,11 @@ impl State {
 		let scores = self.web_session.user_scores(
 			user_id,
 			..,
-			eo::web::SortCriterium::Date,
+			None,
+			eo::web::UserScoresSortBy::Date,
 			eo::web::SortDirection::Ascending,
 			false, // exclude invalid
+			
 		)?;
 
 		let skill_timeline = etterna::skill_timeline(
@@ -703,18 +705,22 @@ Dropped Holds: {}
 			longest_combo: u32,
 		}
 
-		let replay_analysis;
-		if let Some(replay) = &score.replay {
+
+		fn do_replay_analysis(score: &eo::v2::ScoreData) -> Option<Result<ReplayAnalysis, Error>> {
 			use etterna::SimpleReplay;
 
-			replay_graph::generate_replay_graph(replay, "replay_graph.png")
-				.map_err(Error::ReplayGraphError)?;
+			let replay = score.replay.as_ref()?;
+
+			let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
+			if let Err(e) = r {
+				return Some(Err(Error::ReplayGraphError(e)))
+			}
 			
 			// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
 			// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
 			// _are_ scaled though.
 
-			let (_note_seconds_lanes, hit_seconds_lanes) = replay.split_into_lanes();
+			let (_note_seconds_lanes, hit_seconds_lanes) = replay.split_into_lanes()?;
 			let mut max_finger_nps = 0.0;
 			for hit_seconds in &hit_seconds_lanes {
 				let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed;
@@ -724,39 +730,39 @@ Dropped Holds: {}
 				}
 			}
 
-			let (_note_seconds, hit_seconds) = replay.split_into_notes_and_hits();
+			let (_note_seconds, hit_seconds) = replay.split_into_notes_and_hits()?;
 			let fastest_nps = etterna::find_fastest_note_subset(&hit_seconds, 100, 100).speed;
 
-			replay_analysis = Some(ReplayAnalysis {
+			Some(Ok(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
 				wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
 					&etterna::J4,
-				),
+				)?,
 				wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
 					&etterna::J4,
-				),
+				)?,
 				wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
 					replay,
 					score.judgements.hit_mines,
 					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
 					&etterna::J4,
-				),
+				)?,
 				fastest_finger_jackspeed: max_finger_nps,
 				fastest_nps,
-				longest_100_combo: replay.longest_combo(|deviation| deviation < 0.005),
-				longest_marv_combo: replay.longest_combo(|deviation| deviation < etterna::J4.marvelous_window),
-				longest_perf_combo: replay.longest_combo(|deviation| deviation < etterna::J4.perfect_window),
-				longest_combo: replay.longest_combo(|deviation| deviation < etterna::J4.great_window),
-			});
-		} else {
-			replay_analysis = None;
+				longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
+				longest_marv_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
+				longest_perf_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
+				longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
+			}))
 		}
+
+		let replay_analysis = do_replay_analysis(&score).transpose()?;
 
 		msg.channel_id.send_message(&ctx.http, |m| {
 			m.embed(|e| {
@@ -956,19 +962,28 @@ Dropped Holds: {}
 
 		let bytes = attachment.download()?;
 		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
-		println!("Recognized score: {:#?}", recognized);
-		
-		let eo_username = match &recognized.eo_username {
-			Some(a) => a.to_owned(),
-			None => self.get_eo_username(&ctx, &msg)?,
-		};
+		println!("Recognized: {:#?}", recognized);
 
-		let user_id = self.web_session.user_details(&eo_username)?.user_id;
+		let recognized_eo_username = recognized.iter().filter_map(|r| r.eo_username.as_ref()).next();
+		
+		// If a username was recognized, try retrieve its user id. If the recognized username doesn't
+		// exist, or no username was recognized in the first place, fall back to poster's saved
+		// username
+		let poster_eo_username = self.get_eo_username(&ctx, &msg)?;
+		let user_id = match recognized_eo_username {
+			Some(eo_username) => match self.web_session.user_details(&eo_username) {
+				Ok(user_details) => user_details.user_id,
+				Err(eo::Error::UserNotFound) => self.web_session.user_details(&poster_eo_username)?.user_id,
+				Err(other) => return Err(other.into()),
+			},
+			None => self.web_session.user_details(&poster_eo_username)?.user_id,
+		};
 
 		let recent_scores = self.web_session.user_scores(
 			user_id,
-			0..10, // check the 10 most recent scores for a match
-			eo::web::SortCriterium::Date,
+			0..50, // check recent scores for a match
+			None,
+			eo::web::UserScoresSortBy::Date,
 			eo::web::SortDirection::Descending,
 			true, // also search invalid
 		)?;
@@ -988,9 +1003,22 @@ Dropped Holds: {}
 				rate: Some(score.rate),
 				wifescore: Some(score.wifescore.as_percent()),
 				difficulty: None,
+				date: Some(score.date),
 			};
 
-			let equality_score = recognized.equality_score(&score_as_eval);
+			let mut best_equality_score = 0;
+			let mut best_theme_i = 999;
+			for (theme_i, recognized) in recognized.iter().enumerate() { // check results for all themes
+				let equality_score = recognized.equality_score(&score_as_eval);
+				if equality_score > best_equality_score {
+					best_equality_score = equality_score;
+					best_theme_i = theme_i;
+				}
+			}
+			let equality_score = best_equality_score;
+			let theme_i = best_theme_i;
+			println!("Found match in theme {}", theme_i);
+
 			if equality_score > score_ocr::MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL
 				&& equality_score > best_equality_score_so_far
 			{

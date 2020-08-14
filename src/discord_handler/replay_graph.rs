@@ -25,7 +25,7 @@ fn deviation_to_color(deviation: f32) -> RGBColor {
 pub fn inner(
 	replay: &eo::Replay,
 	output_path: &str
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<()>, Box<dyn std::error::Error>> {
 	let notes = &replay.notes;
 
 	let mut hits: Vec<(f32, f32)> = Vec::new();
@@ -34,13 +34,16 @@ pub fn inner(
 	let mut max_wifescore = f32::NEG_INFINITY;
 	// println!("{} mine entries", notes.iter().filter(|n| n.note_type == eo::NoteType::Mine).count());
 	for note in notes {
-		match note.note_type {
+		let note_type = match note.note_type {
+			Some(x) => x,
+			None => return Ok(None),
+		};
+		match note_type {
 			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
-				let hit_points = etterna::wife3(note.deviation.unwrap_or(1.0), &etterna::J4);
-				points += hit_points;
+				points += etterna::wife3(note.hit, &etterna::J4);
 
 				// if we miss a hold head, we additionally get the hold drop penalty
-				if note.is_miss() && note.note_type == eo::NoteType::HoldHead {
+				if note.hit.was_missed() && note_type == eo::NoteType::HoldHead {
 					points += etterna::Wife3::HOLD_DROP_WEIGHT;
 				}
 		
@@ -106,7 +109,7 @@ pub fn inner(
 	dots_chart
 		.draw_series(notes.iter().map(|n| {
 			let x = n.time;
-			let y = n.deviation.unwrap_or(0.1801); // show misses as a miss instead of a bad
+			let y = n.hit.deviation().unwrap_or(0.1801); // show misses as a miss instead of a bad
 
 			EmptyElement::at((x, y)) + Circle::new(
 				(0, 0),
@@ -141,7 +144,7 @@ pub fn inner(
 		.y_labels(5)
 		.draw()?;
 
-	Ok(())
+	Ok(Some(()))
 }
 
 /// plotters did a GREAT fucking JOB of hiding their error types so that I'm **unable** to handle
@@ -149,6 +152,11 @@ pub fn inner(
 pub fn generate_replay_graph(
 	replay: &etternaonline_api::v2::Replay,
 	output_path: &str
-) -> Result<(), String> {
+) -> Result<Option<()>, String> {
+	// match inner(replay, output_path) {
+	// 	Ok(Some(())) => Ok(()),
+	// 	Ok(None) => Err(Error::InsufficientReplayData),
+	// 	Err(e) => Err(Error::PlottersError(e.to_string())),
+	// }
 	inner(replay, output_path).map_err(|e| e.to_string())
 }
