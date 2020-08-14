@@ -960,6 +960,16 @@ Dropped Holds: {}
 			None => return Ok(()), // non-image post in #scores. ignore
 		};
 
+		if let Some(member) = msg.member(&ctx.cache) { // was sent in a guild (as opposed to DMs)
+			// If message was sent in EO and user doesn't have the appropriate role for the
+			// score OCR feature, ignore this image
+			if member.guild_id.0 == self.config.etterna_online_guild_id {
+				if member.roles.iter().all(|r| r.0 != self.config.score_ocr_allowed_eo_role) {
+					return Ok(());
+				}
+			}
+		}
+
 		let bytes = attachment.download()?;
 		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
 		println!("Recognized: {:#?}", recognized);

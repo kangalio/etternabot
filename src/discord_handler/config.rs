@@ -22,6 +22,7 @@ pub struct Config {
 	pub allowed_channels: Vec<u64>,
 	pub score_channel: u64,
 	pub etterna_online_guild_id: u64,
+	pub score_ocr_allowed_eo_role: u64,
 }
 
 impl Config {
