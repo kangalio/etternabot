@@ -628,7 +628,7 @@ impl State {
 		msg: &serenity::Message,
 		scorekey: impl AsRef<str>,
 		user_id: u32,
-		show_ssrs_and_judgements: bool,
+		show_ssrs_and_judgements_and_modifiers: bool,
 	) -> Result<(), Error> {
 		let scorekey = scorekey.as_ref();
 
@@ -688,12 +688,14 @@ Dropped Holds: {}
 		);
 		let judgements_string = judgements_string.trim();
 
-		let description = format!(
-			"https://etternaonline.com/score/view/{}{}\n```\n{}\n```",
+		let mut description = format!(
+			"https://etternaonline.com/score/view/{}{}",
 			scorekey,
 			user_id,
-			score.modifiers,
 		);
+		if show_ssrs_and_judgements_and_modifiers {
+			description += &format!("\n```\n{}\n```", score.modifiers);
+		}
 
 		struct ReplayAnalysis {
 			replay_graph_path: &'static str,
@@ -788,10 +790,10 @@ Dropped Holds: {}
 						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
 					);
 				
-				if show_ssrs_and_judgements {
+				if show_ssrs_and_judgements_and_modifiers {
 					e
 						.field("SSRs", ssrs_string, true)
-						.field("Judgements", judgements_string, true)
+						.field("Judgements", judgements_string, true);
 				}
 				
 				if let Some(analysis) = &replay_analysis {
