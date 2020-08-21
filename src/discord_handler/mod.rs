@@ -460,6 +460,8 @@ impl State {
 		cmd: &str,
 		text: &str
 	) -> Result<(), Error> {
+		println!("Executing command '{}' with args '{}'", cmd, text);
+
 		if cmd.starts_with("top") {
 			if let Ok(limit) = cmd[3..].parse() {
 				self.top_scores(ctx, msg, text, limit)?;
@@ -874,9 +876,15 @@ Dropped Holds: {}
 				.captures_iter(&msg.content)
 			{
 				let scorekey = &captures[1];
-				let user_id: u32 = captures[2].parse()
-					.expect("this HAS to be a number as per the regex..?");
+				let user_id: u32 = match captures[2].parse() {
+					Ok(x) => x,
+					Err(e) => {
+						println!("Error while parsing '{}' (\\d+) as u32: {}", &captures[2], e);
+						continue;
+					}
+				};
 				
+				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
 				if let Err(e) = self.score_card(&ctx, &msg, scorekey, user_id) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
@@ -890,6 +898,8 @@ Dropped Holds: {}
 					Ok(song_id) => song_id,
 					Err(_) => continue, // this wasn't a valid song view url after all
 				};
+
+				println!("Trying to show score card for song id {}", song_id);
 				if let Err(e) = self.song_card(&ctx, &msg, song_id) {
 					println!("Error while showing song card for {}: {}", song_id, e);
 				}
