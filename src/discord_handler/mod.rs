@@ -732,8 +732,13 @@ Dropped Holds: {}
 				}
 			}
 
-			let (_note_seconds, hit_seconds) = replay.split_into_notes_and_hits()?;
-			let fastest_nps = etterna::find_fastest_note_subset(&hit_seconds, 100, 100).speed;
+			let (_note_seconds, unsorted_hit_seconds) = replay.split_into_notes_and_hits()?;
+			let sorted_hit_seconds = {
+				let mut temp = unsorted_hit_seconds.clone();
+				temp.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+				temp
+			};
+			let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
 
 			Some(Ok(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
