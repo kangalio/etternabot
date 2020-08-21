@@ -53,7 +53,7 @@ pub struct State {
 	web_session: eo::web::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	user_id: serenity::UserId,
-	analyzed_score_screenshot_messages: Vec<serenity::MessageId>,
+	printed_score_screenshot_messages: Vec<serenity::MessageId>,
 	score_screenshot_scorekey_user_ids: std::collections::HashMap<serenity::MessageId, (eo::Scorekey, u32)>,
 }
 
@@ -79,7 +79,7 @@ impl State {
 			data: Data::load(),
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
 			user_id: bot_user_id,
-			analyzed_score_screenshot_messages: vec![],
+			printed_score_screenshot_messages: vec![],
 			score_screenshot_scorekey_user_ids: std::collections::HashMap::new(),
 		})
 	}
@@ -508,7 +508,7 @@ impl State {
 				};
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 				let user_id = self.web_session.user_details(&eo_username)?.user_id;
-				self.score_card(ctx, msg, &latest_scores[0].scorekey, user_id)?;
+				self.score_card(ctx, msg, &latest_scores[0].scorekey, user_id, true)?;
 			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
@@ -628,6 +628,7 @@ impl State {
 		msg: &serenity::Message,
 		scorekey: impl AsRef<str>,
 		user_id: u32,
+		show_ssrs_and_judgements: bool,
 	) -> Result<(), Error> {
 		let scorekey = scorekey.as_ref();
 
@@ -782,21 +783,30 @@ Dropped Holds: {}
 					)
 					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 					.description(description)
-					.field("SSRs", ssrs_string, true)
-					.field("Judgements", judgements_string, true)
 					.footer(|f| f
 						.text(format!("Played by {}", &score.user.username))
 						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
 					);
 				
+				if show_ssrs_and_judgements {
+					e
+						.field("SSRs", ssrs_string, true)
+						.field("Judgements", judgements_string, true)
+				}
+				
 				if let Some(analysis) = &replay_analysis {
 					e
 						.attachment(analysis.replay_graph_path)
 						.field("Scoring systems comparison", format!(
-							"_Note: these calculated scores are slightly inaccurate_\n\
+							"{}\
 								**Wife2**: {:.2}%\n\
 								**Wife3**: {:.2}%\n\
 								**Wife3**: {:.2}% (no CB rushes)\n",
+							if (analysis.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
+								"_Note: these calculated scores are slightly inaccurate_\n"
+							} else {
+								""
+							},
 							analysis.wife2_score.as_percent(),
 							analysis.wife3_score.as_percent(),
 							analysis.wife3_kang_system_score.as_percent(),
@@ -856,9 +866,7 @@ Dropped Holds: {}
 			}
 		};
 
-		if msg.channel_id.0 == self.config.score_channel {
-			self.check_potential_score_screenshot(ctx, msg)?;
-		}
+		self.check_potential_score_screenshot(ctx, msg)?;
 
 		if msg.channel_id.0 == self.config.work_in_progress_channel { // #work-in-progress
 			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
@@ -890,7 +898,7 @@ Dropped Holds: {}
 				};
 				
 				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, &msg, scorekey, user_id) {
+				if let Err(e) = self.score_card(&ctx, &msg, scorekey, user_id, true) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
@@ -970,16 +978,21 @@ Dropped Holds: {}
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<(), Error> {
+		if msg.channel_id.0 != self.config.score_channel {
+			return Ok(());
+		}
+
 		let attachment = match msg.attachments.iter().find(|a| a.width.is_some()) {
 			Some(a) => a,
-			None => return Ok(()), // non-image post in #scores. ignore
+			None => return Ok(()), // non-image post in score channel. Ignore
 		};
 
-		if let Some(member) = msg.member(&ctx.cache) { // was sent in a guild (as opposed to DMs)
+		if let Some(member) = msg.member(&ctx.cache) { // if was sent in a guild (as opposed to DMs)
 			// If message was sent in EO and user doesn't have the appropriate role for the
 			// score OCR feature, ignore this image
 			if member.guild_id.0 == self.config.etterna_online_guild_id {
 				if member.roles.iter().all(|r| r.0 != self.config.score_ocr_allowed_eo_role) {
+					println!("user doesn't have role"); // REMEMBER
 					return Ok(());
 				}
 			}
@@ -1072,15 +1085,6 @@ Dropped Holds: {}
 			return Ok(());
 		}
 
-		if self.analyzed_score_screenshot_messages.contains(&reaction.message_id) {
-			// we don't need to analyze and echo the results twice.
-			// In particularly, we don't want users to be able to overload the server by spam
-			// clicking the reaction button
-			return Ok(());
-		} else {
-			self.analyzed_score_screenshot_messages.push(reaction.message_id);
-		}
-
 		let message = reaction.message(&ctx.http)?;
 
 		// it only counts when the original author reacts
@@ -1088,12 +1092,21 @@ Dropped Holds: {}
 			return Ok(())
 		}
 
+		// we don't need to print the results twice.
+		// In particular, we don't want users to be able to spam by spam-clicking the reaction
+		// button
+		if self.printed_score_screenshot_messages.contains(&reaction.message_id) {
+			return Ok(());
+		} else {
+			self.printed_score_screenshot_messages.push(reaction.message_id);
+		}
+
 		let (scorekey, user_id) = match self.score_screenshot_scorekey_user_ids.get(&message.id) {
 			Some(x) => x.to_owned(),
-			None => return Ok(()),
+			None => return Ok(()), // if the user reacted to some arbitrary message
 		};
 		
-		self.score_card(&ctx, &message, &scorekey, user_id)?;
+		self.score_card(&ctx, &message, &scorekey, user_id, false)?;
 
 		Ok(())
 	}
