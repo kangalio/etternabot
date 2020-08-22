@@ -53,8 +53,7 @@ pub struct State {
 	web_session: eo::web::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	user_id: serenity::UserId,
-	printed_score_screenshot_messages: Vec<serenity::MessageId>,
-	score_screenshot_scorekey_user_ids: std::collections::HashMap<serenity::MessageId, (eo::Scorekey, u32)>,
+	ocr_score_card_manager: OcrScoreCardManager,
 }
 
 impl State {
@@ -79,8 +78,7 @@ impl State {
 			data: Data::load(),
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
 			user_id: bot_user_id,
-			printed_score_screenshot_messages: vec![],
-			score_screenshot_scorekey_user_ids: std::collections::HashMap::new(),
+			ocr_score_card_manager: OcrScoreCardManager::new(),
 		})
 	}
 
@@ -855,15 +853,24 @@ Dropped Holds: {}
 		// If the message is in etternaonline server, and not in an allowed channel, and not sent
 		// by a person with the permission to manage the guild, don't process the command
 		let user_is_allowed_bot_interaction = {
-			if let (Some(guild_id), Some(guild_member)) = (msg.guild_id, msg.member(&ctx.cache)) {
-				*guild_id.as_u64() != self.config.etterna_online_guild_id
-					|| self.config.allowed_channels.contains(msg.channel_id.as_u64())
-					|| guild_member.permissions(&ctx.cache)?.manage_guild()
+			if let Some(guild_id) = msg.guild_id { // if msg is in server (opposed to DMs)
+				if let Some(guild_member) = msg.member(&ctx.cache) {
+					if *guild_id.as_u64() == self.config.etterna_online_guild_id
+						&& !self.config.allowed_channels.contains(msg.channel_id.as_u64())
+						&& !guild_member.permissions(&ctx.cache)?.manage_guild()
+					{
+						false
+					} else {
+						true
+					}
+				} else {
+					println!("Failed to retrieve guild information.... is this worrisome?");
+					// "true" should really every user be allowed bot usage everyhwere, just because we
+					// failed to retrieve guild information? (probably; the alternative is completely
+					// denying bot usage)
+					true
+				}
 			} else {
-				println!("Failed to retrieve guild information.... is this worrisome?");
-				// "true" should really every user be allowed bot usage everyhwere, just because we
-				// failed to retrieve guild information? (probably; the alternative is completely
-				// denying bot usage)
 				true
 			}
 		};
@@ -1074,7 +1081,7 @@ Dropped Holds: {}
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.score_screenshot_scorekey_user_ids.insert(msg.id, (scorekey, user_id));
+		self.ocr_score_card_manager.add_candidate(msg.id, msg.author.id, scorekey, user_id);
 
 		Ok(())
 	}
@@ -1087,29 +1094,70 @@ Dropped Holds: {}
 			return Ok(());
 		}
 
-		let message = reaction.message(&ctx.http)?;
-
-		// it only counts when the original author reacts
-		if reaction.user_id != message.author.id {
-			return Ok(())
+		if let Some((scorekey, user_id)) = self.ocr_score_card_manager.add_reaction(&reaction) {
+			let scorekey = scorekey.clone(); // borrow checker headaches because this thing is monolithic
+			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, user_id, false)?;
 		}
-
-		// we don't need to print the results twice.
-		// In particular, we don't want users to be able to spam by spam-clicking the reaction
-		// button
-		if self.printed_score_screenshot_messages.contains(&reaction.message_id) {
-			return Ok(());
-		} else {
-			self.printed_score_screenshot_messages.push(reaction.message_id);
-		}
-
-		let (scorekey, user_id) = match self.score_screenshot_scorekey_user_ids.get(&message.id) {
-			Some(x) => x.to_owned(),
-			None => return Ok(()), // if the user reacted to some arbitrary message
-		};
-		
-		self.score_card(&ctx, &message, &scorekey, user_id, false)?;
 
 		Ok(())
+	}
+}
+
+struct Candidate {
+	message_id: serenity::MessageId,
+	author_id: serenity::UserId,
+
+	scorekey: etterna::Scorekey,
+	user_id: u32,
+
+	reactors: std::collections::HashSet<serenity::UserId>,
+	score_card_has_been_printed: bool,
+}
+
+struct OcrScoreCardManager {
+	candidates: Vec<Candidate>,
+}
+
+impl OcrScoreCardManager {
+	pub fn new() -> Self {
+		Self { candidates: vec![] }
+	}
+
+	pub fn add_candidate(&mut self,
+		message_id: serenity::MessageId,
+		author_id: serenity::UserId,
+		scorekey: etterna::Scorekey,
+		user_id: u32,
+	) {
+		self.candidates.push(Candidate {
+			message_id, author_id, scorekey, user_id,
+			
+			reactors: std::collections::HashSet::new(),
+			score_card_has_been_printed: false,
+		});
+	}
+
+	/// Returns the score scorekey and user id if this reaction triggers the score card
+	pub fn add_reaction(&mut self,
+		reaction: &serenity::Reaction,
+	) -> Option<(&etterna::Scorekey, u32)> {
+		// Find the Candidate that this reaction was made on, or return if the user made the
+		// reaction on some unrelated message, i.e. a non-candidate
+		let mut candidate = self.candidates.iter_mut().find(|c| c.message_id == reaction.message_id)?;
+
+		// If it has already been printed, stop. We don't want to print the card over and over
+		// again
+		if candidate.score_card_has_been_printed {
+			return None;
+		}
+
+		candidate.reactors.insert(reaction.user_id);
+
+		if candidate.reactors.contains(&candidate.author_id) && candidate.reactors.len() >= 2 {
+			candidate.score_card_has_been_printed = true;
+			Some((&candidate.scorekey, candidate.user_id))
+		} else {
+			None
+		}
 	}
 }
