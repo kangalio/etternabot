@@ -506,7 +506,7 @@ impl State {
 				};
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 				let user_id = self.web_session.user_details(&eo_username)?.user_id;
-				self.score_card(ctx, msg, &latest_scores[0].scorekey, user_id, true)?;
+				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true)?;
 			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
@@ -625,75 +625,44 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		scorekey: impl AsRef<str>,
-		user_id: u32,
+		user_id: Option<u32>, // pass None if score link shouldn't shown
 		show_ssrs_and_judgements_and_modifiers: bool,
 	) -> Result<(), Error> {
 		let scorekey = scorekey.as_ref();
 
 		let score = self.v2_session.score_data(&scorekey)?;
 
-		let ssrs_string = format!(r#"
-```nim
-	  Wife: {:.2}%
- Max Combo: {}
-   Overall: {:.2}
-    Stream: {:.2}
-   Stamina: {:.2}
-Jumpstream: {:.2}
-Handstream: {:.2}
-     Jacks: {:.2}
- Chordjack: {:.2}
- Technical: {:.2}
-```
-			"#,
-			score.wifescore.as_percent(),
-			score.max_combo,
-			score.ssr.overall(),
-			score.ssr.stream,
-			score.ssr.stamina,
-			score.ssr.jumpstream,
-			score.ssr.handstream,
-			score.ssr.jackspeed,
-			score.ssr.chordjack,
-			score.ssr.technical,
-		);
-		let ssrs_string = ssrs_string.trim();
-
-		let judgements_string = format!(r#"
-```nim
-    Marvelous: {}
-      Perfect: {}
-        Great: {}
-         Good: {}
-          Bad: {}
-         Miss: {}
-    Hit Mines: {}
-   Held Holds: {}
-Dropped Holds: {}
- Missed Holds: {}
-```
-			"#,
-			score.judgements.marvelouses,
-			score.judgements.perfects,
-			score.judgements.greats,
-			score.judgements.goods,
-			score.judgements.bads,
-			score.judgements.misses,
-			score.judgements.hit_mines,
-			score.judgements.held_holds,
-			score.judgements.let_go_holds,
-			score.judgements.missed_holds,
-		);
-		let judgements_string = judgements_string.trim();
-
-		let mut description = format!(
-			"https://etternaonline.com/score/view/{}{}",
-			scorekey,
-			user_id,
-		);
-		if show_ssrs_and_judgements_and_modifiers {
-			description += &format!("\n```\n{}\n```", score.modifiers);
+		let mut description = String::new();
+		if let Some(user_id) = user_id {
+			description += &format!("https://etternaonline.com/score/view/{}{}\n", scorekey, user_id);
 		}
+		if show_ssrs_and_judgements_and_modifiers {
+			description += &format!("```\n{}\n```", score.modifiers);
+		}
+		description += &format!(r#"```nim
+        Wife: {:<5.2}%  ⏐      Marvelous: {}
+   Max Combo: {:<5}   ⏐        Perfect: {}
+     Overall: {:<5.2}   ⏐          Great: {}
+      Stream: {:<5.2}   ⏐           Good: {}
+     Stamina: {:<5.2}   ⏐            Bad: {}
+  Jumpstream: {:<5.2}   ⏐           Miss: {}
+  Handstream: {:<5.2}   ⏐      Hit Mines: {}
+       Jacks: {:<5.2}   ⏐     Held Holds: {}
+   Chordjack: {:<5.2}   ⏐  Dropped Holds: {}
+   Technical: {:<5.2}   ⏐   Missed Holds: {}
+```
+"#,
+			score.wifescore.as_percent(), score.judgements.marvelouses,
+			score.max_combo, score.judgements.perfects,
+			score.ssr.overall(), score.judgements.greats,
+			score.ssr.stream, score.judgements.goods,
+			score.ssr.stamina, score.judgements.bads,
+			score.ssr.jumpstream, score.judgements.misses,
+			score.ssr.handstream, score.judgements.hit_mines,
+			score.ssr.jackspeed, score.judgements.held_holds,
+			score.ssr.chordjack, score.judgements.let_go_holds,
+			score.ssr.technical, score.judgements.missed_holds,
+		);
 
 		struct ReplayAnalysis {
 			replay_graph_path: &'static str,
@@ -787,12 +756,6 @@ Dropped Holds: {}
 						.text(format!("Played by {}", &score.user.username))
 						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
 					);
-				
-				if show_ssrs_and_judgements_and_modifiers {
-					e
-						.field("SSRs", ssrs_string, true)
-						.field("Judgements", judgements_string, true);
-				}
 				
 				if let Some(analysis) = &replay_analysis {
 					e
@@ -907,7 +870,7 @@ Dropped Holds: {}
 				};
 				
 				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, &msg, scorekey, user_id, true) {
+				if let Err(e) = self.score_card(&ctx, &msg, scorekey, None, true) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
@@ -1096,7 +1059,7 @@ Dropped Holds: {}
 
 		if let Some((scorekey, user_id)) = self.ocr_score_card_manager.add_reaction(&reaction) {
 			let scorekey = scorekey.clone(); // borrow checker headaches because this thing is monolithic
-			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, user_id, false)?;
+			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, Some(user_id), false)?;
 		}
 
 		Ok(())
