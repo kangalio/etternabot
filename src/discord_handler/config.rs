@@ -105,7 +105,7 @@ impl Data {
 
 	pub fn make_description(&mut self, minanyms: &[String]) -> String {
 		let description = format!(
-			"
+			r#"
 Here are my commands: (Descriptions by Fission)
 
 **+profile [username]**
@@ -130,7 +130,7 @@ More commands:
 *Set your preferred scroll type that will be used as a default*
 **+skillgraph [user]**
 *Show a graph of your profile rating over time, including all skillsets*
-**+rs**
+**+rs [username] [judge]**
 *Show your most recent score*
 **+quote**
 *Print one of various random quotes, phrases and memes from various rhythm gaming communities*
@@ -139,8 +139,9 @@ More commands:
 **+help**
 *Print this message*
 
-You can also post links to scores and I will show info about them
-			",
+You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
+your message, I will also show the wifescores with that judge.
+			"#,
 			minanyms[(rand::random::<f64>() * minanyms.len() as f64) as usize]
 		);
 

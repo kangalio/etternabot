@@ -14,6 +14,20 @@ const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or 
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
 const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
+const CMD_RS_HELP: &str = "Call this command with `+rs [username] [judge]`";
+
+static SCORE_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+	regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)").unwrap()
+});
+static LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+	regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap()
+});
+static SONG_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+	regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?").unwrap()
+});
+static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+	regex::Regex::new(r"[jJ](\d)").unwrap()
+});
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -44,6 +58,26 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 		.chars()
 		.map(|c| std::char::from_u32(c as u32 + regional_indicator_value_offset).unwrap_or(c))
 		.collect()
+}
+
+fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
+	JUDGE_REGEX.captures_iter(string)
+		.filter_map(|groups| {
+			let judge_num: u32 = groups[1].parse().ok()?;
+			match judge_num {
+				1 => Some(etterna::J1),
+				2 => Some(etterna::J2),
+				3 => Some(etterna::J3),
+				4 => Some(etterna::J4),
+				5 => Some(etterna::J5),
+				6 => Some(etterna::J6),
+				7 => Some(etterna::J7),
+				8 => Some(etterna::J8),
+				9 => Some(etterna::J9),
+				_ => None,
+			}
+		})
+		.next()
 }
 
 pub struct State {
@@ -500,13 +534,33 @@ impl State {
 				msg.channel_id.say(&ctx.http, &string)?;
 			}
 			"rs" => {
-				let eo_username = match text {
-					"" => self.get_eo_username(ctx, msg)?,
-					username => username.to_owned(),
+				let args: Vec<_> = text.split_whitespace().collect();
+				let (eo_username, alternative_judge) = match args.as_slice() {
+					&[] => (self.get_eo_username(ctx, msg)?, None),
+					&[username_or_judge_string] => {
+						if let Some(judge) = extract_judge_from_string(username_or_judge_string) {
+							(self.get_eo_username(ctx, msg)?, Some(judge))
+						} else {
+							(username_or_judge_string.to_owned(), None)
+						}
+					}
+					&[username, judge_string] => {
+						if let Some(judge) = extract_judge_from_string(judge_string) {
+							(username.to_owned(), Some(judge))
+						} else {
+							msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
+							return Ok(());
+						}
+					},
+					_ => {
+						msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
+						return Ok(());
+					}
 				};
+
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 				let user_id = self.web_session.user_details(&eo_username)?.user_id;
-				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true)?;
+				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true, alternative_judge)?;
 			}
 			"scrollset" => {
 				let scroll = match &text.to_lowercase() as &str {
@@ -627,10 +681,26 @@ impl State {
 		scorekey: impl AsRef<str>,
 		user_id: Option<u32>, // pass None if score link shouldn't shown
 		show_ssrs_and_judgements_and_modifiers: bool,
+		alternative_judge: Option<&etterna::Judge>,
 	) -> Result<(), Error> {
 		let scorekey = scorekey.as_ref();
 
 		let score = self.v2_session.score_data(&scorekey)?;
+
+		let alternative_judge_wifescore = if let Some(alternative_judge) = alternative_judge {
+			if let Some(replay) = &score.replay {
+				etterna::rescore_from_note_hits::<etterna::Wife3, _>(
+					replay.notes.iter().map(|note| note.hit),
+					score.judgements.hit_mines,
+					score.judgements.let_go_holds + score.judgements.missed_holds,
+					alternative_judge,
+				)
+			} else {
+				None
+			}
+		} else {
+			None
+		};
 
 		let mut description = String::new();
 		if let Some(user_id) = user_id {
@@ -640,7 +710,7 @@ impl State {
 			description += &format!("```\n{}\n```", score.modifiers);
 		}
 		description += &format!(r#"```nim
-        Wife: {:<5.2}%  ⏐      Marvelous: {}
+{}
    Max Combo: {:<5}   ⏐        Perfect: {}
      Overall: {:<5.2}   ⏐          Great: {}
       Stream: {:<5.2}   ⏐           Good: {}
@@ -652,7 +722,23 @@ impl State {
    Technical: {:<5.2}   ⏐   Missed Holds: {}
 ```
 "#,
-			score.wifescore.as_percent(), score.judgements.marvelouses,
+			if let Some(alternative_judge_wifescore) = alternative_judge_wifescore {
+				format!(
+					concat!(
+						"        Wife: {:<5.2}%  ⏐\n",
+						"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
+					),
+					score.wifescore.as_percent(),
+					alternative_judge.unwrap().name,
+					alternative_judge_wifescore.as_percent(),
+					score.judgements.marvelouses,
+				)
+			} else {
+				format!(
+					"        Wife: {:<5.2}%  ⏐      Marvelous: {}",
+					score.wifescore.as_percent(), score.judgements.marvelouses,
+				)
+			},
 			score.max_combo, score.judgements.perfects,
 			score.ssr.overall(), score.judgements.greats,
 			score.ssr.stream, score.judgements.goods,
@@ -664,11 +750,16 @@ impl State {
 			score.ssr.technical, score.judgements.missed_holds,
 		);
 
-		struct ReplayAnalysis {
-			replay_graph_path: &'static str,
+		struct ScoringSystemComparison {
 			wife2_score: etterna::Wifescore,
 			wife3_score: etterna::Wifescore,
 			wife3_kang_system_score: etterna::Wifescore,
+		}
+
+		struct ReplayAnalysis {
+			replay_graph_path: &'static str,
+			scoring_system_comparison_j4: ScoringSystemComparison,
+			scoring_system_comparison_alternative: Option<ScoringSystemComparison>,
 			fastest_finger_jackspeed: f32, // NPS, single finger
 			fastest_nps: f32,
 			longest_100_combo: u32,
@@ -678,7 +769,7 @@ impl State {
 		}
 
 
-		fn do_replay_analysis(score: &eo::v2::ScoreData) -> Option<Result<ReplayAnalysis, Error>> {
+		let do_replay_analysis = |score: &eo::v2::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
 			use etterna::SimpleReplay;
 
 			let replay = score.replay.as_ref()?;
@@ -712,24 +803,49 @@ impl State {
 
 			Some(Ok(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
-				wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
-					replay,
-					score.judgements.hit_mines,
-					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
-					&etterna::J4,
-				)?,
-				wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-					replay,
-					score.judgements.hit_mines,
-					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
-					&etterna::J4,
-				)?,
-				wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
-					replay,
-					score.judgements.hit_mines,
-					score.judgements.let_go_holds + score.judgements.missed_holds, // is this correct?
-					&etterna::J4,
-				)?,
+				scoring_system_comparison_j4: ScoringSystemComparison {
+					wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
+						replay,
+						score.judgements.hit_mines,
+						score.judgements.let_go_holds + score.judgements.missed_holds,
+						&etterna::J4,
+					)?,
+					wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+						replay,
+						score.judgements.hit_mines,
+						score.judgements.let_go_holds + score.judgements.missed_holds,
+						&etterna::J4,
+					)?,
+					wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
+						replay,
+						score.judgements.hit_mines,
+						score.judgements.let_go_holds + score.judgements.missed_holds,
+						&etterna::J4,
+					)?,
+				},
+				scoring_system_comparison_alternative: match alternative_judge {
+					Some(alternative_judge) => Some(ScoringSystemComparison {
+						wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
+							replay,
+							score.judgements.hit_mines,
+							score.judgements.let_go_holds + score.judgements.missed_holds,
+							alternative_judge,
+						)?,
+						wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+							replay,
+							score.judgements.hit_mines,
+							score.judgements.let_go_holds + score.judgements.missed_holds,
+							alternative_judge,
+						)?,
+						wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
+							replay,
+							score.judgements.hit_mines,
+							score.judgements.let_go_holds + score.judgements.missed_holds,
+							alternative_judge,
+						)?,
+					}),
+					None => None,
+				},
 				fastest_finger_jackspeed: max_finger_nps,
 				fastest_nps,
 				longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
@@ -737,7 +853,7 @@ impl State {
 				longest_perf_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
 				longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
 			}))
-		}
+		};
 
 		let replay_analysis = do_replay_analysis(&score).transpose()?;
 
@@ -758,21 +874,39 @@ impl State {
 					);
 				
 				if let Some(analysis) = &replay_analysis {
+					let alternative_text_1;
+					let alternative_text_2;
+					let alternative_text_3;
+					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
+						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, alternative_judge.unwrap().name);
+						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, alternative_judge.unwrap().name);
+						alternative_text_3 = format!(", {:.2} on {}", comparison.wife3_kang_system_score, alternative_judge.unwrap().name);
+					} else {
+						alternative_text_1 = "".to_owned();
+						alternative_text_2 = "".to_owned();
+						alternative_text_3 = "".to_owned();
+					}
+
 					e
 						.attachment(analysis.replay_graph_path)
 						.field("Scoring systems comparison", format!(
-							"{}\
-								**Wife2**: {:.2}%\n\
-								**Wife3**: {:.2}%\n\
-								**Wife3**: {:.2}% (no CB rushes)\n",
-							if (analysis.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
+							concat!(
+								"{}",
+								"**Wife2**: {:.2}%{}\n",
+								"**Wife3**: {:.2}%{}\n",
+								"**Wife3**: {:.2}%{} (no CB rushes)",
+							),
+							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
 								"_Note: these calculated scores are slightly inaccurate_\n"
 							} else {
 								""
 							},
-							analysis.wife2_score.as_percent(),
-							analysis.wife3_score.as_percent(),
-							analysis.wife3_kang_system_score.as_percent(),
+							analysis.scoring_system_comparison_j4.wife2_score.as_percent(),
+							alternative_text_1,
+							analysis.scoring_system_comparison_j4.wife3_score.as_percent(),
+							alternative_text_2,
+							analysis.scoring_system_comparison_j4.wife3_kang_system_score.as_percent(),
+							alternative_text_3,
 						), false)
 						.field("Tap speeds", format!(
 							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
@@ -840,9 +974,8 @@ impl State {
 
 		self.check_potential_score_screenshot(ctx, msg)?;
 
-		if msg.channel_id.0 == self.config.work_in_progress_channel { // #work-in-progress
-			let url_regex = regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap();
-			let num_links = url_regex.find_iter(&msg.content).count();
+		if msg.channel_id.0 == self.config.work_in_progress_channel {
+			let num_links = LINK_REGEX.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
 				let notice_msg = msg.channel_id.say(&ctx.http, format!(
@@ -856,30 +989,26 @@ impl State {
 		}
 
 		if user_is_allowed_bot_interaction {
-			for captures in regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)")
-				.unwrap()
-				.captures_iter(&msg.content)
-			{
-				let scorekey = &captures[1];
-				let user_id: u32 = match captures[2].parse() {
+			let alternative_judge = extract_judge_from_string(&msg.content);
+			for groups in SCORE_LINK_REGEX.captures_iter(&msg.content) {
+				let scorekey = &groups[1];
+				let user_id: u32 = match groups[2].parse() {
 					Ok(x) => x,
 					Err(e) => {
-						println!("Error while parsing '{}' (\\d+) as u32: {}", &captures[2], e);
+						println!("Error while parsing '{}' (\\d+) as u32: {}", &groups[2], e);
 						continue;
 					}
 				};
 				
 				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, &msg, scorekey, None, true) {
+				if let Err(e) = self.score_card(&ctx, &msg, scorekey, None, true, alternative_judge) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
 	
-			for captures in regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?")
-				.unwrap()
-				.captures_iter(&msg.content)
-			{
-				let song_id = match captures[1].parse() {
+			for groups in SONG_LINK_REGEX.captures_iter(&msg.content) {
+				println!("{:?}", groups);
+				let song_id = match groups[1].parse() {
 					Ok(song_id) => song_id,
 					Err(_) => continue, // this wasn't a valid song view url after all
 				};
@@ -1059,7 +1188,7 @@ impl State {
 
 		if let Some((scorekey, user_id)) = self.ocr_score_card_manager.add_reaction(&reaction) {
 			let scorekey = scorekey.clone(); // borrow checker headaches because this thing is monolithic
-			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, Some(user_id), false)?;
+			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, Some(user_id), false, None)?;
 		}
 
 		Ok(())
