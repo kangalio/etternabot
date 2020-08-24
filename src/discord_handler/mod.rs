@@ -783,17 +783,19 @@ impl State {
 			// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
 			// _are_ scaled though.
 
-			let (_note_seconds_lanes, hit_seconds_lanes) = replay.split_into_lanes()?;
+			let lanes = replay.split_into_lanes()?;
 			let mut max_finger_nps = 0.0;
-			for hit_seconds in &hit_seconds_lanes {
-				let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed;
+			for lane in &lanes {
+				let this_fingers_max_nps = etterna::find_fastest_note_subset(&lane.hit_seconds, 20, 20).speed;
 
 				if this_fingers_max_nps > max_finger_nps {
 					max_finger_nps = this_fingers_max_nps;
 				}
 			}
 
-			let (_note_seconds, unsorted_hit_seconds) = replay.split_into_notes_and_hits()?;
+			let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
+			let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
+
 			let sorted_hit_seconds = {
 				#[allow(clippy::redundant_clone)] // it's redundant RIGHT NOW but it won't when I start to use unsorted_hit_seconds
 				let mut temp = unsorted_hit_seconds.clone();
