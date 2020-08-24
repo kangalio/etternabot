@@ -535,16 +535,16 @@ impl State {
 			}
 			"rs" => {
 				let args: Vec<_> = text.split_whitespace().collect();
-				let (eo_username, alternative_judge) = match args.as_slice() {
-					&[] => (self.get_eo_username(ctx, msg)?, None),
-					&[username_or_judge_string] => {
+				let (eo_username, alternative_judge) = match *args.as_slice() {
+					[] => (self.get_eo_username(ctx, msg)?, None),
+					[username_or_judge_string] => {
 						if let Some(judge) = extract_judge_from_string(username_or_judge_string) {
 							(self.get_eo_username(ctx, msg)?, Some(judge))
 						} else {
 							(username_or_judge_string.to_owned(), None)
 						}
 					}
-					&[username, judge_string] => {
+					[username, judge_string] => {
 						if let Some(judge) = extract_judge_from_string(judge_string) {
 							(username.to_owned(), Some(judge))
 						} else {
@@ -795,6 +795,7 @@ impl State {
 
 			let (_note_seconds, unsorted_hit_seconds) = replay.split_into_notes_and_hits()?;
 			let sorted_hit_seconds = {
+				#[allow(clippy::redundant_clone)] // it's redundant RIGHT NOW but it won't when I start to use unsorted_hit_seconds
 				let mut temp = unsorted_hit_seconds.clone();
 				temp.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
 				temp

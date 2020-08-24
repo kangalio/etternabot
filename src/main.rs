@@ -1,4 +1,4 @@
-#[allow(clippy::len_zero, clippy::tabs_in_doc_comments)]
+#![allow(clippy::len_zero, clippy::tabs_in_doc_comments, clippy::collapsible_if, clippy::needless_bool)]
 
 mod discord_handler;
 mod auth;
@@ -55,24 +55,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			if msg.author.bot { return }
 
 			lock!(self, state);
-			if let Err(e) = state.message(&ctx, &msg).map_err(|e| {
+			if let Err(mut error) = state.message(&ctx, &msg) {
 				// this looks complicated, but all it does is map serenity's confusing
 				// "[Serenity] No correct json was received!" error to one of my (more descriptive)
 				// error types
-				if let discord_handler::Error::SerenityError(serenity::Error::Http(ref e)) = e {
+				if let discord_handler::Error::SerenityError(serenity::Error::Http(ref e)) = error {
 					if let serenity::HttpError::UnsuccessfulRequest(serenity::ErrorResponse {
 						error: serenity::DiscordJsonError { code: -1, .. },
 						..
 					}) = **e {
-						return discord_handler::Error::AttemptedToSendInvalidMessage;
+						error = discord_handler::Error::AttemptedToSendInvalidMessage;
 					}
 				}
-				e
-			}) {
-				println!("Error {:?}", e);
-				let error_msg = e.to_string();
-				if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
-					println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
+
+				println!("Error {:?}", error);
+				let error_msg = error.to_string();
+				if error_msg.contains("No userid found in user page") {
+					// don't print this error. it's annoying
+				} else {
+					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
+						println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
+					}
 				}
 			}
 		}
