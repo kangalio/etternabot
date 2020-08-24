@@ -20,3 +20,4 @@ text_io = { git = "https://github.com/kangalioo/rust-si" }
 leptess = { git = "https://github.com/kangalioo/leptess/" }
 etterna = { package = "etterna_base", git = "https://github.com/kangalioo/etterna-base", features = ["parallel"] }
 chrono = "0.4.13"
+once_cell = "1.4.1"
