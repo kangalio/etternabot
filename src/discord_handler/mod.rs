@@ -1,7 +1,6 @@
 mod config;
 mod pattern_visualize;
 mod replay_graph;
-mod score_ocr;
 mod draw_skill_graph;
 
 use crate::serenity; // use my custom serenity prelude

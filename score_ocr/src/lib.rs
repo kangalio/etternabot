@@ -1,7 +1,7 @@
 #![allow(clippy::match_ref_pats)]
 
 use leptess::LepTess;
-use etternaonline_api::{Difficulty, Rate, TapJudgements};
+use etterna::{Difficulty, Rate, TapJudgements};
 use thiserror::Error;
 
 pub const MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL: i32 = 10;
