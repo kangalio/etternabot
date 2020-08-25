@@ -1136,7 +1136,7 @@ impl State {
 			let score_as_eval = score_ocr::EvaluationScreenData {
 				artist: None,
 				eo_username: None, // no point comparing EO usernames - it's gonna match anyway
-				judgements: Some(score.judgements),
+				judgements: Some(score.judgements.into()),
 				song: Some(score.song_name),
 				msd: None,
 				ssr: score.user_id_and_ssr.map(|x| x.ssr.overall()),
@@ -1157,8 +1157,8 @@ impl State {
 				}
 			}
 			let equality_score = best_equality_score;
-			let theme_i = best_theme_i;
-			println!("Found match in theme {}", theme_i);
+			let _theme_i = best_theme_i;
+			// println!("Found match in theme {}", theme_i);
 
 			if equality_score > score_ocr::MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL
 				&& equality_score > best_equality_score_so_far

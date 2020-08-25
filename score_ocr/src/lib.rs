@@ -19,31 +19,33 @@ fn recognize_rect<T>(
 	rect_x: u32, rect_y: u32, rect_w: u32, rect_h: u32, // the coordinates are in 1920x1080 format
 	processor: impl FnOnce(&str) -> Option<T>
 ) -> Option<T> {
-	let (actual_img_w, actual_img_h) = lt.get_image_dimensions()
+	let (img_w, img_h) = lt.get_image_dimensions()
 		.expect("hey caller, you should've set an image by now");
+	// let (actual_img_w, actual_img_h) = lt.get_image_dimensions()
+	// 	.expect("hey caller, you should've set an image by now");
 
-	// Make everything float for easier math
-	let (actual_img_w, actual_img_h) = (actual_img_w as f32, actual_img_h as f32);
-	let (mut rect_x, mut rect_y) = (rect_x as f32, rect_y as f32);
-	let (mut rect_w, mut rect_h) = (rect_w as f32, rect_h as f32);
+	// // Make everything float for easier math
+	// let (actual_img_w, actual_img_h) = (actual_img_w as f32, actual_img_h as f32);
+	// let (mut rect_x, mut rect_y) = (rect_x as f32, rect_y as f32);
+	// let (mut rect_w, mut rect_h) = (rect_w as f32, rect_h as f32);
 
-	// Normalize to height=1080
-	let height_multiplier = 1080.0 / actual_img_h;
-	rect_x *= height_multiplier;
-	rect_y *= height_multiplier;
-	rect_w *= height_multiplier;
-	rect_h *= height_multiplier;
-	let img_w = actual_img_w * height_multiplier;
+	// // Normalize to height=1080
+	// let height_multiplier = 1080.0 / actual_img_h;
+	// rect_x *= height_multiplier;
+	// rect_y *= height_multiplier;
+	// rect_w *= height_multiplier;
+	// rect_h *= height_multiplier;
+	// let img_w = actual_img_w * height_multiplier;
 
-	if rect_x + rect_w / 2.0 > 1920.0 / 2.0 { // if on right half, assume anchored to right side
-		rect_x += img_w - 1920.0;
-	}
+	// if rect_x + rect_w / 2.0 > 1920.0 / 2.0 { // if on right half, assume anchored to right side
+	// 	rect_x += img_w - 1920.0;
+	// }
 
 	let bounding_box = &leptess::leptonica::Box::new(
-		(rect_x / height_multiplier) as i32,
-		(rect_y / height_multiplier) as i32,
-		(rect_w / height_multiplier) as i32,
-		(rect_h / height_multiplier) as i32,
+		(rect_x * img_w / 1920) as i32,
+		(rect_y * img_h / 1080) as i32,
+		(rect_w * img_w / 1920) as i32,
+		(rect_h * img_h / 1080) as i32,
 	).unwrap();
 
 	println!("{:?}", bounding_box.get_val());
@@ -55,19 +57,20 @@ fn recognize_rect<T>(
 	processor(text)
 }
 
-fn parse_slash_separated_judgement_string(s: &str) -> Option<TapJudgements> {
+fn parse_slash_separated_judgement_string(s: &str) -> Option<TapJudgementsMaybe> {
 	let judgements: Vec<u32> = s
 		.split('/')
 		.filter_map(|s| s.trim().parse().ok())
 		.collect();
 	
-	match judgements.as_slice() {
-		&[marvelouses, perfects, greats, goods, bads, misses] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads, misses }),
-		&[marvelouses, perfects, greats, goods, bads] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads, misses: 0 }),
-		&[marvelouses, perfects, greats, goods] => Some(TapJudgements { marvelouses, perfects, greats, goods, bads: 0, misses: 0 }),
-		&[marvelouses, perfects, greats] => Some(TapJudgements { marvelouses, perfects, greats, goods: 0, bads: 0, misses: 0 }),
-		_ => None,
-	}
+	Some(TapJudgementsMaybe {
+		marvelouses: judgements.get(0).copied(),
+		perfects: judgements.get(1).copied(),
+		greats: judgements.get(2).copied(),
+		goods: judgements.get(3).copied(),
+		bads: judgements.get(4).copied(),
+		misses: judgements.get(5).copied(),
+	})
 }
 
 fn recognize_til_death(
@@ -173,8 +176,16 @@ fn recognize_scwh(
 		ssr: recognize_rect(&mut num_lt, 83, 195, 143, 61, |s| {
 			Some(s.trim().parse().ok()?)
 		}),
-		// same gotcha applies as in til death
-		judgements: recognize_rect(&mut num_lt, 1310, 407, 260, 22, parse_slash_separated_judgement_string),
+		// // same gotcha applies as in til death
+		// judgements: recognize_rect(&mut num_lt, 1310, 407, 260, 22, parse_slash_separated_judgement_string),
+		judgements: Some(TapJudgementsMaybe {
+			marvelouses: recognize_rect(&mut num_lt, 456, 264, 193, 51, |s| s.parse().ok()),
+			perfects: recognize_rect(&mut num_lt, 456, 313, 193, 51, |s| s.parse().ok()),
+			greats: recognize_rect(&mut num_lt, 456, 362, 193, 51, |s| s.parse().ok()),
+			goods: recognize_rect(&mut num_lt, 456, 410, 193, 51, |s| s.parse().ok()),
+			bads: recognize_rect(&mut num_lt, 456, 460, 193, 51, |s| s.parse().ok()),
+			misses: recognize_rect(&mut num_lt, 456, 508, 193, 51, |s| s.parse().ok()),
+		}),
 		difficulty: recognize_rect(&mut eng_lt, 233, 225, 62, 31, |s| {
 			Difficulty::from_short_string(s)
 		}),
@@ -182,6 +193,29 @@ fn recognize_scwh(
 			Some(s.to_owned())
 		}),
 	})
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct TapJudgementsMaybe {
+	pub marvelouses: Option<u32>,
+	pub perfects: Option<u32>,
+	pub greats: Option<u32>,
+	pub goods: Option<u32>,
+	pub bads: Option<u32>,
+	pub misses: Option<u32>,
+}
+
+impl From<TapJudgements> for TapJudgementsMaybe {
+	fn from(j: TapJudgements) -> TapJudgementsMaybe {
+		Self {
+			marvelouses: Some(j.marvelouses),
+			perfects: Some(j.perfects),
+			greats: Some(j.greats),
+			goods: Some(j.goods),
+			bads: Some(j.bads),
+			misses: Some(j.misses),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -195,16 +229,15 @@ pub struct EvaluationScreenData {
 	pub wifescore: Option<f32>,
 	pub msd: Option<f32>,
 	pub ssr: Option<f32>,
-	pub judgements: Option<TapJudgements>,
+	pub judgements: Option<TapJudgementsMaybe>,
 	pub difficulty: Option<Difficulty>,
 	pub date: Option<String>,
 }
 
 impl EvaluationScreenData {
-	// not needed rn
-	// pub fn recognize_from_image_path(path: &str) -> Result<Self, Error> {
-	// 	Self::recognize(|lt| lt.set_image(path))
-	// }
+	pub fn recognize_from_image_path(path: &str) -> Result<Vec<Self>, Error> {
+		Self::recognize(|lt| lt.set_image(path))
+	}
 
 	pub fn recognize_from_image_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
 		Self::recognize(|lt| lt.set_image_from_mem(bytes))
@@ -240,9 +273,8 @@ impl EvaluationScreenData {
 					if $equality_check(a, b) {
 						println!("{} matches! Adding {} points", stringify!($a), $weight);
 						score += $weight;
-					} else {
-						// score -= $weight;
 					}
+					// let's not subtract points if mismatch
 				}
 			};
 			($a:expr, $b:expr, $weight:expr) => {
@@ -262,36 +294,14 @@ impl EvaluationScreenData {
 		compare!(self.ssr, other.ssr, 6, ~0.01);
 		compare!(self.difficulty, other.difficulty, 2);
 		compare!(self.date, other.date, 2);
-		compare!(
-			self.judgements.as_ref().map(|j| j.marvelouses),
-			other.judgements.as_ref().map(|j| j.marvelouses),
-			5
-		);
-		compare!(
-			self.judgements.as_ref().map(|j| j.perfects),
-			other.judgements.as_ref().map(|j| j.perfects),
-			5
-		);
-		compare!(
-			self.judgements.as_ref().map(|j| j.greats),
-			other.judgements.as_ref().map(|j| j.greats),
-			5
-		);
-		compare!(
-			self.judgements.as_ref().map(|j| j.goods),
-			other.judgements.as_ref().map(|j| j.goods),
-			2
-		);
-		compare!(
-			self.judgements.as_ref().map(|j| j.bads),
-			other.judgements.as_ref().map(|j| j.bads),
-			2
-		);
-		compare!(
-			self.judgements.as_ref().map(|j| j.misses),
-			other.judgements.as_ref().map(|j| j.misses),
-			3
-		);
+		if let (Some(self_judgements), Some(other_judgements)) = (&self.judgements, &other.judgements) {
+			compare!(self_judgements.marvelouses, other_judgements.marvelouses, 5);
+			compare!(self_judgements.perfects, other_judgements.perfects, 5);
+			compare!(self_judgements.greats, other_judgements.greats, 5);
+			compare!(self_judgements.goods, other_judgements.goods, 2);
+			compare!(self_judgements.bads, other_judgements.bads, 2);
+			compare!(self_judgements.misses, other_judgements.misses, 3);
+		}
 
 		println!("Got total {} points", score);
 		println!();
