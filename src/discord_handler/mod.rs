@@ -1095,15 +1095,15 @@ impl State {
 			// score OCR feature, ignore this image
 			if member.guild_id.0 == self.config.etterna_online_guild_id {
 				if member.roles.iter().all(|r| r.0 != self.config.score_ocr_allowed_eo_role) {
-					println!("user doesn't have role"); // REMEMBER
 					return Ok(());
 				}
 			}
 		}
 
 		let bytes = attachment.download()?;
+		println!("Post from {} on {:?}...", &msg.author.name, &msg.timestamp);
 		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
-		println!("Recognized: {:#?}", recognized);
+		println!("Recognized {:?}", recognized);
 
 		let recognized_eo_username = recognized.iter().filter_map(|r| r.eo_username.as_ref()).next();
 		
@@ -1223,6 +1223,7 @@ impl OcrScoreCardManager {
 		scorekey: etterna::Scorekey,
 		user_id: u32,
 	) {
+		println!("Added new candidate {}, author id {}", &scorekey, author_id.0);
 		self.candidates.push(Candidate {
 			message_id, author_id, scorekey, user_id,
 			
@@ -1235,6 +1236,8 @@ impl OcrScoreCardManager {
 	pub fn add_reaction(&mut self,
 		reaction: &serenity::Reaction,
 	) -> Option<(&etterna::Scorekey, u32)> {
+		println!("Got reaction in score ocr card manager");
+
 		// Find the Candidate that this reaction was made on, or return if the user made the
 		// reaction on some unrelated message, i.e. a non-candidate
 		let mut candidate = self.candidates.iter_mut().find(|c| c.message_id == reaction.message_id)?;
@@ -1242,12 +1245,18 @@ impl OcrScoreCardManager {
 		// If it has already been printed, stop. We don't want to print the card over and over
 		// again
 		if candidate.score_card_has_been_printed {
+			println!("Has already been printed; skipping");
 			return None;
 		}
 
 		candidate.reactors.insert(reaction.user_id);
+		println!(
+			"Alright the reaction from <@{}> was legit; we now have {} reactions",
+			reaction.user_id,
+			candidate.reactors.len(),
+		);
 
-		if candidate.reactors.contains(&candidate.author_id) && candidate.reactors.len() >= 2 {
+		if candidate.reactors.len() >= 2 {
 			candidate.score_card_has_been_printed = true;
 			Some((&candidate.scorekey, candidate.user_id))
 		} else {

@@ -19,6 +19,7 @@ fn recognize_rect<T>(
 	rect_x: u32, rect_y: u32, rect_w: u32, rect_h: u32, // the coordinates are in 1920x1080 format
 	processor: impl FnOnce(&str) -> Option<T>
 ) -> Option<T> {
+	print!("a");
 	let (img_w, img_h) = lt.get_image_dimensions()
 		.expect("hey caller, you should've set an image by now");
 	// let (actual_img_w, actual_img_h) = lt.get_image_dimensions()
@@ -41,6 +42,7 @@ fn recognize_rect<T>(
 	// 	rect_x += img_w - 1920.0;
 	// }
 
+	print!("b");
 	let bounding_box = &leptess::leptonica::Box::new(
 		(rect_x * img_w / 1920) as i32,
 		(rect_y * img_h / 1080) as i32,
@@ -48,12 +50,15 @@ fn recognize_rect<T>(
 		(rect_h * img_h / 1080) as i32,
 	).unwrap();
 
-	println!("{:?}", bounding_box.get_val());
+	// println!("{:?}", bounding_box.get_val());
 
+	print!("c");
 	lt.set_rectangle(bounding_box);
+	print!("d");
 	let text = lt.get_utf8_text().ok()?;
 	let text = text.trim();
-	println!("Recognized string: {}", text);
+	// println!("Recognized string {:?}", text);
+	print!("E - ");
 	processor(text)
 }
 
@@ -269,9 +274,9 @@ impl EvaluationScreenData {
 		macro_rules! compare {
 			($a:expr, $b:expr, $weight:expr, $equality_check:expr) => {
 				if let (Some(a), Some(b)) = (&$a, &$b) {
-					println!("{:?} == {:?} ?", a, b);
+					// println!("{:?} == {:?} ?", a, b);
 					if $equality_check(a, b) {
-						println!("{} matches! Adding {} points", stringify!($a), $weight);
+						// println!("{} matches! Adding {} points", stringify!($a), $weight);
 						score += $weight;
 					}
 					// let's not subtract points if mismatch
@@ -303,8 +308,8 @@ impl EvaluationScreenData {
 			compare!(self_judgements.misses, other_judgements.misses, 3);
 		}
 
-		println!("Got total {} points", score);
-		println!();
+		// println!("Got total {} points", score);
+		// println!();
 
 		score
 	}
