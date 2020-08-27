@@ -489,13 +489,13 @@ impl State {
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		cmd: &str,
-		text: &str
+		args: &str
 	) -> Result<(), Error> {
-		println!("Executing command '{}' with args '{}'", cmd, text);
+		println!("Executing command '{}' with args '{}'", cmd, args);
 
 		if cmd.starts_with("top") {
 			if let Ok(limit) = cmd[3..].parse() {
-				self.top_scores(ctx, msg, text, limit)?;
+				self.top_scores(ctx, msg, args, limit)?;
 			} else {
 				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
 			}
@@ -504,7 +504,12 @@ impl State {
 
 		match cmd {
 			"ping" => {
-				msg.channel_id.say(&ctx.http, "Pong!")?;
+				let mut response = String::from("Pong");
+				for _ in 0..args.matches("ping").count() {
+					response += " pong";
+				}
+				response += "!";
+				msg.channel_id.say(&ctx.http, &response)?;
 			},
 			"help" => {
 				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
@@ -513,16 +518,16 @@ impl State {
 				))?;
 			},
 			"profile" => {
-				self.profile(ctx, msg, text)?;
+				self.profile(ctx, msg, args)?;
 			},
 			"lastsession" => {
-				self.latest_scores(ctx, msg, text)?;
+				self.latest_scores(ctx, msg, args)?;
 			},
 			"pattern" => {
-				self.pattern(ctx, msg, text)?;
+				self.pattern(ctx, msg, args)?;
 			},
 			"skillgraph" => {
-				self.skillgraph(ctx, msg, text)?;
+				self.skillgraph(ctx, msg, args)?;
 			}
 			"quote" => {
 				let quote = &self.config.quotes[rand::random::<usize>() % self.config.quotes.len()];
@@ -533,7 +538,7 @@ impl State {
 				msg.channel_id.say(&ctx.http, &string)?;
 			}
 			"rs" => {
-				let args: Vec<_> = text.split_whitespace().collect();
+				let args: Vec<_> = args.split_whitespace().collect();
 				let (eo_username, alternative_judge) = match *args.as_slice() {
 					[] => (self.get_eo_username(ctx, msg)?, None),
 					[username_or_judge_string] => {
@@ -562,7 +567,7 @@ impl State {
 				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true, alternative_judge)?;
 			}
 			"scrollset" => {
-				let scroll = match &text.to_lowercase() as &str {
+				let scroll = match &args.to_lowercase() as &str {
 					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
 					"up" | "upscroll" => pattern_visualize::ScrollType::Upscroll,
 					"" => {
@@ -570,7 +575,7 @@ impl State {
 						return Ok(());
 					},
 					_ => {
-						msg.channel_id.say(&ctx.http, format!("No such scroll '{}'", text))?;
+						msg.channel_id.say(&ctx.http, format!("No such scroll '{}'", args))?;
 						return Ok(());
 					},
 				};
@@ -579,13 +584,13 @@ impl State {
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
-				if text.is_empty() {
+				if args.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(e) = self.v2_session.user_details(text) {
+				if let Err(e) = self.v2_session.user_details(args) {
 					if let eo::Error::UserNotFound = e {
-						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
+						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
 						return Ok(());
 					} else {
 						return Err(e.into());
@@ -594,38 +599,38 @@ impl State {
 				
 				let response = match self.data.set_eo_username(
 					msg.author.id.0,
-					text.to_owned()
+					args.to_owned()
 				) {
 					Some(old_eo_username) => format!(
 						"Successfully updated username from `{}` to `{}`",
 						old_eo_username,
-						text,
+						args,
 					),
-					None => format!("Successfully set username to `{}`", text),
+					None => format!("Successfully set username to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
 				self.data.save();
 			},
 			"rivalset" => {
-				if text.is_empty() {
+				if args.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_RIVALSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(eo::Error::UserNotFound) = self.v2_session.user_details(text) {
-					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", text))?;
+				if let Err(eo::Error::UserNotFound) = self.v2_session.user_details(args) {
+					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
 					return Ok(());
 				}
 
 				let response = match self.data.set_rival(
 					msg.author.id.0,
-					text.to_owned()
+					args.to_owned()
 				) {
 					Some(old_rival) => format!(
 						"Successfully updated your rival from `{}` to `{}`",
 						old_rival,
-						text,
+						args,
 					),
-					None => format!("Successfully set your rival to `{}`", text),
+					None => format!("Successfully set your rival to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
 				self.data.save();
@@ -642,7 +647,7 @@ impl State {
 				self.profile_compare(ctx, msg, me, &you)?;
 			}
 			"compare" => {
-				let args: Vec<&str> = text.split_whitespace().collect();
+				let args: Vec<&str> = args.split_whitespace().collect();
 
 				let me;
 				let you;
