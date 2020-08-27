@@ -744,7 +744,7 @@ impl State {
 				)
 			},
 			score.max_combo, score.judgements.perfects,
-			score.ssr.overall(), score.judgements.greats,
+			score.ssr.overall_pre_070(), score.judgements.greats,
 			score.ssr.stream, score.judgements.goods,
 			score.ssr.stamina, score.judgements.bads,
 			score.ssr.jumpstream, score.judgements.misses,
