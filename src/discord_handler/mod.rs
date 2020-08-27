@@ -468,7 +468,7 @@ impl State {
 		let skill_timeline = etterna::skill_timeline(
 			scores.scores.iter()
 				.filter_map(|s| s
-					.user_id_and_ssr
+					.validity_dependant
 					.as_ref()
 					.map(|u| (s.date.as_str(), u.nerfed_ssr()))
 				)
@@ -1133,13 +1133,18 @@ impl State {
 		let mut best_equality_score_so_far = i32::MIN;
 		let mut scorekey = None;
 		for score in recent_scores.scores {
+			let validity_dependant = match score.validity_dependant {
+				Some(x) => x,
+				None => continue, // don't check invalid scores (we don't have scorekey for those)
+			};
+
 			let score_as_eval = score_ocr::EvaluationScreenData {
 				artist: None,
 				eo_username: None, // no point comparing EO usernames - it's gonna match anyway
 				judgements: Some(score.judgements.into()),
 				song: Some(score.song_name),
 				msd: None,
-				ssr: score.user_id_and_ssr.map(|x| x.ssr.overall()),
+				ssr: Some(validity_dependant.ssr.overall_pre_070()),
 				pack: None,
 				rate: Some(score.rate),
 				wifescore: Some(score.wifescore.as_percent()),
@@ -1164,7 +1169,7 @@ impl State {
 				&& equality_score > best_equality_score_so_far
 			{
 				best_equality_score_so_far = equality_score;
-				scorekey = Some(score.scorekey);
+				scorekey = Some(validity_dependant.scorekey);
 			}
 		}
 
@@ -1199,6 +1204,7 @@ impl State {
 
 struct Candidate {
 	message_id: serenity::MessageId,
+	#[allow(dead_code)] // idk maybe we will need this again in the future
 	author_id: serenity::UserId,
 
 	scorekey: etterna::Scorekey,
