@@ -308,7 +308,7 @@ impl State {
 			rating_string += &format!(
 				"{: >10}:   {: >5.2} (#{})\n",
 				skillset.to_string(),
-				details.rating.get(skillset),
+				details.rating.get_pre_070(skillset),
 				ranks.get(skillset),
 			);
 		}
@@ -414,16 +414,16 @@ impl State {
 			string += &format!(
 				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work
-				me.rating.get(skillset),
-				if (me.rating.get(skillset) - you.rating.get(skillset)).abs() < f32::EPSILON {
+				me.rating.get_pre_070(skillset),
+				if (me.rating.get_pre_070(skillset) - you.rating.get_pre_070(skillset)).abs() < f32::EPSILON {
 					"="
-				} else if me.rating.get(skillset) > you.rating.get(skillset) { 
+				} else if me.rating.get_pre_070(skillset) > you.rating.get_pre_070(skillset) { 
 					">"
 				} else {
 					"<"
 				},
-				you.rating.get(skillset),
-				me.rating.get(skillset) - you.rating.get(skillset),
+				you.rating.get_pre_070(skillset),
+				me.rating.get_pre_070(skillset) - you.rating.get_pre_070(skillset),
 			);
 		}
 		string += "```";
