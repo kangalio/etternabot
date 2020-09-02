@@ -377,14 +377,14 @@ impl State {
 		let mut scroll_type = None;
 		for (i, arg) in args.iter().enumerate() {
 			match arg.to_lowercase().as_str() {
-				"up" => scroll_type = Some(pattern_visualize::ScrollType::Upscroll),
-				"down" | "reverse" => scroll_type = Some(pattern_visualize::ScrollType::Downscroll),
+				"up" => scroll_type = Some(etterna::ScrollDirection::Upscroll),
+				"down" | "reverse" => scroll_type = Some(etterna::ScrollDirection::Downscroll),
 				_ => continue,
 			}
 			arg_indices_to_remove.push(i);
 		}
 		let scroll_type = scroll_type.unwrap_or_else(||
-			self.data.scroll(msg.author.id.0).unwrap_or(pattern_visualize::ScrollType::Upscroll)
+			self.data.scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll)
 		);
 
 		// this is super fucking hacky
@@ -537,6 +537,11 @@ impl State {
 				};
 				msg.channel_id.say(&ctx.http, &string)?;
 			}
+			"lookup" => {
+				// self.data.eo_username(discord_user)
+				// args
+				// TODO
+			}
 			"rs" => {
 				let args: Vec<_> = args.split_whitespace().collect();
 				let (eo_username, alternative_judge) = match *args.as_slice() {
@@ -568,8 +573,8 @@ impl State {
 			}
 			"scrollset" => {
 				let scroll = match &args.to_lowercase() as &str {
-					"down" | "downscroll" => pattern_visualize::ScrollType::Downscroll,
-					"up" | "upscroll" => pattern_visualize::ScrollType::Upscroll,
+					"down" | "downscroll" => etterna::ScrollDirection::Downscroll,
+					"up" | "upscroll" => etterna::ScrollDirection::Upscroll,
 					"" => {
 						msg.channel_id.say(&ctx.http, CMD_SCROLLSET_HELP)?;
 						return Ok(());
@@ -1095,11 +1100,21 @@ impl State {
 			None => return Ok(()), // non-image post in score channel. Ignore
 		};
 
-		if let Some(member) = msg.member(&ctx.cache) { // if was sent in a guild (as opposed to DMs)
+		// sigh, I wish serenity had nice things, like methods built-in for this
+		let member = match msg.guild_id {
+			Some(guild_id) => Some(match msg.member(&ctx.cache) {
+				Some(cached_member) => cached_member,
+				None => ctx.http.get_member(guild_id.0, msg.author.id.0)?,
+			}),
+			None => None,
+		};
+
+		if let Some(member) = member { // if was sent in a guild (as opposed to DMs)
 			// If message was sent in EO and user doesn't have the appropriate role for the
 			// score OCR feature, ignore this image
 			if member.guild_id.0 == self.config.etterna_online_guild_id {
-				if member.roles.iter().all(|r| r.0 != self.config.score_ocr_allowed_eo_role) {
+				let has_required_role = member.roles.iter().any(|r| r.0 == self.config.score_ocr_allowed_eo_role);
+				if !has_required_role {
 					return Ok(());
 				}
 			}

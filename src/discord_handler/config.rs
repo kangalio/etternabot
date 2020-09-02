@@ -49,7 +49,7 @@ pub struct Data {
 	#[serde(default)]
 	rival_mapping: HashMap<u64, String>, // discord username -> eo username
 	#[serde(default)]
-	preferred_scroll: HashMap<u64, super::pattern_visualize::ScrollType>,
+	preferred_scroll: HashMap<u64, etterna::ScrollDirection>,
 }
 
 impl Data {
@@ -87,11 +87,11 @@ impl Data {
 		self.discord_eo_username_mapping.get(&discord_user).map(|s| s as _)
 	}
 
-	pub fn set_scroll(&mut self, discord_user: u64, scroll: super::pattern_visualize::ScrollType) {
+	pub fn set_scroll(&mut self, discord_user: u64, scroll: etterna::ScrollDirection) {
 		self.preferred_scroll.insert(discord_user, scroll);
 	}
 
-	pub fn scroll(&self, discord_user: u64) -> Option<super::pattern_visualize::ScrollType> {
+	pub fn scroll(&self, discord_user: u64) -> Option<etterna::ScrollDirection> {
 		self.preferred_scroll.get(&discord_user).copied()
 	}
 

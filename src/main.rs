@@ -25,8 +25,9 @@ pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146)
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	macro_rules! lock {
 		($this:ident, $state:ident) => {
-			// if poisened, kill the whole process instead of failing over and over again
-			let mut guard = $this.state.lock().unwrap_or_else(|_| std::process::exit(1));
+			// // if poisened, kill the whole process instead of failing over and over again
+			// let mut guard = $this.state.lock().unwrap_or_else(|_| std::process::exit(1));
+			let mut guard = $this.state.lock().unwrap();
 
 			let $state = match *guard {
 				Some(ref mut state) => state,

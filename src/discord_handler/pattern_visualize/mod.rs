@@ -5,7 +5,6 @@ use noteskin::*;
 
 use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 
@@ -29,18 +28,12 @@ pub enum Error {
 	KeymodeNotImplemented(u32),
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub enum ScrollType {
-	Upscroll,
-	Downscroll,
-}
-
 /// Parameter `note_imgs`: a slice of 64x64 images, in the following order: 4ths, 8ths, 12ths,
 /// 16ths, 24ths, 32nds, 48ths, 64ths, 192nds
 fn render_pattern(
 	noteskin: &dyn Noteskin,
 	pattern: &etterna::Pattern,
-	scroll_type: ScrollType,
+	scroll_type: etterna::ScrollDirection,
 	interval_num_rows: usize,
 ) -> Result<RgbaImage, Error> {
 	let keymode = pattern.keymode().ok_or(Error::EmptyPattern)?;
@@ -52,7 +45,7 @@ fn render_pattern(
 
 	let mut place_note = |note_img: &RgbaImage, x, mut y| {
 		// Flip y if downscroll
-		if scroll_type == ScrollType::Downscroll {
+		if scroll_type == etterna::ScrollDirection::Downscroll {
 			y = (buffer.height() / 64) - y - 1;
 		}
 
@@ -105,7 +98,7 @@ impl PatternVisualizer {
 
 	pub fn generate(&self,
 		pattern_str: &str,
-		scroll_type: ScrollType,
+		scroll_type: etterna::ScrollDirection,
 		interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
 	) -> Result<Vec<u8>, Error> {
 		let mut pattern = etterna::Pattern::parse_taps(pattern_str);
