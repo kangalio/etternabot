@@ -82,6 +82,7 @@ fn recognize_til_death(
 	mut eng_lt: &mut LepTess,
 	mut num_lt: &mut LepTess,
 ) -> Result<EvaluationScreenData, Error> {
+	println!("Alrighty we're in recognize_til_death")
 	Ok(EvaluationScreenData {
 		rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
 			Rate::from_f32(s.parse().ok()?)
@@ -251,17 +252,22 @@ impl EvaluationScreenData {
 	pub fn recognize(
 		mut image_setter: impl FnMut(&mut LepTess) -> Option<()>
 	) -> Result<Vec<Self>, Error> {
+		println!("Creating english LepTess");
 		let mut eng_lt = LepTess::new(Some("ocr_data"), "eng")?;
+		println!("Creating digits LepTess");
 		let mut num_lt = LepTess::new(Some("ocr_data"), "digitsall_layer")?;
 
 		// that's apparently the full screen dpi and our images are fullscreen so let's use this value
 		let dpi = 96;
 
+		println!("Setting eng image");
 		(image_setter)(&mut eng_lt).ok_or(Error::CouldNotReadImage)?;
 		eng_lt.set_fallback_source_resolution(dpi);
+		println!("Setting digits image");
 		(image_setter)(&mut num_lt).ok_or(Error::CouldNotReadImage)?;
 		num_lt.set_fallback_source_resolution(dpi);
 
+		println!("Got everything set up, now recognizing...");
 		Ok(vec![
 			recognize_til_death(&mut eng_lt, &mut num_lt)?,
 			recognize_scwh(&mut eng_lt, &mut num_lt)?,
