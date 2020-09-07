@@ -82,7 +82,7 @@ fn recognize_til_death(
 	mut eng_lt: &mut LepTess,
 	mut num_lt: &mut LepTess,
 ) -> Result<EvaluationScreenData, Error> {
-	println!("Alrighty we're in recognize_til_death")
+	println!("Alrighty we're in recognize_til_death");
 	Ok(EvaluationScreenData {
 		rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
 			Rate::from_f32(s.parse().ok()?)
