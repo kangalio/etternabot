@@ -42,10 +42,18 @@ impl Config {
 	}
 }
 
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct UserRegistryEntry {
+	pub discord_id: u64,
+	pub disord_username: String,
+	pub eo_id: u32,
+	pub eo_username: String,
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Data {
 	#[serde(default)]
-	discord_eo_username_mapping: HashMap<u64, String>,
+	pub user_registry: Vec<UserRegistryEntry>,
 	#[serde(default)]
 	rival_mapping: HashMap<u64, String>, // discord username -> eo username
 	#[serde(default)]
@@ -74,17 +82,6 @@ impl Data {
 				.expect("Couldn't write to data json file"),
 			self
 		).expect("Couldn't deserialize data into a json");
-	}
-
-	// Returns the old EO username, if there was one registered
-	pub fn set_eo_username(&mut self, discord_user: u64, eo_username: String) -> Option<String> {
-		self.discord_eo_username_mapping.insert(discord_user, eo_username)
-	}
-
-	// we need String here because the string can come either from `self` or from the passed
-	// parameter. So we have differing lifetimes which we can't encode with a `&str`
-	pub fn eo_username(&self, discord_user: u64) -> Option<&str> {
-		self.discord_eo_username_mapping.get(&discord_user).map(|s| s as _)
 	}
 
 	pub fn set_scroll(&mut self, discord_user: u64, scroll: etterna::ScrollDirection) {

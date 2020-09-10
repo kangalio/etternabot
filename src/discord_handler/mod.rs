@@ -119,8 +119,10 @@ impl State {
 		_ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<String, Error> {
-		if let Some(eo_username) = self.data.eo_username(msg.author.id.0) {
-			return Ok(eo_username.to_owned());
+		if let Some(user_entry) = self.data.user_registry.iter()
+			.find(|user| user.discord_id == msg.author.id.0)
+		{
+			return Ok(user_entry.eo_username.to_owned());
 		}
 
 		match self.v2_session.user_details(&msg.author.name) {
@@ -593,27 +595,44 @@ impl State {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-				if let Err(e) = self.v2_session.user_details(args) {
-					if let eo::Error::UserNotFound = e {
+
+				let user_details = match self.web_session.user_details(args) {
+					Ok(x) => x,
+					Err(eo::Error::UserNotFound) => {
 						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
 						return Ok(());
-					} else {
+					},
+					Err(e) => {
 						return Err(e.into());
 					}
-				}
-				
-				let response = match self.data.set_eo_username(
-					msg.author.id.0,
-					args.to_owned()
-				) {
-					Some(old_eo_username) => format!(
-						"Successfully updated username from `{}` to `{}`",
-						old_eo_username,
-						args,
-					),
-					None => format!("Successfully set username to `{}`", args),
 				};
-				msg.channel_id.say(&ctx.http, &response)?;
+				
+				let new_user_entry = config::UserRegistryEntry {
+					discord_id: msg.author.id.0,
+					disord_username: msg.author.name.to_owned(),
+					eo_id: user_details.user_id,
+					eo_username: args.to_owned(),
+				};
+				
+				match self.data.user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
+					Some(existing_user_entry) => {
+						msg.channel_id.say(&ctx.http, format!(
+							"Successfully updated username from `{}` to `{}`",
+							existing_user_entry.eo_username,
+							new_user_entry.eo_username,
+						))?;
+
+						*existing_user_entry = new_user_entry;
+					},
+					None => {
+						msg.channel_id.say(&ctx.http, format!(
+							"Successfully set username to `{}`",
+							args
+						))?;
+
+						self.data.user_registry.push(new_user_entry);
+					},
+				};
 				self.data.save();
 			},
 			"rivalset" => {
