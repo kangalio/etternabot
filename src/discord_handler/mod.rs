@@ -134,6 +134,13 @@ impl State {
 		}
 	}
 
+	fn get_eo_user_id(&mut self, eo_username: &str) -> Result<u32, Error> {
+		match self.data.user_registry.iter().find(|user| user.eo_username == eo_username) {
+			Some(user) => Ok(user.eo_id),
+			None => Ok(self.web_session.user_details(eo_username)?.user_id),
+		}
+	}
+
 	fn top_scores(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
@@ -570,7 +577,7 @@ impl State {
 				};
 
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
-				let user_id = self.web_session.user_details(&eo_username)?.user_id;
+				let user_id = self.get_eo_user_id(&eo_username)?;
 				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true, alternative_judge)?;
 			}
 			"scrollset" => {
@@ -595,22 +602,11 @@ impl State {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-
-				let user_details = match self.web_session.user_details(args) {
-					Ok(x) => x,
-					Err(eo::Error::UserNotFound) => {
-						msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
-						return Ok(());
-					},
-					Err(e) => {
-						return Err(e.into());
-					}
-				};
 				
 				let new_user_entry = config::UserRegistryEntry {
 					discord_id: msg.author.id.0,
 					disord_username: msg.author.name.to_owned(),
-					eo_id: user_details.user_id,
+					eo_id: self.web_session.user_details(args)?.user_id,
 					eo_username: args.to_owned(),
 				};
 				
