@@ -1066,13 +1066,11 @@ impl State {
 		Ok(())
 	}
 
-	pub fn guild_member_update(&mut self,
+	pub fn check_member_update_for_max_300(&mut self,
 		ctx: serenity::Context,
-		old: Option<serenity::Member>,
+		old: serenity::Member,
 		new: serenity::Member
 	) -> Result<(), Error> {
-		let old = match old { Some(a) => a, None => return Ok(()) };
-		
 		let guild = new.guild_id.to_partial_guild(&ctx.http)?;
 		
 		let get_guild_role = |guild_id| {
@@ -1097,6 +1095,24 @@ impl State {
 					format!("Congrats on the promotion, <@{}>!", old.user_id()
 				)
 			)?;
+		}
+
+		Ok(())
+	}
+
+	pub fn guild_member_update(&mut self,
+		ctx: serenity::Context,
+		old: Option<serenity::Member>,
+		new: serenity::Member
+	) -> Result<(), Error> {
+		if let Some(user_entry) = self.data.user_registry.iter_mut()
+			.find(|user| user.discord_id == new.user.read().id.0)
+		{
+			user_entry.disord_username = new.user.read().name.clone();
+		}
+
+		if let Some(old) = old {
+			self.check_member_update_for_max_300(ctx, old, new)?;
 		}
 
 		Ok(())
