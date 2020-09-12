@@ -8,6 +8,7 @@ mod serenity {
 	pub use serenity::{
 		prelude::*,
 		model::{
+			user::User,
 			gateway::Ready,
 			channel::{Message, Reaction},
 			id::{UserId, ChannelId, MessageId},

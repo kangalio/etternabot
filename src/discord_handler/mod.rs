@@ -79,6 +79,14 @@ fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 		.next()
 }
 
+struct ScoreCard<'a> {
+	scorekey: &'a etterna::Scorekey,
+	user_id: Option<u32>, // pass None if score link shouldn't shown
+	show_ssrs_and_judgements_and_modifiers: bool,
+	alternative_judge: Option<&'a etterna::Judge>,
+	triggerers: Option<&'a [serenity::User]>,
+}
+
 pub struct State {
 	config: Config,
 	data: Data,
@@ -587,7 +595,13 @@ impl State {
 
 				let latest_scores = self.v2_session.user_latest_scores(&eo_username)?;
 				let user_id = self.get_eo_user_id(&eo_username)?;
-				self.score_card(ctx, msg, &latest_scores[0].scorekey, Some(user_id), true, alternative_judge)?;
+				self.score_card(ctx, msg, ScoreCard {
+					scorekey: &latest_scores[0].scorekey,
+					user_id: Some(user_id),
+					show_ssrs_and_judgements_and_modifiers: true,
+					alternative_judge,
+					triggerers: None,
+				})?;
 			}
 			"scrollset" => {
 				let scroll = match &args.to_lowercase() as &str {
@@ -711,16 +725,11 @@ impl State {
 	fn score_card(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-		scorekey: impl AsRef<str>,
-		user_id: Option<u32>, // pass None if score link shouldn't shown
-		show_ssrs_and_judgements_and_modifiers: bool,
-		alternative_judge: Option<&etterna::Judge>,
+		info: ScoreCard<'_>,
 	) -> Result<(), Error> {
-		let scorekey = scorekey.as_ref();
+		let score = self.v2_session.score_data(info.scorekey)?;
 
-		let score = self.v2_session.score_data(&scorekey)?;
-
-		let alternative_judge_wifescore = if let Some(alternative_judge) = alternative_judge {
+		let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
 			if let Some(replay) = &score.replay {
 				etterna::rescore_from_note_hits::<etterna::Wife3, _>(
 					replay.notes.iter().map(|note| note.hit),
@@ -736,10 +745,18 @@ impl State {
 		};
 
 		let mut description = String::new();
-		if let Some(user_id) = user_id {
-			description += &format!("https://etternaonline.com/score/view/{}{}\n", scorekey, user_id);
+		if let Some(triggerers) = info.triggerers {
+			description += "_Requested by ";
+			description += &triggerers.iter()
+				.map(|user| user.name.as_str())
+				.collect::<Vec<_>>()
+				.join(", ");
+			description += "_\n";
 		}
-		if show_ssrs_and_judgements_and_modifiers {
+		if let Some(user_id) = info.user_id {
+			description += &format!("https://etternaonline.com/score/view/{}{}\n", info.scorekey, user_id);
+		}
+		if info.show_ssrs_and_judgements_and_modifiers {
 			description += &format!("```\n{}\n```", score.modifiers);
 		}
 		description += &format!(r#"```nim
@@ -762,7 +779,7 @@ impl State {
 						"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
 					),
 					score.wifescore.as_percent(),
-					alternative_judge.unwrap().name,
+					info.alternative_judge.unwrap().name,
 					alternative_judge_wifescore.as_percent(),
 					score.judgements.marvelouses,
 				)
@@ -859,7 +876,7 @@ impl State {
 						&etterna::J4,
 					)?,
 				},
-				scoring_system_comparison_alternative: match alternative_judge {
+				scoring_system_comparison_alternative: match info.alternative_judge {
 					Some(alternative_judge) => Some(ScoringSystemComparison {
 						wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
 							replay,
@@ -914,9 +931,9 @@ impl State {
 					let alternative_text_2;
 					let alternative_text_3;
 					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
-						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, alternative_judge.unwrap().name);
-						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, alternative_judge.unwrap().name);
-						alternative_text_3 = format!(", {:.2} on {}", comparison.wife3_kang_system_score, alternative_judge.unwrap().name);
+						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, info.alternative_judge.unwrap().name);
+						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, info.alternative_judge.unwrap().name);
+						alternative_text_3 = format!(", {:.2} on {}", comparison.wife3_kang_system_score, info.alternative_judge.unwrap().name);
 					} else {
 						alternative_text_1 = "".to_owned();
 						alternative_text_2 = "".to_owned();
@@ -1028,7 +1045,11 @@ impl State {
 		if user_is_allowed_bot_interaction {
 			let alternative_judge = extract_judge_from_string(&msg.content);
 			for groups in SCORE_LINK_REGEX.captures_iter(&msg.content) {
-				let scorekey = &groups[1];
+				let scorekey = match etterna::Scorekey::new(groups[1].to_owned()) {
+					Some(valid_scorekey) => valid_scorekey,
+					None => continue,
+				};
+
 				let user_id: u32 = match groups[2].parse() {
 					Ok(x) => x,
 					Err(e) => {
@@ -1038,7 +1059,13 @@ impl State {
 				};
 				
 				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, &msg, scorekey, None, true, alternative_judge) {
+				if let Err(e) = self.score_card(&ctx, &msg, ScoreCard {
+					scorekey: &scorekey,
+					user_id: None,
+					show_ssrs_and_judgements_and_modifiers: true,
+					alternative_judge,
+					triggerers: None,
+				}) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
@@ -1257,9 +1284,19 @@ impl State {
 			return Ok(());
 		}
 
-		if let Some((scorekey, user_id)) = self.ocr_score_card_manager.add_reaction(&reaction) {
-			let scorekey = scorekey.clone(); // borrow checker headaches because this thing is monolithic
-			self.score_card(&ctx, &reaction.message(&ctx.http)?, &scorekey, Some(user_id), false, None)?;
+		if let Some(score_info) = self.ocr_score_card_manager.add_reaction(&ctx, &reaction)? {
+			// borrow checker headaches because this thing is monolithic
+			let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
+			let scorekey = score_info.scorekey.clone();
+			let eo_user_id = score_info.eo_user_id;
+
+			self.score_card(&ctx, &reaction.message(&ctx.http)?, ScoreCard {
+				scorekey: &scorekey,
+				user_id: Some(eo_user_id),
+				show_ssrs_and_judgements_and_modifiers: false,
+				alternative_judge: None,
+				triggerers: Some(&reactors),
+			})?;
 		}
 
 		Ok(())
@@ -1274,8 +1311,14 @@ struct Candidate {
 	scorekey: etterna::Scorekey,
 	user_id: u32,
 
-	reactors: std::collections::HashSet<serenity::UserId>,
+	reactors: std::collections::HashSet<serenity::User>,
 	score_card_has_been_printed: bool,
+}
+
+struct ScoreCardTrigger<'a> {
+	scorekey: &'a etterna::Scorekey,
+	eo_user_id: u32,
+	reactors: &'a std::collections::HashSet<serenity::User>
 }
 
 struct OcrScoreCardManager {
@@ -1304,33 +1347,43 @@ impl OcrScoreCardManager {
 
 	/// Returns the score scorekey and user id if this reaction triggers the score card
 	pub fn add_reaction(&mut self,
+		ctx: &serenity::Context,
 		reaction: &serenity::Reaction,
-	) -> Option<(&etterna::Scorekey, u32)> {
+	) -> Result<Option<ScoreCardTrigger>, Error> {
 		println!("Got reaction in score ocr card manager");
 
 		// Find the Candidate that this reaction was made on, or return if the user made the
 		// reaction on some unrelated message, i.e. a non-candidate
-		let mut candidate = self.candidates.iter_mut().find(|c| c.message_id == reaction.message_id)?;
+		let mut candidate = match self.candidates.iter_mut()
+			.find(|c| c.message_id == reaction.message_id)
+		{
+			Some(candidate) => candidate,
+			None => return Ok(None),
+		};
 
 		// If it has already been printed, stop. We don't want to print the card over and over
 		// again
 		if candidate.score_card_has_been_printed {
 			println!("Has already been printed; skipping");
-			return None;
+			return Ok(None);
 		}
 
-		candidate.reactors.insert(reaction.user_id);
 		println!(
 			"Alright the reaction from <@{}> was legit; we now have {} reactions",
 			reaction.user_id,
 			candidate.reactors.len(),
 		);
+		candidate.reactors.insert(reaction.user(&ctx.http)?);
 
-		if candidate.reactors.len() >= 2 {
+		Ok(if candidate.reactors.len() >= 2 {
 			candidate.score_card_has_been_printed = true;
-			Some((&candidate.scorekey, candidate.user_id))
+			Some(ScoreCardTrigger {
+				scorekey: &candidate.scorekey,
+				eo_user_id: candidate.user_id,
+				reactors: &candidate.reactors
+			})
 		} else {
 			None
-		}
+		})
 	}
 }
