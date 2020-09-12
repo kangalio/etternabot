@@ -95,6 +95,7 @@ pub struct State {
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	user_id: serenity::UserId,
 	ocr_score_card_manager: OcrScoreCardManager,
+	// last_scrolll: std::time::Instant,
 }
 
 impl State {
@@ -120,6 +121,7 @@ impl State {
 			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
 			user_id: bot_user_id,
 			ocr_score_card_manager: OcrScoreCardManager::new(),
+			// last_scrolll: std::time::Instant,
 		})
 	}
 
@@ -134,7 +136,10 @@ impl State {
 		}
 
 		match self.v2_session.user_details(&msg.author.name) {
-			Ok(_) => Ok(msg.author.name.to_owned()),
+			Ok(_) => {
+				// seems like the user's EO name is the same as their Discord name :)
+				Ok(msg.author.name.to_owned())
+			},
 			Err(eo::Error::UserNotFound) => {
 				Err(Error::CouldNotDeriveEoUsername { discord_username: msg.author.name.to_owned() })
 			},
@@ -557,7 +562,7 @@ impl State {
 						user.eo_username,
 					))?;
 				} else {
-					msg.channel_id.say(&ctx.http, "User not found in registry")?;
+					msg.channel_id.say(&ctx.http, "User not found in registry (`+lookup` needs to be called)")?;
 				}
 			},
 			"quote" => {
@@ -567,7 +572,31 @@ impl State {
 					None => format!("> {}", quote.quote),
 				};
 				msg.channel_id.say(&ctx.http, &string)?;
-			}
+			},
+			// "scroll" => {
+			// 	msg.channel_id.say(
+			// 		&ctx.http,
+			// 		"Go to song options (hit enter twice when starting a song)\nScroll -> Reverse"
+			// 	)?;
+			// }
+			// "scrolll" => {
+			// 	const SCROLLL_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(60);
+
+			// 	let now = std::time::Instant::now();
+			// 	if self.last_scrolll + SCROLLL_COOLDOWN > now {
+			// 		msg.channel_id.say(&ctx.http, "Cool down a bit with that");
+			// 		std::thread::sleep(now - self.last_scrolll);
+			// 		self.last_scrolll = now;
+			// 	}
+
+			// 	msg.channel_id.send_files(&ctx.http, vec![
+			// 		"assets/ETTERNATUTORIAL00.png",
+			// 		"assets/ETTERNATUTORIAL01.png",
+			// 		"assets/ETTERNATUTORIAL02.png",
+			// 		"assets/ETTERNATUTORIAL03.png",
+			// 		"assets/ETTERNATUTORIAL04.png",
+			// 	], |m| m)?;
+			// }
 			"rs" => {
 				let args: Vec<_> = args.split_whitespace().collect();
 				let (eo_username, alternative_judge) = match *args.as_slice() {
