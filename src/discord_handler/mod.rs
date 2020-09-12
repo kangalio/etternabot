@@ -967,6 +967,7 @@ impl State {
 	pub fn message(&mut self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
+		was_explicitly_invoked: &mut bool,
 	) -> Result<(), Error> {
 		// Let's not do this, because if a non existing command is called (e.g. `+asdfg`) there'll
 		// be typing broadcasted, but no actual response, which is stupid
@@ -1048,6 +1049,8 @@ impl State {
 		}
 
 		if msg.content.starts_with('+') {
+			*was_explicitly_invoked = true;
+
 			let text = &msg.content[1..];
 
 			// Split message into command part and parameter part

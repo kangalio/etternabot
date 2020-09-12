@@ -56,24 +56,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			if msg.author.bot { return }
 
 			lock!(self, state);
-			if let Err(mut error) = state.message(&ctx, &msg) {
+
+			let mut was_explicitly_invoked = false;
+			let result = state.message(&ctx, &msg, &mut was_explicitly_invoked);
+			if let Err(mut error) = result {
 				// this looks complicated, but all it does is map serenity's confusing
-				// "[Serenity] No correct json was received!" error to one of my (more descriptive)
+				// "[Serenity] No correct json was received!" error to one of my more descriptive
 				// error types
-				if let discord_handler::Error::SerenityError(serenity::Error::Http(ref e)) = error {
-					if let serenity::HttpError::UnsuccessfulRequest(serenity::ErrorResponse {
-						error: serenity::DiscordJsonError { code: -1, .. },
-						..
-					}) = **e {
-						error = discord_handler::Error::AttemptedToSendInvalidMessage;
+				if let discord_handler::Error::SerenityError(e) = &error {
+					if let serenity::Error::Http(e) = e {
+						if let serenity::HttpError::UnsuccessfulRequest(e) = &**e {
+							if e.error.code == -1 {
+								error = discord_handler::Error::AttemptedToSendInvalidMessage;
+							}
+						}
 					}
 				}
 
-				println!("Error {:?}", error);
+				println!("Error {}", error);
+
 				let error_msg = error.to_string();
-				if error_msg.contains("No userid found in user page") {
-					// don't print this error. it's annoying
-				} else {
+				if was_explicitly_invoked {
+					// Print the error message into the chat
 					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
 						println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
 					}
