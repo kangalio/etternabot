@@ -45,18 +45,15 @@ impl Config {
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UserRegistryEntry {
 	pub discord_id: u64,
-	pub disord_username: String,
+	pub discord_username: String,
 	pub eo_id: u32,
 	pub eo_username: String,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Data {
-	#[serde(default)]
 	pub user_registry: Vec<UserRegistryEntry>,
-	#[serde(default)]
 	rival_mapping: HashMap<u64, String>, // discord username -> eo username
-	#[serde(default)]
 	preferred_scroll: HashMap<u64, etterna::ScrollDirection>,
 }
 

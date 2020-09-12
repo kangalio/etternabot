@@ -537,7 +537,21 @@ impl State {
 			},
 			"skillgraph" => {
 				self.skillgraph(ctx, msg, args)?;
-			}
+			},
+			"lookup" => {
+				if let Some(user) = self.data.user_registry.iter()
+					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
+				{
+					msg.channel_id.say(&ctx.http, format!(
+						"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
+						user.discord_username,
+						user.eo_username,
+						user.eo_username,
+					))?;
+				} else {
+					msg.channel_id.say(&ctx.http, "User not found in registry")?;
+				}
+			},
 			"quote" => {
 				let quote = &self.config.quotes[rand::random::<usize>() % self.config.quotes.len()];
 				let string = match &quote.source {
@@ -545,11 +559,6 @@ impl State {
 					None => format!("> {}", quote.quote),
 				};
 				msg.channel_id.say(&ctx.http, &string)?;
-			}
-			"lookup" => {
-				// self.data.eo_username(discord_user)
-				// args
-				// TODO
 			}
 			"rs" => {
 				let args: Vec<_> = args.split_whitespace().collect();
@@ -605,7 +614,7 @@ impl State {
 				
 				let new_user_entry = config::UserRegistryEntry {
 					discord_id: msg.author.id.0,
-					disord_username: msg.author.name.to_owned(),
+					discord_username: msg.author.name.to_owned(),
 					eo_id: self.web_session.user_details(args)?.user_id,
 					eo_username: args.to_owned(),
 				};
@@ -1111,7 +1120,8 @@ impl State {
 		if let Some(user_entry) = self.data.user_registry.iter_mut()
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
-			user_entry.disord_username = new.user.read().name.clone();
+			user_entry.discord_username = new.user.read().name.clone();
+			self.data.save();
 		}
 
 		if let Some(old) = old {
