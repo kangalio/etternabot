@@ -839,6 +839,7 @@ impl State {
 			wife2_score: etterna::Wifescore,
 			wife3_score: etterna::Wifescore,
 			wife3_kang_system_score: etterna::Wifescore,
+			wife3_score_zero_mean: etterna::Wifescore,
 		}
 
 		struct ReplayAnalysis {
@@ -889,6 +890,20 @@ impl State {
 			};
 			let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
 
+
+			let mean_offset = replay.mean_deviation();
+			let replay_zero_mean = eo::Replay {
+				notes: replay.notes.iter()
+					.map(|note| {
+						let mut note = note.clone();
+						if let etterna::Hit::Hit { deviation } = &mut note.hit {
+							*deviation -= mean_offset;
+						}
+						note
+					})
+					.collect(),
+			};
+			
 			Some(Ok(ReplayAnalysis {
 				replay_graph_path: "replay_graph.png",
 				scoring_system_comparison_j4: ScoringSystemComparison {
@@ -910,6 +925,12 @@ impl State {
 						score.judgements.let_go_holds + score.judgements.missed_holds,
 						&etterna::J4,
 					)?,
+					wife3_score_zero_mean: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+						&replay_zero_mean,
+						score.judgements.hit_mines,
+						score.judgements.let_go_holds + score.judgements.missed_holds,
+						&etterna::J4,
+					)?,
 				},
 				scoring_system_comparison_alternative: match info.alternative_judge {
 					Some(alternative_judge) => Some(ScoringSystemComparison {
@@ -927,6 +948,12 @@ impl State {
 						)?,
 						wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
 							replay,
+							score.judgements.hit_mines,
+							score.judgements.let_go_holds + score.judgements.missed_holds,
+							alternative_judge,
+						)?,
+						wife3_score_zero_mean: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+							&replay_zero_mean,
 							score.judgements.hit_mines,
 							score.judgements.let_go_holds + score.judgements.missed_holds,
 							alternative_judge,
@@ -965,24 +992,28 @@ impl State {
 					let alternative_text_1;
 					let alternative_text_2;
 					let alternative_text_3;
+					let alternative_text_4;
 					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
 						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, info.alternative_judge.unwrap().name);
 						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, info.alternative_judge.unwrap().name);
 						alternative_text_3 = format!(", {:.2} on {}", comparison.wife3_kang_system_score, info.alternative_judge.unwrap().name);
+						alternative_text_4 = format!(", {:.2} on {}", comparison.wife3_score_zero_mean, info.alternative_judge.unwrap().name);
 					} else {
 						alternative_text_1 = "".to_owned();
 						alternative_text_2 = "".to_owned();
 						alternative_text_3 = "".to_owned();
+						alternative_text_4 = "".to_owned();
 					}
 
 					e
 						.attachment(analysis.replay_graph_path)
-						.field("Scoring systems comparison", format!(
+						.field("Score comparisons", format!(
 							concat!(
 								"{}",
 								"**Wife2**: {:.2}%{}\n",
 								"**Wife3**: {:.2}%{}\n",
-								"**Wife3**: {:.2}%{} ([no CB rushes](https://kangalioo.github.io/cb-rushes/))",
+								"**Wife3**: {:.2}%{} ([no CB rushes](https://kangalioo.github.io/cb-rushes/))\n",
+								"**Wife3**: {:.2}%{} (0ms mean)",
 							),
 							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
 								"_Note: these calculated scores are slightly inaccurate_\n"
@@ -995,6 +1026,8 @@ impl State {
 							alternative_text_2,
 							analysis.scoring_system_comparison_j4.wife3_kang_system_score.as_percent(),
 							alternative_text_3,
+							analysis.scoring_system_comparison_j4.wife3_score_zero_mean.as_percent(),
+							alternative_text_4,
 						), false)
 						.field("Tap speeds", format!(
 							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
