@@ -14,6 +14,7 @@ const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAM
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
 const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
 const CMD_RS_HELP: &str = "Call this command with `+rs [username] [judge]`";
+const CMD_LOOKUP_HELP: &str = "Call this command with `+lookup DISCORDUSERNAME`";
 
 static SCORE_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
 	regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)").unwrap()
@@ -552,6 +553,11 @@ impl State {
 				self.skillgraph(ctx, msg, args)?;
 			},
 			"lookup" => {
+				if args.is_empty() {
+					msg.channel_id.say(&ctx.http, CMD_LOOKUP_HELP)?;
+					return Ok(());
+				}
+
 				if let Some(user) = self.data.user_registry.iter()
 					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
 				{
@@ -562,7 +568,7 @@ impl State {
 						user.eo_username,
 					))?;
 				} else {
-					msg.channel_id.say(&ctx.http, "User not found in registry (`+lookup` needs to be called)")?;
+					msg.channel_id.say(&ctx.http, "User not found in registry (`+userset` must have been called at least once)")?;
 				}
 			},
 			"quote" => {
@@ -976,7 +982,7 @@ impl State {
 								"{}",
 								"**Wife2**: {:.2}%{}\n",
 								"**Wife3**: {:.2}%{}\n",
-								"**Wife3**: {:.2}%{} (no CB rushes)",
+								"**Wife3**: {:.2}%{} ([no CB rushes](https://kangalioo.github.io/cb-rushes/))",
 							),
 							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
 								"_Note: these calculated scores are slightly inaccurate_\n"
