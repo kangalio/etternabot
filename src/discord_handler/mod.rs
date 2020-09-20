@@ -852,6 +852,7 @@ impl State {
 			longest_marv_combo: u32,
 			longest_perf_combo: u32,
 			longest_combo: u32,
+			mean_offset: f32,
 		}
 
 
@@ -967,6 +968,7 @@ impl State {
 				longest_marv_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
 				longest_perf_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
 				longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
+				mean_offset,
 			}))
 		};
 
@@ -1013,7 +1015,7 @@ impl State {
 								"**Wife2**: {:.2}%{}\n",
 								"**Wife3**: {:.2}%{}\n",
 								"**Wife3**: {:.2}%{} ([no CB rushes](https://kangalioo.github.io/cb-rushes/))\n",
-								"**Wife3**: {:.2}%{} (0ms mean)",
+								"**Wife3**: {:.2}%{} (mean of {:.1}ms corrected)",
 							),
 							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
 								"_Note: these calculated scores are slightly inaccurate_\n"
@@ -1028,6 +1030,7 @@ impl State {
 							alternative_text_3,
 							analysis.scoring_system_comparison_j4.wife3_score_zero_mean.as_percent(),
 							alternative_text_4,
+							analysis.mean_offset * 1000.0,
 						), false)
 						.field("Tap speeds", format!(
 							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
