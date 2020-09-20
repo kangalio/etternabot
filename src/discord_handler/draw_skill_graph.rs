@@ -1,4 +1,5 @@
 use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos}};
+use plotters_backend::BackendColor;
 
 #[derive(Debug)]
 pub struct StringError(&'static str);
@@ -14,7 +15,7 @@ fn inner_draw_skill_graph(
 	output_path: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let label_text_style = TextStyle {
-		color: WHITE.to_rgba().mix(0.8),
+		color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
 		pos: Pos::new(HPos::Center, VPos::Center),
 		font: ("Open Sans", 18).into(),
 	};
@@ -46,14 +47,14 @@ fn inner_draw_skill_graph(
 		.x_label_area_size(25)
 		.y_label_area_size(35)
 		.margin(10)
-		.build_ranged(
+		.build_cartesian_2d(
 			parsedate(first.0)..parsedate(last.0),
 			0.0..etterna::Skillset8::iter().map(|ss| last.1.get(ss)).fold(f32::NEG_INFINITY, f32::max)
 		)?;
 
 	chart.configure_mesh()
-		.line_style_1(&WHITE.mix(0.3))
-		.line_style_2(&TRANSPARENT)
+		.bold_line_style(&WHITE.mix(0.3))
+		.light_line_style(&TRANSPARENT)
 		.axis_style(&WHITE.mix(0.5))
 		.x_label_style(label_text_style.clone())
 		.x_label_formatter(&|dt| dt.format("%Y-%m-%d").to_string())
@@ -92,7 +93,7 @@ fn inner_draw_skill_graph(
         .configure_series_labels()
 		.background_style(&RGBColor(10, 10, 10))
 		.label_font(TextStyle {
-			color: WHITE.to_rgba().mix(0.8),
+			color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
 			pos: Pos::new(HPos::Left, VPos::Top),
 			font: ("Open Sans", 18).into(),
 		})

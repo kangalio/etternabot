@@ -1,4 +1,5 @@
 use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos} /*style::RGBAColor*/};
+use plotters_backend::BackendColor;
 use etternaonline_api::v2 as eo;
 use etterna::Wife;
 
@@ -78,10 +79,10 @@ pub fn inner(
 	let acc = wifescore_range < 0.5; // if true, the axis labels are more precise
 
 	let mut wifescore_chart = ChartBuilder::on(&root)
-		.build_ranged(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
+		.build_cartesian_2d(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
 
 	let mut dots_chart = ChartBuilder::on(&root)
-		.build_ranged(0.0f32..chart_length, -0.19..0.19f32)?;
+		.build_cartesian_2d(0.0f32..chart_length, -0.19..0.19f32)?;
 
 	let draw_horizontal_line = |height: f32, color: &RGBColor| {
 		let path = PathElement::new(vec![
@@ -127,7 +128,7 @@ pub fn inner(
 
 	ChartBuilder::on(&root)
 		.y_label_area_size(if acc { 75 } else { 55 })
-		.build_ranged(wifescore_chart_x_range, wifescore_chart_y_range)?
+		.build_cartesian_2d(wifescore_chart_x_range, wifescore_chart_y_range)?
 		.configure_mesh()
 		.disable_mesh()
 		// .disable_x_mesh()
@@ -136,7 +137,7 @@ pub fn inner(
 		.disable_x_axis()
 		.axis_style(&WHITE.mix(0.5))
 		.y_label_style(TextStyle {
-			color: WHITE.mix(0.8),
+			color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
 			pos: Pos::new(HPos::Center, VPos::Center),
 			font: ("Open Sans", 18).into(),
 		})
