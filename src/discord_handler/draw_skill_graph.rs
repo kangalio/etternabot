@@ -15,7 +15,7 @@ fn inner_draw_skill_graph(
 	output_path: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let label_text_style = TextStyle {
-		color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
+		color: BackendColor { rgb: (255, 255, 255), alpha: 0.8 },
 		pos: Pos::new(HPos::Center, VPos::Center),
 		font: ("Open Sans", 18).into(),
 	};
@@ -93,7 +93,7 @@ fn inner_draw_skill_graph(
         .configure_series_labels()
 		.background_style(&RGBColor(10, 10, 10))
 		.label_font(TextStyle {
-			color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
+			color: BackendColor { rgb: (255, 255, 255), alpha: 0.8 },
 			pos: Pos::new(HPos::Left, VPos::Top),
 			font: ("Open Sans", 18).into(),
 		})

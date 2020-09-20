@@ -137,7 +137,7 @@ pub fn inner(
 		.disable_x_axis()
 		.axis_style(&WHITE.mix(0.5))
 		.y_label_style(TextStyle {
-			color: BackendColor { rgb: (255, 255, 255), alpha: 0.2 },
+			color: BackendColor { rgb: (255, 255, 255), alpha: 0.8 },
 			pos: Pos::new(HPos::Center, VPos::Center),
 			font: ("Open Sans", 18).into(),
 		})
