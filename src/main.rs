@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		fn ready(&self, _: serenity::Context, ready: serenity::Ready) {
 			println!("Connected to Discord as {}", ready.user.name);
 			*self.state.lock().unwrap() = Some(discord_handler::State::load(ready.user.id)
-				.expect("Couldn't login to EO"));
+				.expect("Failed to initialize"));
 			println!("Logged into EO");
 
 		}
