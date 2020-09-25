@@ -247,7 +247,12 @@ impl EvaluationScreenData {
 	}
 
 	pub fn recognize_from_image_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
-		Self::recognize(|lt| lt.set_image_from_mem(bytes))
+		Self::recognize(|lt| {
+			println!("before set_image_from_mem");
+			let img = lt.set_image_from_mem(bytes);
+			println!("after set_image_from_mem");
+			img
+		})
 	}
 
 	pub fn recognize(
@@ -261,11 +266,12 @@ impl EvaluationScreenData {
 		// that's apparently the full screen dpi and our images are fullscreen so let's use this value
 		let dpi = 96;
 
-		println!("Setting eng image");
+		println!("Setting eng image and fallback res");
 		(image_setter)(&mut eng_lt).ok_or(Error::CouldNotReadImage)?;
 		eng_lt.set_fallback_source_resolution(dpi);
 		println!("Setting digits image");
 		(image_setter)(&mut num_lt).ok_or(Error::CouldNotReadImage)?;
+		println!("Setting fallback res");
 		num_lt.set_fallback_source_resolution(dpi);
 
 		println!("Got everything set up, now recognizing...");
