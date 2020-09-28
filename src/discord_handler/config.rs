@@ -67,7 +67,7 @@ impl Data {
 			serde_json::from_str(&config_contents)
 				.expect("Data JSON had invalid format")
 		} else {
-			std::default::Default::default()
+			Default::default()
 		};
 		
 		data

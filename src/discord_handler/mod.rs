@@ -113,10 +113,10 @@ impl State {
 
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(300000)), // yes five whole fucking minutes
+			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
 		);
 
-		Ok(State {
+		Ok(Self {
 			v2_session,
 			web_session,
 			config: Config::load(),
@@ -438,7 +438,7 @@ impl State {
 		me: &str,
 		you: &str,
 	) -> Result<(), Error> {
-		let me = self.v2()?.user_details(&me)?;
+		let me = self.v2()?.user_details(me)?;
 		let you = self.v2()?.user_details(you)?;
 
 		let mut string = "```Prolog\n".to_owned();
