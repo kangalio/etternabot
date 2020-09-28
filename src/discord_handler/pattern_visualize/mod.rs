@@ -1,7 +1,10 @@
 #![allow(clippy::collapsible_if)]
 
 mod noteskin;
-use noteskin::*;
+pub use noteskin::*;
+
+mod pattern;
+pub use pattern::*;
 
 use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
@@ -32,7 +35,7 @@ pub enum Error {
 /// 16ths, 24ths, 32nds, 48ths, 64ths, 192nds
 fn render_pattern(
 	noteskin: &dyn Noteskin,
-	pattern: &etterna::Pattern,
+	pattern: &Pattern,
 	scroll_type: etterna::ScrollDirection,
 	interval_num_rows: usize,
 ) -> Result<RgbaImage, Error> {
@@ -101,17 +104,25 @@ impl PatternVisualizer {
 		scroll_type: etterna::ScrollDirection,
 		interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
 	) -> Result<Vec<u8>, Error> {
-		let mut pattern = etterna::Pattern::parse_taps(pattern_str);
+		let mut pattern = Pattern::parse_taps(pattern_str);
 
 		let noteskin: &dyn Noteskin = match pattern.keymode().ok_or(Error::EmptyPattern)? {
 			0..=4 | 8 => &self.dbz,
 			5 => &self.delta_note,
 			7 | 9 => &self.sbz,
 			6 => &self.dbz_6k,
-			other => return Err(Error::KeymodeNotImplemented(other)),
+			// other => return Err(Error::KeymodeNotImplemented(other)),
+			_ => &self.sbz,
 		};
 
+		// truncate vertically
 		pattern.rows.truncate(100);
+
+		// truncate horizontally
+		for row in pattern.rows.iter_mut() {
+			row.retain(|&lane| lane < 50);
+		}
+
 		let buffer = render_pattern(noteskin, &pattern, scroll_type, interval_num_rows)?;
 		
 		let mut output_buffer = Vec::with_capacity(1_000_000); // allocate 1 MB for the img
