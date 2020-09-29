@@ -4,7 +4,6 @@ mod noteskin;
 pub use noteskin::*;
 
 mod pattern;
-pub use pattern::*;
 
 use std::borrow::Cow;
 use image::{GenericImageView, GenericImage, RgbaImage};
@@ -27,19 +26,21 @@ pub enum Error {
 	EmptyPattern,
 	#[error("Error in the image library")]
 	ImageError(#[from] image::ImageError),
-	#[error("This keymode is not implemented")]
-	KeymodeNotImplemented(u32),
+	// #[error("This keymode is not implemented")]
+	// KeymodeNotImplemented(u32),
+	#[error("Failed parsing the pattern: {0}")]
+	PatternParseError(#[from] pattern::Error),
 }
 
 /// Parameter `note_imgs`: a slice of 64x64 images, in the following order: 4ths, 8ths, 12ths,
 /// 16ths, 24ths, 32nds, 48ths, 64ths, 192nds
 fn render_pattern(
 	noteskin: &dyn Noteskin,
-	pattern: &Pattern,
+	pattern: &pattern::Pattern,
 	scroll_type: etterna::ScrollDirection,
 	interval_num_rows: usize,
 ) -> Result<RgbaImage, Error> {
-	let keymode = pattern.keymode().ok_or(Error::EmptyPattern)?;
+	let keymode = pattern.keymode_guess().ok_or(Error::EmptyPattern)?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
 	let width = 64 * keymode;
@@ -78,6 +79,11 @@ pub struct PatternVisualizer {
 	dbz_6k: Noteskin6k,
 }
 
+pub struct GeneratedPattern {
+	pub img_bytes: Vec<u8>,
+	pub notes_were_truncated: bool,
+}
+
 impl PatternVisualizer {
 	pub fn load() -> Result<Self, Error> {
 		Ok(Self {
@@ -103,24 +109,34 @@ impl PatternVisualizer {
 		pattern_str: &str,
 		scroll_type: etterna::ScrollDirection,
 		interval_num_rows: usize, // e.g. 16 for 16ths, 48 for 48ths
-	) -> Result<Vec<u8>, Error> {
-		let mut pattern = Pattern::parse_taps(pattern_str);
+		max_rows: usize,
+		max_cols: u32,
+	) -> Result<GeneratedPattern, Error> {
+		let mut pattern = pattern::parse_pattern(pattern_str)?;
 
-		let noteskin: &dyn Noteskin = match pattern.keymode().ok_or(Error::EmptyPattern)? {
+		let noteskin: &dyn Noteskin = match pattern.keymode_guess().ok_or(Error::EmptyPattern)? {
 			0..=4 | 8 => &self.dbz,
 			5 => &self.delta_note,
 			7 | 9 => &self.sbz,
 			6 => &self.dbz_6k,
 			// other => return Err(Error::KeymodeNotImplemented(other)),
-			_ => &self.sbz,
+			_ => &self.sbz, // this one works for all keymodes so let's use it as a fallback
 		};
 
+		let mut notes_were_truncated = false;
+		
 		// truncate vertically
-		pattern.rows.truncate(100);
-
+		if pattern.rows.len() > max_rows {
+			pattern.rows.truncate(max_rows);
+			notes_were_truncated = true;
+		}
 		// truncate horizontally
 		for row in pattern.rows.iter_mut() {
-			row.retain(|&lane| lane < 50);
+			row.retain(|&lane| {
+				let is_kept = lane < max_cols;
+				if !is_kept { notes_were_truncated = true; }
+				is_kept
+			});
 		}
 
 		let buffer = render_pattern(noteskin, &pattern, scroll_type, interval_num_rows)?;
@@ -131,6 +147,6 @@ impl PatternVisualizer {
 			image::ImageOutputFormat::Png
 		)?;
 
-		Ok(output_buffer)
+		Ok(GeneratedPattern { img_bytes: output_buffer, notes_were_truncated })
 	}
 }

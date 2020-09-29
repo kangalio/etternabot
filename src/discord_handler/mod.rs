@@ -424,10 +424,26 @@ impl State {
 		args.retain(|_| (!arg_indices_to_remove.contains(&i), i += 1).0);
 		let args_string = args.join("");
 
-		let bytes = self.pattern_visualizer.generate(&args_string, scroll_type, interval_num_rows)?;
+		let generated_pattern = self.pattern_visualizer.generate(
+			&args_string,
+			scroll_type,
+			interval_num_rows,
+			100, // max rows
+			50, // max columns
+		)?;
 
 		// Send the image into the channel where the summoning message comes from
-		msg.channel_id.send_files(&ctx.http, vec![(bytes.as_slice(), "output.png")], |m| m)?;
+		msg.channel_id.send_files(
+			&ctx.http,
+			vec![(generated_pattern.img_bytes.as_slice(), "output.png")],
+			|m| {
+				if generated_pattern.notes_were_truncated {
+					m.content("Warning: some notes were truncated because they exceeded the limit \
+						of 100 rows or 50 columns");
+				}
+				m
+			}
+		)?;
 
 		Ok(())
 	}
