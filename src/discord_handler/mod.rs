@@ -252,7 +252,7 @@ impl State {
 			.author(|a| a
 				.name(title)
 				.url(format!("https://etternaonline.com/user/profile/{}", eo_username))
-				.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", country_code))
+				.icon_url(format!("https://etternaonline.com/img/flags/{}.png", country_code))
 			)
 		))?;
 
@@ -295,7 +295,7 @@ impl State {
 			.author(|a| a
 				.name(title)
 				.url(format!("https://etternaonline.com/user/profile/{}", eo_username))
-				.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", country_code))
+				.icon_url(format!("https://etternaonline.com/img/flags/{}.png", country_code))
 			)
 		))?;
 
@@ -352,7 +352,7 @@ impl State {
 				.author(|a| a
 					.name(&title)
 					.url(format!("https://etternaonline.com/user/profile/{}", &eo_username))
-					.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", &details.country_code))
+					.icon_url(format!("https://etternaonline.com/img/flags/{}.png", &details.country_code))
 				)
 				.thumbnail(format!("https://etternaonline.com/avatars/{}", &details.avatar_url))
 				.color(crate::ETTERNA_COLOR);
@@ -1006,7 +1006,7 @@ impl State {
 					.author(|a| a
 						.name(&score.song_name)
 						.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
-						.icon_url(format!("https://etternaonline.com/img/gif/{}.gif", score.user.country_code))
+						.icon_url(format!("https://etternaonline.com/img/flags/{}.png", score.user.country_code))
 					)
 					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 					.description(description)
