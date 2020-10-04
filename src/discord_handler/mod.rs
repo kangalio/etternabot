@@ -36,7 +36,7 @@ pub enum Error {
 		username with `+userset`")]
 	CouldNotDeriveEoUsername { discord_username: String },
 
-	#[error(transparent)]
+	#[error("EtternaOnline error: {0}")]
 	EoApiError(#[from] eo::Error),
 	#[error("Can't complete this request because EO login failed ({0})")]
 	FailedEoLogin(eo::Error),
@@ -689,7 +689,28 @@ impl State {
 			},
 			"help" => {
 				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-					.description(self.data.make_description(&self.config.minanyms))
+					.description(if args.eq_ignore_ascii_case("pattern") {
+						r#"
+**+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
+- `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
+- `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern
+- `noteskin` can be `delta-note`, `sbz` or `dbz` at the moment. If omitted, a default will be chosen
+- `zoom` applies a certain stretch to the notes
+- `keymode` can be used to force a certain keymode when it's not obvious
+
+To draw a chord, enclose the notes in bracketes: `[12][34][12][34]` creates a jumptrill.
+Empty rows are written with `0` or `[]`.
+Lane numbers beyond 9 must be enclosed in paranthesis: `123456789(10)` instead of `12345678910`.
+
+Examples:
+`+pattern [13]4[32]1[24]1[23]4` draws a simple jumpstream
+`+pattern 232421212423212` draws a runningman
+`+pattern 2x 12ths 123432 16ths 1313` draws a few 12ths notes, followed by a 16ths trill, all stretched by a factor of 2
+`+pattern 6k [34]52[34]25` draws a pattern in 6k mode, even though the notes span across just 5 lanes
+						"#.to_owned()
+					} else {
+						self.data.make_description(&self.config.minanyms)
+					})
 					.color(crate::ETTERNA_COLOR)
 				))?;
 			},
