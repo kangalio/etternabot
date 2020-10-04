@@ -40,7 +40,7 @@ pub enum Error {
 	#[error(transparent)]
 	EoApiError(#[from] eo::Error),
 	#[error("Can't complete this request because EO login failed ({0})")]
-	FailedEoLogin(String),
+	FailedEoLogin(eo::Error),
 	#[error(transparent)]
 	SerenityError(#[from] serenity::Error),
 	#[error(transparent)]
@@ -93,7 +93,7 @@ struct ScoreCard<'a> {
 pub struct State {
 	config: Config,
 	data: Data,
-	v2_session: Result<eo::v2::Session, String>, // stores the session, or an error msg if login failed
+	v2_session: Option<eo::v2::Session>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	pattern_visualizer: pattern_visualize::PatternVisualizer,
 	user_id: serenity::UserId,
@@ -103,21 +103,19 @@ pub struct State {
 
 impl State {
 	pub fn load(bot_user_id: serenity::UserId) -> Result<Self, Error> {
-		let v2_session = eo::v2::Session::new_from_login(
-			crate::auth::EO_USERNAME.to_owned(),
-			crate::auth::EO_PASSWORD.to_owned(),
-			crate::auth::EO_CLIENT_DATA.to_owned(),
-			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(30000)),
-		).map_err(|e| e.to_string());
-
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
 		);
 
 		Ok(Self {
-			v2_session,
+			v2_session: match Self::attempt_v2_login() {
+				Ok(v2) => Some(v2),
+				Err(e) => {
+					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
+					None
+				}
+			}, // is set with attempt_v2_login below
 			web_session,
 			config: Config::load(),
 			data: Data::load(),
@@ -128,10 +126,35 @@ impl State {
 		})
 	}
 
+	fn attempt_v2_login() -> Result<eo::v2::Session, eo::Error> {
+		eo::v2::Session::new_from_login(
+			crate::auth::EO_USERNAME.to_owned(),
+			crate::auth::EO_PASSWORD.to_owned(),
+			crate::auth::EO_CLIENT_DATA.to_owned(),
+			std::time::Duration::from_millis(1000),
+			Some(std::time::Duration::from_millis(30000)),
+		)
+	}
+
+	/// attempt to retrieve the v2 session object. If there is none because login had failed,
+	/// retry login just to make sure that EO is _really_ done
 	fn v2(&mut self) -> Result<&mut eo::v2::Session, Error> {
-		match &mut self.v2_session {
-			Ok(v2) => Ok(v2),
-			Err(e) => Err(Error::FailedEoLogin(e.clone())),
+		// the unwrap()'s in here are literally unreachable. But for some reason the borrow checker
+		// always throws a fit when I try to restructure the code to avoid the unwraps
+
+		if self.v2_session.is_some() {
+			Ok(self.v2_session.as_mut().unwrap())
+		} else {
+			match Self::attempt_v2_login() {
+				Ok(v2) => {
+					self.v2_session = Some(v2);
+					Ok(self.v2_session.as_mut().unwrap())
+				},
+				Err(e) => {
+					self.v2_session = None;
+					Err(Error::FailedEoLogin(e))
+				}
+			}
 		}
 	}
 
