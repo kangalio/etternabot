@@ -23,6 +23,16 @@ fn middle_texture(texture_map: &image::RgbaImage) -> Result<image::RgbaImage, cr
 		.ok_or(crate::Error::NoteskinTextureMapTooSmall)
 }
 
+// Rotate a texture of a down-facing arrow to face down-left
+fn rotate_clockwise_by(img: &image::RgbaImage, degrees: u32) -> image::RgbaImage {
+	imageproc::geometric_transformations::rotate_about_center(
+		img,
+		std::f32::consts::PI * (degrees as f32 / 180.0),
+		imageproc::geometric_transformations::Interpolation::Bilinear,
+		image::Rgba::from([0, 0, 0, 0]),
+	)
+}
+
 // The returned index ranges from 0 to 7, so it can be used to index into a [T; 8]
 fn snap_to_texture_index(snap: etterna::Snap) -> usize {
 	match snap {
@@ -40,8 +50,8 @@ fn snap_to_texture_index(snap: etterna::Snap) -> usize {
 
 enum Textures {
 	Ldur {
-		receptors: [image::RgbaImage; 4],
-		notes: [[image::RgbaImage; 4]; 8],
+		receptors: [image::RgbaImage; 6],
+		notes: [[image::RgbaImage; 6]; 8], // first four are LDUR, then come left-up and right-up
 	},
 	Pump {
 		receptors: [image::RgbaImage; 5],
@@ -119,6 +129,8 @@ impl Noteskin {
 					receptor.clone(),
 					image::imageops::rotate180(&receptor),
 					image::imageops::rotate270(&receptor),
+					rotate_clockwise_by(&receptor, 135), // rotate down -> up-left
+					rotate_clockwise_by(&receptor, 225), // rotate down -> up-right
 				],
 				notes: {
 					let boxed: Box<_> = iterate_center_column_of_texture_map(&notes, sprite_resolution)
@@ -127,6 +139,8 @@ impl Noteskin {
 							note.clone(),
 							image::imageops::rotate180(&note),
 							image::imageops::rotate270(&note),
+							rotate_clockwise_by(&note, 135), // rotate down -> up-left
+							rotate_clockwise_by(&note, 225), // rotate down -> up-right
 						])
 						.collect::<Vec<_>>().into_boxed_slice().try_into()
 						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
@@ -159,20 +173,51 @@ impl Noteskin {
 		})
 	}
 
+	fn check_keymode(&self, lane: usize, keymode: usize) -> Result<(), crate::Error> {
+		if lane >= keymode {
+			return Err(crate::Error::InvalidLaneForKeymode { human_readable_lane: lane + 1, keymode });
+		}
+
+		let keymode_is_supported = match self.textures {
+			Textures::Ldur { .. } => matches!(keymode, 4 | 6 | 8),
+			Textures::Pump { .. } => matches!(keymode, 5 | 10),
+			Textures::Bar { .. } => matches!(keymode, 7 | 9),
+		};
+		if keymode_is_supported {
+			Ok(())
+		} else {
+			Err(crate::Error::NoteskinDoesntSupportKeymode { keymode })
+		}
+	}
+
+	fn lane_to_note_array_index(&self, lane: usize, keymode: usize) -> Result<usize, crate::Error> {
+		self.check_keymode(lane, keymode)?;
+
+		Ok(match self.textures {
+			Textures::Ldur { .. } => if keymode == 6 { [0, 4, 1, 2, 5, 3][lane] } else { lane % 4 },
+			Textures::Pump { .. } => lane % 5,
+			Textures::Bar { .. } => 0, // not applicable, but let's return something anyway
+		})
+	}
+
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
-	pub fn note(&self, lane: usize, snap: etterna::Snap) -> Result<&image::RgbaImage, crate::Error> {
+	pub fn note(&self, lane: usize, keymode: usize, snap: etterna::Snap) -> Result<&image::RgbaImage, crate::Error> {
+		self.check_keymode(lane, keymode)?;
+
 		Ok(match &self.textures {
-			Textures::Ldur { notes, .. } => &notes[snap_to_texture_index(snap)][lane % 4],
-			Textures::Pump { notes, .. } => &notes[snap_to_texture_index(snap)][lane % 5],
+			Textures::Ldur { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
+			Textures::Pump { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Bar { notes, .. } => &notes[snap_to_texture_index(snap)],
 		})
 	}
 
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
-	pub fn receptor(&self, lane: usize) -> Result<&image::RgbaImage, crate::Error> {
+	pub fn receptor(&self, lane: usize, keymode: usize) -> Result<&image::RgbaImage, crate::Error> {
+		self.check_keymode(lane, keymode)?;
+
 		Ok(match &self.textures {
-			Textures::Ldur { receptors, .. } => &receptors[lane % 4],
-			Textures::Pump { receptors, .. } => &receptors[lane & 5],
+			Textures::Ldur { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
+			Textures::Pump { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Bar { receptor, .. } => &receptor,
 		})
 	}

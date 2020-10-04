@@ -35,7 +35,6 @@ pub enum Error {
 	#[error("User {discord_username} not found on EO. Please manually specify your EtternaOnline \
 		username with `+userset`")]
 	CouldNotDeriveEoUsername { discord_username: String },
-
 	#[error("EtternaOnline error: {0}")]
 	EoApiError(#[from] eo::Error),
 	#[error("Can't complete this request because EO login failed ({0})")]
@@ -492,6 +491,7 @@ impl State {
 			let mut did_user_intend = false;
 			if let Some(noteskin) = extract_noteskin(arg, &mut did_user_intend) {
 				noteskin_override = Some(noteskin);
+				continue;
 			}
 			if did_user_intend {
 				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid noteskin name", arg))?;
@@ -499,7 +499,8 @@ impl State {
 			
 			let mut did_user_intend = false;
 			if let Some(vertical_spacing_multiplier_override) = extract_vertical_spacing_multiplier(arg, &mut did_user_intend) {
-				vertical_spacing_multiplier = vertical_spacing_multiplier_override
+				vertical_spacing_multiplier = vertical_spacing_multiplier_override;
+				continue;
 			}
 			if did_user_intend {
 				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid zoom option", arg))?;
@@ -508,6 +509,7 @@ impl State {
 			let mut did_user_intend = false;
 			if let Some(scroll_direction_override) = extract_scroll_direction(arg, &mut did_user_intend) {
 				scroll_direction = scroll_direction_override;
+				continue;
 			}
 			if did_user_intend {
 				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid scroll direction", arg))?;
@@ -516,6 +518,7 @@ impl State {
 			let mut did_user_intend = false;
 			if let Some(keymode) = extract_keymode(arg, &mut did_user_intend) {
 				keymode_override = Some(keymode);
+				continue;
 			}
 			if did_user_intend {
 				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid keymode", arg))?;

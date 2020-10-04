@@ -15,6 +15,10 @@ pub enum Error {
 	ImageError(#[from] image::ImageError),
 	#[error("Can't display a note on lane {lane} using the selected noteskin")]
 	NoteskinDoesntSupportLane { lane: usize },
+	#[error("{keymode}k not supported by selected noteskin")]
+	NoteskinDoesntSupportKeymode { keymode: usize },
+	#[error("Lane {human_readable_lane} is invalid in {keymode}k")]
+	InvalidLaneForKeymode { human_readable_lane: usize, keymode: usize },
 	#[error("Noteskin's texture map doesn't contain all required textures")]
 	NoteskinTextureMapTooSmall,
 	#[error("{count} sprites would need to be rendered for this pattern, which exceeds the limit of {limit}")]
@@ -92,7 +96,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 		etterna::ScrollDirection::Downscroll => highest_row,
 	};
 	for lane in 0..keymode {
-		sprites.push(Sprite { lane, y_pos: receptor_y_pos, image: noteskin.receptor(lane)? });
+		sprites.push(Sprite { lane, y_pos: receptor_y_pos, image: noteskin.receptor(lane, keymode)? });
 	}
 
 	for (row_data, row_number) in rows {
@@ -103,7 +107,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 					etterna::ScrollDirection::Upscroll => row_number,
 					etterna::ScrollDirection::Downscroll => highest_row - row_number,
 				},
-				image: noteskin.note(note_lane as usize, etterna::Snap::from_row(row_number))?,
+				image: noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number))?,
 			});
 		}
 	}
