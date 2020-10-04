@@ -11,3 +11,4 @@ edition = "2018"
 etterna = { package = "etterna_base", git = "https://github.com/kangalioo/etterna-base", features = ["parallel"] }
 thiserror = "1.0.20"
 image = "0.23"
+imageproc = "0.21.0"
