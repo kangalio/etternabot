@@ -6,7 +6,7 @@ fn is_equal_no_order_no_duplicates<T: PartialEq>(a: &[T], b: &[T]) -> bool {
 }
 
 #[derive(Debug, Error)]
-pub enum Error {
+pub enum PatternParseError {
 	#[error("Missing closing bracket")]
 	UnclosedBracket,
 	#[error("Missing closing paranthesis")]
@@ -17,13 +17,13 @@ pub enum Error {
 
 /// Represents a simple note pattern without any holds or mines or snap changes.
 #[derive(Debug, Default)]
-pub struct Pattern {
+pub struct SimplePattern {
 	/// Each row is a vector of lane numbers. For example a plain jumptrill would be
 	/// `vec![vec![0, 1], vec![2, 3], vec![0, 1], vec![2, 3]...]`
 	pub rows: Vec<Vec<u32>>,
 }
 
-impl Pattern {
+impl SimplePattern {
 	/// Guesses the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane. The number is
 	/// clamped to a minimum of 4k - there is no such thing as 3k, 2k, 1k.
 	/// 
@@ -34,7 +34,7 @@ impl Pattern {
 	/// 
 	/// ```rust
 	/// # use etterna_base::Pattern;
-	/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+	/// # fn main() -> Result<(), Box<dyn std::error::PatternParseError>> {
 	/// assert_eq!(Pattern::parse_taps("1234").keymode(), Some(4));
 	/// assert_eq!(Pattern::parse_taps("123").keymode(), Some(4));
 	/// assert_eq!(Pattern::parse_taps("9").keymode(), Some(9));
@@ -52,7 +52,7 @@ impl Pattern {
 	}
 }
 
-impl PartialEq for Pattern {
+impl PartialEq for SimplePattern {
     fn eq(&self, other: &Self) -> bool {
 		if self.rows.len() != other.rows.len() { return false; }
 		
@@ -61,7 +61,7 @@ impl PartialEq for Pattern {
     }
 }
 
-impl Eq for Pattern {}
+impl Eq for SimplePattern {}
 
 // Pops off the first full character as a substring. This will not panic on
 // multi-byte UTF-8 characters.
@@ -72,7 +72,7 @@ fn pop_first_char<'a>(string: &mut &'a str) -> Option<&'a str> {
 }
 
 // Returns None if character signifies an empty space
-fn parse_note_identifier(note: &str) -> Result<Option<u32>, Error> {
+fn parse_note_identifier(note: &str) -> Result<Option<u32>, PatternParseError> {
     if let Ok(lane) = note.parse::<u32>() {
         if lane == 0 {
             Ok(None)
@@ -87,17 +87,17 @@ fn parse_note_identifier(note: &str) -> Result<Option<u32>, Error> {
             "u" => Ok(Some(2)),
             "r" => Ok(Some(3)),
             "" => Ok(None),
-            other => Err(Error::UnrecognizedNote(other.to_owned())),
+            other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
         }
     }
 }
 
 // Will panic if string is too short
-fn parse_single_note(pattern: &mut &str) -> Result<Option<u32>, Error> {
+fn parse_single_note(pattern: &mut &str) -> Result<Option<u32>, PatternParseError> {
     let note;
 
     if pattern.starts_with('(') {
-        let closing_paran = pattern.find(')').ok_or(Error::UnclosedParanthesis)?;
+        let closing_paran = pattern.find(')').ok_or(PatternParseError::UnclosedParanthesis)?;
         
         note = parse_note_identifier(&pattern[1..closing_paran])?;
         
@@ -110,9 +110,9 @@ fn parse_single_note(pattern: &mut &str) -> Result<Option<u32>, Error> {
 }
 
 // Will panic if string is too short
-fn parse_row(pattern: &mut &str) -> Result<Vec<u32>, Error> {
+fn parse_row(pattern: &mut &str) -> Result<Vec<u32>, PatternParseError> {
     if pattern.starts_with('[') {
-        let closing_bracket = pattern.find(']').ok_or(Error::UnclosedBracket)?;
+        let closing_bracket = pattern.find(']').ok_or(PatternParseError::UnclosedBracket)?;
         
         let mut bracket_contents = &pattern[1..closing_bracket];
         let mut row = Vec::new();
@@ -133,7 +133,7 @@ fn parse_row(pattern: &mut &str) -> Result<Vec<u32>, Error> {
     }
 }
 
-pub fn parse_pattern(pattern: &str) -> Result<Pattern, Error> {
+pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, PatternParseError> {
     // remove all whitespace
     let pattern = pattern.split_whitespace().collect::<String>();
     let mut pattern = pattern.as_str();
@@ -143,7 +143,7 @@ pub fn parse_pattern(pattern: &str) -> Result<Pattern, Error> {
         rows.push(parse_row(&mut pattern)?);
     }
     
-    Ok(Pattern { rows })
+    Ok(SimplePattern { rows })
 }
 
 #[cfg(test)]
@@ -157,16 +157,16 @@ mod tests {
 	#[test]
 	fn test_pattern_equality() {
 		assert_eq!(
-			Pattern { rows: vec![vec![0, 1, 2]] },
-			Pattern { rows: vec![vec![2, 1, 0]] },
+			SimplePattern { rows: vec![vec![0, 1, 2]] },
+			SimplePattern { rows: vec![vec![2, 1, 0]] },
 		);
 		assert_eq!(
-			Pattern { rows: vec![vec![0, 1, 2, 2]] },
-			Pattern { rows: vec![vec![2, 1, 0]] },
+			SimplePattern { rows: vec![vec![0, 1, 2, 2]] },
+			SimplePattern { rows: vec![vec![2, 1, 0]] },
 		);
 		assert_ne!(
-			Pattern { rows: vec![vec![0, 1, 2, 3]] },
-			Pattern { rows: vec![vec![0, 1, 2, 2]] },
+			SimplePattern { rows: vec![vec![0, 1, 2, 3]] },
+			SimplePattern { rows: vec![vec![0, 1, 2, 2]] },
 		);
 	}
 }

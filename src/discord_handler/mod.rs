@@ -1,5 +1,4 @@
 mod config;
-mod pattern_visualize;
 mod replay_graph;
 mod draw_skill_graph;
 
@@ -44,7 +43,9 @@ pub enum Error {
 	#[error(transparent)]
 	SerenityError(#[from] serenity::Error),
 	#[error(transparent)]
-	PatternVisualizeError(#[from] pattern_visualize::Error),
+	PatternVisualizeError(#[from] pattern_draw::Error),
+	#[error("Failed parsing the pattern: {0}")]
+	PatternParseError(#[from] pattern_draw::PatternParseError),
 	#[error("{0}")]
 	ReplayGraphError(String),
 	#[error("{0}")]
@@ -90,15 +91,20 @@ struct ScoreCard<'a> {
 	triggerers: Option<&'a [serenity::User]>,
 }
 
+struct NoteskinProvider {
+	dbz: pattern_draw::Noteskin,
+	delta_note: pattern_draw::Noteskin,
+	sbz: pattern_draw::Noteskin,
+}
+
 pub struct State {
 	config: Config,
 	data: Data,
 	v2_session: Option<eo::v2::Session>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
-	pattern_visualizer: pattern_visualize::PatternVisualizer,
+	noteskin_provider: NoteskinProvider,
 	user_id: serenity::UserId,
 	ocr_score_card_manager: OcrScoreCardManager,
-	// last_scrolll: std::time::Instant,
 }
 
 impl State {
@@ -119,10 +125,23 @@ impl State {
 			web_session,
 			config: Config::load(),
 			data: Data::load(),
-			pattern_visualizer: pattern_visualize::PatternVisualizer::load()?,
 			user_id: bot_user_id,
 			ocr_score_card_manager: OcrScoreCardManager::new(),
-			// last_scrolll: std::time::Instant,
+			noteskin_provider: NoteskinProvider {
+				dbz: pattern_draw::Noteskin::read_ldur(
+					64,
+					"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+				)?,
+				delta_note: pattern_draw::Noteskin::read_pump(
+					64,
+					"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
+					"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png"
+				)?,
+				sbz: pattern_draw::Noteskin::read_bar(
+					64,
+					"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
+				)?,
+			},
 		})
 	}
 
@@ -402,70 +421,156 @@ impl State {
 		msg: &serenity::Message,
 		args: &str,
 	) -> Result<(), Error> {
-		let mut args: Vec<&str> = args.split_whitespace().collect();
-		let mut arg_indices_to_remove = vec![];
+		let mut noteskin_override = None;
+		let mut keymode_override = None;
+		let mut row_interval = 192 / 16; // default snap is 16ths
+		let mut vertical_spacing_multiplier = 1.0;
+		let mut scroll_direction = self.data.scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
+		let mut segments = Vec::new();
 
-		let mut interval_num_rows = 192 / 16;
-		for (i, token) in args.iter().enumerate() {
-			let ending = ["st", "sts", "nd", "nds", "th", "ths"].iter()
-				.find(|&e| token.ends_with(e));
-			let ending = match ending { Some(a) => a, None => continue };
+		let extract_row_interval = |string: &str, user_intended: &mut bool| {
+			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "th", "ths"];
 
-			// at this point, this arg was surely intended to be a notes type arg, so we can already
-			// remove it from the list of parsed arg indices. That's so that `+pattern 57ths 123`
-			// doesn't generate as `5-7-1-2-3`
-			arg_indices_to_remove.push(i);
+			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
+			*user_intended = true;
+			let snap: usize = string[..(string.len() - characters_to_truncate)].parse().ok()?;
+			if 192_usize.checked_rem(snap)? != 0 { return None } // user entered 57ths or 23ths or so
+			Some(192 / snap)
+		};
+		let extract_noteskin = |string: &str, _user_intended: &mut bool| {
+			match string.to_lowercase().as_str() {
+				"delta-note" => Some(&self.noteskin_provider.delta_note),
+				"dbz" => Some(&self.noteskin_provider.dbz),
+				"sbz" => Some(&self.noteskin_provider.sbz),
+				_ => None,
+			}
+		};
+		let extract_vertical_spacing_multiplier = |string: &str, user_intended: &mut bool| {
+			if !string.ends_with('x') { return None };
+			let vertical_spacing_multiplier: f32 = string[..(string.len() - 1)].parse().ok()?;
+			*user_intended = true;
+			if vertical_spacing_multiplier > 0.0 {
+				Some(vertical_spacing_multiplier)
+			} else {
+				None
+			}
+		};
+		let extract_scroll_direction = |string: &str, _user_intended: &mut bool| {
+			match string.to_lowercase().as_str() {
+				"up" => Some(etterna::ScrollDirection::Upscroll),
+				"down" | "reverse" => Some(etterna::ScrollDirection::Downscroll),
+				_ => None,
+			}
+		};
+		let extract_keymode = |string: &str, user_intended: &mut bool| {
+			if !(string.ends_with('k') || string.ends_with('K')) { return None }
 
-			let note_type: usize = match token[..(token.len() - ending.len())].parse() {
-				Ok(n) => n,
-				Err(_) => continue,
-			};
-			if note_type == 0 {
-				// early continue here to prevent crash through `192 % 0` operation
+			let keymode: usize = string[..(string.len() - 1)].parse().ok()?;
+			*user_intended = true;
+			if keymode > 0 {
+				Some(keymode)
+			} else {
+				None
+			}
+		};
+
+		let mut pattern_buffer = String::new();
+		for arg in args.split_whitespace() {
+			let mut did_user_intend = false;
+			if let Some(new_row_interval) = extract_row_interval(arg, &mut did_user_intend) {
+				if pattern_buffer.len() > 0 {
+					segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, row_interval));
+					pattern_buffer.clear();
+				}
+				row_interval = new_row_interval;
 				continue;
 			}
-			if 192 % note_type != 0 { continue }
-
-			interval_num_rows = 192 / note_type;
-		}
-
-		let mut scroll_type = None;
-		for (i, arg) in args.iter().enumerate() {
-			match arg.to_lowercase().as_str() {
-				"up" => scroll_type = Some(etterna::ScrollDirection::Upscroll),
-				"down" | "reverse" => scroll_type = Some(etterna::ScrollDirection::Downscroll),
-				_ => continue,
+			if did_user_intend {
+				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid snap", arg))?;
 			}
-			arg_indices_to_remove.push(i);
+
+			let mut did_user_intend = false;
+			if let Some(noteskin) = extract_noteskin(arg, &mut did_user_intend) {
+				noteskin_override = Some(noteskin);
+			}
+			if did_user_intend {
+				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid noteskin name", arg))?;
+			}
+			
+			let mut did_user_intend = false;
+			if let Some(vertical_spacing_multiplier_override) = extract_vertical_spacing_multiplier(arg, &mut did_user_intend) {
+				vertical_spacing_multiplier = vertical_spacing_multiplier_override
+			}
+			if did_user_intend {
+				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid zoom option", arg))?;
+			}
+			
+			let mut did_user_intend = false;
+			if let Some(scroll_direction_override) = extract_scroll_direction(arg, &mut did_user_intend) {
+				scroll_direction = scroll_direction_override;
+			}
+			if did_user_intend {
+				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid scroll direction", arg))?;
+			}
+			
+			let mut did_user_intend = false;
+			if let Some(keymode) = extract_keymode(arg, &mut did_user_intend) {
+				keymode_override = Some(keymode);
+			}
+			if did_user_intend {
+				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid keymode", arg))?;
+			}
+			
+			// if nothing matched, this is just an ordinary part of the pattern
+			pattern_buffer += arg;
 		}
-		let scroll_type = scroll_type.unwrap_or_else(||
-			self.data.scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll)
-		);
+		if pattern_buffer.len() > 0 {
+			segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, row_interval));
+			pattern_buffer.clear();
+		}
+		
+		let keymode = if let Some(keymode) = keymode_override {
+			keymode
+		} else {
+			let highest_lane = segments.iter()
+				.flat_map(|(pattern, _)| &pattern.rows)
+				.filter_map(|row: &Vec<u32>| row.iter().max().copied())
+				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
+			(highest_lane + 1) as usize
+		};
 
-		// this is super fucking hacky
-		let mut i = 0;
-		args.retain(|_| (!arg_indices_to_remove.contains(&i), i += 1).0);
-		let args_string = args.join("");
+		let noteskin = if let Some(noteskin) = noteskin_override {
+			&noteskin
+		} else {
+			match keymode {
+				4 | 6 | 8 => &self.noteskin_provider.dbz,
+				5 | 10 => &self.noteskin_provider.delta_note,
+				7 | 9 => &self.noteskin_provider.sbz,
+				_ => &self.noteskin_provider.sbz, // fallback
+			}
+		};
 
-		let generated_pattern = self.pattern_visualizer.generate(
-			&args_string,
-			scroll_type,
-			interval_num_rows,
-			100, // max rows
-			50, // max columns
-		)?;
+		let generated_pattern = pattern_draw::draw_pattern(pattern_draw::PatternRecipe {
+			noteskin,
+			scroll_direction,
+			keymode,
+			vertical_spacing_multiplier,
+			pattern: &segments,
+			max_image_dimensions: (5000, 5000),
+			max_sprites: 1000,
+		})?;
+
+		let mut img_bytes = Vec::with_capacity(1_000_000); // preallocate 1 MB for the img
+		image::DynamicImage::ImageRgba8(generated_pattern).write_to(
+			&mut img_bytes,
+			image::ImageOutputFormat::Png
+		).map_err(pattern_draw::Error::ImageError)?;
 
 		// Send the image into the channel where the summoning message comes from
 		msg.channel_id.send_files(
 			&ctx.http,
-			vec![(generated_pattern.img_bytes.as_slice(), "output.png")],
-			|m| {
-				if generated_pattern.notes_were_truncated {
-					m.content("Warning: some notes were truncated because they exceeded the limit \
-						of 100 rows or 50 columns");
-				}
-				m
-			}
+			vec![(img_bytes.as_slice(), "output.png")],
+			|m| m
 		)?;
 
 		Ok(())
