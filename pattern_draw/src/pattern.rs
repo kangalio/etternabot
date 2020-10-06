@@ -71,29 +71,35 @@ fn pop_first_char<'a>(string: &mut &'a str) -> Option<&'a str> {
     Some(substring)
 }
 
-// Returns None if character signifies an empty space
-fn parse_note_identifier(note: &str) -> Result<Option<u32>, PatternParseError> {
+enum NoteIdentifier {
+    Lane(u32),
+    Empty,
+    Invalid,
+}
+
+fn parse_note_identifier(note: &str) -> Result<NoteIdentifier, PatternParseError> {
     if let Ok(lane) = note.parse::<u32>() {
         if lane == 0 {
-            Ok(None)
+            Ok(NoteIdentifier::Empty)
         } else {
             // Must have checked that lane isn't zero!
-            Ok(Some(lane - 1))
+            Ok(NoteIdentifier::Lane(lane - 1))
         }
     } else {
         match note.to_lowercase().as_str() {
-            "l" => Ok(Some(0)),
-            "d" => Ok(Some(1)),
-            "u" => Ok(Some(2)),
-            "r" => Ok(Some(3)),
-            "" => Ok(None),
-            other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
+            "l" => Ok(NoteIdentifier::Lane(0)),
+            "d" => Ok(NoteIdentifier::Lane(1)),
+            "u" => Ok(NoteIdentifier::Lane(2)),
+            "r" => Ok(NoteIdentifier::Lane(3)),
+            "" => Ok(NoteIdentifier::Empty),
+            // other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
+            _other => Ok(NoteIdentifier::Invalid),
         }
     }
 }
 
 // Will panic if string is too short
-fn parse_single_note(pattern: &mut &str) -> Result<Option<u32>, PatternParseError> {
+fn parse_single_note(pattern: &mut &str) -> Result<NoteIdentifier, PatternParseError> {
     let note;
 
     if pattern.starts_with('(') {
@@ -110,25 +116,28 @@ fn parse_single_note(pattern: &mut &str) -> Result<Option<u32>, PatternParseErro
 }
 
 // Will panic if string is too short
-fn parse_row(pattern: &mut &str) -> Result<Vec<u32>, PatternParseError> {
+// If None is returned, an invalid character was popped
+fn parse_row(pattern: &mut &str) -> Result<Option<Vec<u32>>, PatternParseError> {
     if pattern.starts_with('[') {
         let closing_bracket = pattern.find(']').ok_or(PatternParseError::UnclosedBracket)?;
         
         let mut bracket_contents = &pattern[1..closing_bracket];
         let mut row = Vec::new();
         while !bracket_contents.is_empty() {
-            if let Some(note) = parse_single_note(&mut bracket_contents)? {
-                row.push(note);
-            } // else, something like 0 or () was entered
+            match parse_single_note(&mut bracket_contents)? {
+                NoteIdentifier::Lane(lane) => row.push(lane),
+                NoteIdentifier::Empty | NoteIdentifier::Invalid => {},
+            }
         }
         
         *pattern = &pattern[closing_bracket+1..];
         
-        Ok(row)
+        Ok(Some(row))
     } else {
         match parse_single_note(pattern)? {
-            Some(note) => Ok(vec![note]),
-            None => Ok(vec![]),
+            NoteIdentifier::Lane(lane) => Ok(Some(vec![lane])),
+            NoteIdentifier::Empty => Ok(Some(vec![])),
+            NoteIdentifier::Invalid => Ok(None),
         }
     }
 }
@@ -140,7 +149,9 @@ pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, PatternParseError> 
 
     let mut rows = Vec::with_capacity(pattern.len() / 2); // rough estimate
     while !pattern.is_empty() {
-        rows.push(parse_row(&mut pattern)?);
+        if let Some(row) = parse_row(&mut pattern)? {
+            rows.push(row);
+        }
     }
     
     Ok(SimplePattern { rows })
