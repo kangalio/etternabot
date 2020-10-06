@@ -39,6 +39,24 @@ struct SpriteMap<'a> {
 	vertical_spacing_multiplier: f32,
 }
 
+fn copy_from(this: &mut image::RgbaImage, other: &image::RgbaImage, x: u32, y: u32) -> image::ImageResult<()> {
+	// Do bounds checking here so we can use the non-bounds-checking
+	// functions to copy pixels.
+	if this.width() < other.width() + x || this.height() < other.height() + y {
+		return Err(image::ImageError::Parameter(image::error::ParameterError::from_kind(
+			image::error::ParameterErrorKind::DimensionMismatch,
+		)));
+	}
+
+	for i in 0..other.width() {
+		for k in 0..other.height() {
+			let p = other.get_pixel(i, k);
+			this.blend_pixel(i + x, k + y, *p);
+		}
+	}
+	Ok(())
+}
+
 fn render_sprite_map(sprite_map: crate::SpriteMap, (max_width, max_height): (usize, usize)) -> Result<image::RgbaImage, crate::Error> {
 	let sprite_res = sprite_map.sprite_resolution;
 
@@ -56,7 +74,9 @@ fn render_sprite_map(sprite_map: crate::SpriteMap, (max_width, max_height): (usi
 	for sprite in sprite_map.sprites {
 		let x = sprite.lane * sprite_res;
 		let y = ((sprite.y_pos * sprite_res) as f32 * sprite_map.vertical_spacing_multiplier) as usize;
-		buffer.copy_from(sprite.image, x as u32, y as u32)
+		// buffer.copy_from(sprite.image, x as u32, y as u32)
+		// 	.expect("Note image is too large (shouldn't happen)");
+		copy_from(&mut buffer, sprite.image, x as u32, y as u32)
 			.expect("Note image is too large (shouldn't happen)");
 	}
 	
