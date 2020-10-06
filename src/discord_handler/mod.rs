@@ -443,7 +443,7 @@ impl State {
 		let mut segments = Vec::new();
 
 		let extract_row_interval = |string: &str, user_intended: &mut bool| {
-			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "th", "ths"];
+			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "rd", "rds", "th", "ths"];
 
 			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
 			*user_intended = true;
