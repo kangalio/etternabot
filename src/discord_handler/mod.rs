@@ -92,8 +92,11 @@ struct ScoreCard<'a> {
 
 struct NoteskinProvider {
 	dbz: pattern_draw::Noteskin,
+	lambda: pattern_draw::Noteskin,
+	wafles: pattern_draw::Noteskin,
 	delta_note: pattern_draw::Noteskin,
 	sbz: pattern_draw::Noteskin,
+	mbz: pattern_draw::Noteskin,
 }
 
 pub struct State {
@@ -139,6 +142,18 @@ impl State {
 				sbz: pattern_draw::Noteskin::read_bar(
 					64,
 					"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
+				)?,
+				mbz: pattern_draw::Noteskin::read_bar(
+					64,
+					"noteskin/mbz-notes.png", "noteskin/mbz-receptor.png",
+				)?,
+				lambda: pattern_draw::Noteskin::read_ldur(
+					128,
+					"noteskin/lambda-notes.png", "noteskin/lambda-receptor.png",
+				)?,
+				wafles: pattern_draw::Noteskin::read_ldur(
+					64,
+					"noteskin/wafles-notes.png", "noteskin/wafles-receptor.png",
 				)?,
 			},
 		})
@@ -437,10 +452,16 @@ impl State {
 			Some(192 / snap)
 		};
 		let extract_noteskin = |string: &str, _user_intended: &mut bool| {
-			match string.to_lowercase().as_str() {
-				"delta-note" => Some(&self.noteskin_provider.delta_note),
-				"dbz" => Some(&self.noteskin_provider.dbz),
-				"sbz" => Some(&self.noteskin_provider.sbz),
+			let mut normalized_noteskin_name = string.to_ascii_lowercase();
+			normalized_noteskin_name.retain(|c| c.is_alphabetic());
+
+			match normalized_noteskin_name.as_str() {
+				"dbz" | "dividebyzero" => Some(&self.noteskin_provider.dbz),
+				"wafles" | "wafles3" => Some(&self.noteskin_provider.wafles),
+				"default" | "lambda" => Some(&self.noteskin_provider.lambda),
+				"delta-note" | "delta" => Some(&self.noteskin_provider.delta_note),
+				"sbz" | "subtractbyzero" => Some(&self.noteskin_provider.sbz),
+				"mbz" | "multiplybyzero" => Some(&self.noteskin_provider.mbz),
 				_ => None,
 			}
 		};
@@ -545,6 +566,7 @@ impl State {
 		let noteskin = if let Some(noteskin) = noteskin_override {
 			&noteskin
 		} else {
+			// choose a default noteskin
 			match keymode {
 				4 | 6 | 8 => &self.noteskin_provider.dbz,
 				5 | 10 => &self.noteskin_provider.delta_note,
@@ -697,7 +719,7 @@ impl State {
 **+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
 - `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
 - `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern
-- `noteskin` can be `delta-note`, `sbz` or `dbz` at the moment. If omitted, a default will be chosen
+- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`. If omitted, a default will be chosen
 - `zoom` applies a certain stretch to the notes
 - `keymode` can be used to force a certain keymode when it's not obvious
 
