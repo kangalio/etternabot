@@ -452,6 +452,7 @@ impl State {
 			Some(192 / snap)
 		};
 		let extract_noteskin = |string: &str, _user_intended: &mut bool| {
+			// make lowercase and remove all special characters
 			let mut normalized_noteskin_name = string.to_ascii_lowercase();
 			normalized_noteskin_name.retain(|c| c.is_alphabetic());
 
@@ -560,7 +561,8 @@ impl State {
 				.flat_map(|(pattern, _)| &pattern.rows)
 				.filter_map(|row: &Vec<u32>| row.iter().max().copied())
 				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
-			(highest_lane + 1) as usize
+			let keymode = (highest_lane + 1) as usize;
+			keymode.max(4) // clamp keymode to a minimum of 4k
 		};
 
 		let noteskin = if let Some(noteskin) = noteskin_override {
