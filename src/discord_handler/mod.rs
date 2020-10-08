@@ -570,7 +570,7 @@ impl State {
 		} else {
 			// choose a default noteskin
 			match keymode {
-				4 | 6 | 8 => &self.noteskin_provider.dbz,
+				3 | 4 | 6 | 8 => &self.noteskin_provider.dbz,
 				5 | 10 => &self.noteskin_provider.delta_note,
 				7 | 9 => &self.noteskin_provider.sbz,
 				_ => &self.noteskin_provider.sbz, // fallback

@@ -179,11 +179,11 @@ impl Noteskin {
 		}
 
 		let keymode_is_supported = match self.textures {
-			Textures::Ldur { .. } => matches!(keymode, 4 | 6 | 8),
+			Textures::Ldur { .. } => matches!(keymode, 3 | 4 | 6 | 8),
 			Textures::Pump { .. } => matches!(keymode, 5 | 10),
-			// Textures::Bar { .. } => matches!(keymode, 7 | 9),
 			// honestly there's no reason not to make the bar skin accept all keymodes. And if it
 			// didn't it would be impossible to draw any patterns with more than 10 lanes
+			// Textures::Bar { .. } => matches!(keymode, 7 | 9),
 			Textures::Bar { .. } => true,
 		};
 		if keymode_is_supported {
@@ -197,7 +197,11 @@ impl Noteskin {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match self.textures {
-			Textures::Ldur { .. } => if keymode == 6 { [0, 4, 1, 2, 5, 3][lane] } else { lane % 4 },
+			Textures::Ldur { .. } => match keymode {
+				6 => [0, 4, 1, 2, 5, 3][lane],
+				3 => [0, 1, 3][lane],
+				_ => lane % 4,
+			}
 			Textures::Pump { .. } => lane % 5,
 			Textures::Bar { .. } => 0, // not applicable, but let's return something anyway
 		})
