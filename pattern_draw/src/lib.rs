@@ -120,7 +120,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 	}
 
 	for (row_data, row_number) in rows {
-		for &note_lane in row_data {
+		for &(note_lane, note_type) in row_data {
 			let note_lane = note_lane.column_number_with_keymode(keymode as u32);
 
 			sprites.push(Sprite {
@@ -129,7 +129,10 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 					etterna::ScrollDirection::Upscroll => row_number,
 					etterna::ScrollDirection::Downscroll => highest_row - row_number,
 				},
-				image: noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number))?,
+				image: match note_type {
+					NoteType::Tap => noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number))?,
+					NoteType::Mine => noteskin.mine()?,
+				},
 			});
 		}
 	}

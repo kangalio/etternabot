@@ -133,27 +133,33 @@ impl State {
 				dbz: pattern_draw::Noteskin::read_ldur(
 					64,
 					"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
+					"noteskin/ldur-mine.png",
 				)?,
 				delta_note: pattern_draw::Noteskin::read_pump(
 					64,
 					"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
-					"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png"
+					"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png",
+					"noteskin/5k-mine.png",
 				)?,
 				sbz: pattern_draw::Noteskin::read_bar(
 					64,
 					"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
+					"noteskin/ldur-mine.png",
 				)?,
 				mbz: pattern_draw::Noteskin::read_bar(
 					64,
 					"noteskin/mbz-notes.png", "noteskin/mbz-receptor.png",
+					"noteskin/ldur-mine.png",
 				)?,
 				lambda: pattern_draw::Noteskin::read_ldur(
 					128,
 					"noteskin/lambda-notes.png", "noteskin/lambda-receptor.png",
+					"noteskin/lambda-mine.png",
 				)?,
 				wafles: pattern_draw::Noteskin::read_ldur(
 					64,
 					"noteskin/wafles-notes.png", "noteskin/wafles-receptor.png",
+					"noteskin/wafles-mine.png",
 				)?,
 			},
 		})
@@ -562,7 +568,7 @@ impl State {
 				// if the user entered `+pattern ldr`, was the highest column 3, or 4? remember, the
 				// meaning of `r` depends on keymode, but we don't know the keymode yet. I've
 				// decided to assume 4k in the fallback case
-				.filter_map(|row| row.iter().map(|lane| lane.column_number_with_keymode(4)).max())
+				.filter_map(|row| row.iter().map(|(lane, _note_type)| lane.column_number_with_keymode(4)).max())
 				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
 			let keymode = (highest_lane + 1) as usize;
 			keymode.max(4) // clamp keymode to a minimum of 4k. yes, 3k exists, but it's so niche that even if only three lanes are populated, the pattern is probably meant to be 4k

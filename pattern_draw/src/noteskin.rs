@@ -52,14 +52,17 @@ enum Textures {
 	Ldur {
 		receptors: [image::RgbaImage; 6],
 		notes: [[image::RgbaImage; 6]; 8], // first four are LDUR, then come left-up and right-up
+		mine: image::RgbaImage,
 	},
 	Pump {
 		receptors: [image::RgbaImage; 5],
 		notes: [[image::RgbaImage; 5]; 8],
+		mine: image::RgbaImage,
 	},
 	Bar {
 		receptor: image::RgbaImage,
 		notes: [image::RgbaImage; 8],
+		mine: image::RgbaImage,
 	}
 }
 
@@ -75,8 +78,10 @@ impl Noteskin {
 		center_receptor_path: &str,
 		corner_notes_path: &str,
 		corner_receptor_path: &str,
+		mine_path: &str,
 	) -> Result<Self, crate::Error> {
 		// we use the middle frame of the animations
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let center_receptor = middle_texture(&image::open(center_receptor_path)?.into_rgba())?;
 		let corner_receptor = middle_texture(&image::open(corner_receptor_path)?.into_rgba())?;
 		let center_notes = image::open(center_notes_path)?.into_rgba();
@@ -108,6 +113,7 @@ impl Noteskin {
 						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
+				mine,
 			}
 		})
 	}
@@ -116,8 +122,10 @@ impl Noteskin {
 		sprite_resolution: usize,
 		notes_path: &str,
 		receptor_path: &str,
+		mine_path: &str,
 	) -> Result<Self, crate::Error> {
 		// we use the middle frame of the animations
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
 		let notes = image::open(notes_path)?.into_rgba();
 
@@ -146,7 +154,8 @@ impl Noteskin {
 						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
-			}
+				mine,
+			},
 		})
 	}
 
@@ -154,8 +163,10 @@ impl Noteskin {
 		sprite_resolution: usize,
 		notes_path: &str,
 		receptor_path: &str,
+		mine_path: &str,
 	) -> Result<Self, crate::Error> {
 		// we use the middle frame of the animations
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
 		let notes = image::open(notes_path)?.into_rgba();
 
@@ -169,6 +180,7 @@ impl Noteskin {
 						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
+				mine,
 			}
 		})
 	}
@@ -226,6 +238,15 @@ impl Noteskin {
 			Textures::Ldur { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Pump { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Bar { receptor, .. } => &receptor,
+		})
+	}
+	
+	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
+	pub fn mine(&self) -> Result<&image::RgbaImage, crate::Error> {
+		Ok(match &self.textures {
+			Textures::Ldur { mine, .. } => &mine,
+			Textures::Pump { mine, .. } => &mine,
+			Textures::Bar { mine, .. } => &mine,
 		})
 	}
 

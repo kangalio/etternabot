@@ -20,7 +20,7 @@ pub enum PatternParseError {
 pub struct SimplePattern {
 	/// Each row is a vector of lane numbers. For example a plain jumptrill would be
 	/// `vec![vec![0, 1], vec![2, 3], vec![0, 1], vec![2, 3]...]`
-	pub rows: Vec<Vec<Lane>>,
+	pub rows: Vec<Vec<(Lane, NoteType)>>,
 }
 
 impl PartialEq for SimplePattern {
@@ -63,28 +63,47 @@ impl Lane {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-enum NoteIdentifier {
-    Lane(Lane),
-    Empty,
-    Invalid,
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Copy)]
+pub enum NoteType {
+    Tap,
+    Mine,
 }
 
-fn parse_note_identifier(note: &str) -> Result<NoteIdentifier, PatternParseError> {
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+enum NoteIdentifier {
+    Note(Lane, NoteType),
+    Empty,
+    Invalid,
+    ControlCharacter,
+}
+
+struct State {
+    selected_note_type: NoteType,
+}
+
+fn parse_note_identifier(note: &str, state: &mut State) -> Result<NoteIdentifier, PatternParseError> {
     if let Ok(lane) = note.parse::<u32>() {
         if lane == 0 {
             Ok(NoteIdentifier::Empty)
         } else {
             // Must have checked that lane isn't zero! to prevent underflow
-            Ok(NoteIdentifier::Lane(Lane::Index(lane - 1)))
+            Ok(NoteIdentifier::Note(Lane::Index(lane - 1), state.selected_note_type))
         }
     } else {
         match note.to_lowercase().as_str() {
-            "l" => Ok(NoteIdentifier::Lane(Lane::Left)),
-            "d" => Ok(NoteIdentifier::Lane(Lane::Down)),
-            "u" => Ok(NoteIdentifier::Lane(Lane::Up)),
-            "r" => Ok(NoteIdentifier::Lane(Lane::Right)),
+            "l" => Ok(NoteIdentifier::Note(Lane::Left, state.selected_note_type)),
+            "d" => Ok(NoteIdentifier::Note(Lane::Down, state.selected_note_type)),
+            "u" => Ok(NoteIdentifier::Note(Lane::Up, state.selected_note_type)),
+            "r" => Ok(NoteIdentifier::Note(Lane::Right, state.selected_note_type)),
             "" => Ok(NoteIdentifier::Empty),
+            "m" => {
+                state.selected_note_type = NoteType::Mine;
+                Ok(NoteIdentifier::ControlCharacter)
+            },
+            "n" => {
+                state.selected_note_type = NoteType::Tap;
+                Ok(NoteIdentifier::ControlCharacter)
+            },
             // other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
             _other => Ok(NoteIdentifier::Invalid),
         }
@@ -92,34 +111,34 @@ fn parse_note_identifier(note: &str) -> Result<NoteIdentifier, PatternParseError
 }
 
 // Will panic if string is too short
-fn parse_single_note(pattern: &mut &str) -> Result<NoteIdentifier, PatternParseError> {
+fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdentifier, PatternParseError> {
     let note;
 
     if pattern.starts_with('(') {
         let closing_paran = pattern.find(')').ok_or(PatternParseError::UnclosedParanthesis)?;
         
-        note = parse_note_identifier(&pattern[1..closing_paran])?;
+        note = parse_note_identifier(&pattern[1..closing_paran], state)?;
         
         *pattern = &pattern[closing_paran+1..];
     } else {
-        note = parse_note_identifier(pop_first_char(pattern).unwrap())?;
+        note = parse_note_identifier(pop_first_char(pattern).unwrap(), state)?;
     }
     
     Ok(note)
 }
 
 // Will panic if string is too short
-// If None is returned, an invalid character was popped
-fn parse_row(pattern: &mut &str) -> Result<Option<Vec<Lane>>, PatternParseError> {
+// If None is returned, an invalid or control character was popped
+fn parse_row(pattern: &mut &str, state: &mut State) -> Result<Option<Vec<(Lane, NoteType)>>, PatternParseError> {
     if pattern.starts_with('[') {
         let closing_bracket = pattern.find(']').ok_or(PatternParseError::UnclosedBracket)?;
         
         let mut bracket_contents = &pattern[1..closing_bracket];
         let mut row = Vec::new();
         while !bracket_contents.is_empty() {
-            match parse_single_note(&mut bracket_contents)? {
-                NoteIdentifier::Lane(lane) => row.push(lane),
-                NoteIdentifier::Empty | NoteIdentifier::Invalid => {},
+            match parse_single_note(&mut bracket_contents, state)? {
+                NoteIdentifier::Note(lane, note_type) => row.push((lane, note_type)),
+                NoteIdentifier::Empty | NoteIdentifier::Invalid | NoteIdentifier::ControlCharacter => {},
             }
         }
         
@@ -127,10 +146,11 @@ fn parse_row(pattern: &mut &str) -> Result<Option<Vec<Lane>>, PatternParseError>
         
         Ok(Some(row))
     } else {
-        match parse_single_note(pattern)? {
-            NoteIdentifier::Lane(lane) => Ok(Some(vec![lane])),
+        match parse_single_note(pattern, state)? {
+            NoteIdentifier::Note(lane, note_type) => Ok(Some(vec![(lane, note_type)])),
             NoteIdentifier::Empty => Ok(Some(vec![])),
             NoteIdentifier::Invalid => Ok(None),
+            NoteIdentifier::ControlCharacter => Ok(None),
         }
     }
 }
@@ -140,37 +160,14 @@ pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, PatternParseError> 
     let pattern = pattern.split_whitespace().collect::<String>();
     let mut pattern = pattern.as_str();
 
+    let mut state = State { selected_note_type: NoteType::Tap };
+
     let mut rows = Vec::with_capacity(pattern.len() / 2); // rough estimate
     while !pattern.is_empty() {
-        if let Some(row) = parse_row(&mut pattern)? {
+        if let Some(row) = parse_row(&mut pattern, &mut state)? {
             rows.push(row);
         }
     }
     
     Ok(SimplePattern { rows })
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	// I think I'm making useless tests again. I probably don't even need tests for these miniscule
-	// functions, in fact they're probably gonna change so often that these tests are gonna be out-
-	// dated all the time..... eh whatever, the code is written, too late now.
-
-	#[test]
-	fn test_pattern_equality() {
-		assert_eq!(
-			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2)]] },
-			SimplePattern { rows: vec![vec![Lane::Index(2), Lane::Index(1), Lane::Index(0)]] },
-		);
-		assert_eq!(
-			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(2)]] },
-			SimplePattern { rows: vec![vec![Lane::Index(2), Lane::Index(1), Lane::Index(0)]] },
-		);
-		assert_ne!(
-			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(3)]] },
-			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(2)]] },
-		);
-	}
 }
