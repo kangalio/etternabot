@@ -446,8 +446,8 @@ impl State {
 			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "rd", "rds", "th", "ths"];
 
 			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
-			*user_intended = true;
 			let snap: usize = string[..(string.len() - characters_to_truncate)].parse().ok()?;
+			*user_intended = true;
 			if 192_usize.checked_rem(snap)? != 0 { return None } // user entered 57ths or 23ths or so
 			Some(192 / snap)
 		};
@@ -559,10 +559,13 @@ impl State {
 		} else {
 			let highest_lane = segments.iter()
 				.flat_map(|(pattern, _)| &pattern.rows)
-				.filter_map(|row: &Vec<u32>| row.iter().max().copied())
+				// if the user entered `+pattern ldr`, was the highest column 3, or 4? remember, the
+				// meaning of `r` depends on keymode, but we don't know the keymode yet. I've
+				// decided to assume 4k in the fallback case
+				.filter_map(|row| row.iter().map(|lane| lane.column_number_with_keymode(4)).max())
 				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
 			let keymode = (highest_lane + 1) as usize;
-			keymode.max(4) // clamp keymode to a minimum of 4k
+			keymode.max(4) // clamp keymode to a minimum of 4k. yes, 3k exists, but it's so niche that even if only three lanes are populated, the pattern is probably meant to be 4k
 		};
 
 		let noteskin = if let Some(noteskin) = noteskin_override {

@@ -20,36 +20,7 @@ pub enum PatternParseError {
 pub struct SimplePattern {
 	/// Each row is a vector of lane numbers. For example a plain jumptrill would be
 	/// `vec![vec![0, 1], vec![2, 3], vec![0, 1], vec![2, 3]...]`
-	pub rows: Vec<Vec<u32>>,
-}
-
-impl SimplePattern {
-	/// Guesses the keymode (e.g. 4k/5k/6k/...) by adding 1 to the rightmost lane. The number is
-	/// clamped to a minimum of 4k - there is no such thing as 3k, 2k, 1k.
-	/// 
-	/// Returns None if the pattern is empty.
-	///
-	/// Note that this function returns only a _guess_. Nobody knows if \[12\]\[34\] was intended as
-	/// a 4k pattern, or a 5k, 6k, 7k...
-	/// 
-	/// ```rust
-	/// # use etterna_base::Pattern;
-	/// # fn main() -> Result<(), Box<dyn std::error::PatternParseError>> {
-	/// assert_eq!(Pattern::parse_taps("1234").keymode(), Some(4));
-	/// assert_eq!(Pattern::parse_taps("123").keymode(), Some(4));
-	/// assert_eq!(Pattern::parse_taps("9").keymode(), Some(9));
-	/// assert_eq!(Pattern::parse_taps("").keymode(), None);
-	/// # Ok(()) }
-	/// ```
-	pub fn keymode_guess(&self) -> Option<u32> {
-		let keymode = 1 + self.rows.iter().flatten().max()?;
-
-		// clamp to a minimum of 4 because even if the pattern does not use all four columns, it's
-		// still at least 4k
-		let keymode = keymode.max(4);
-
-		Some(keymode)
-	}
+	pub rows: Vec<Vec<Lane>>,
 }
 
 impl PartialEq for SimplePattern {
@@ -71,8 +42,30 @@ fn pop_first_char<'a>(string: &mut &'a str) -> Option<&'a str> {
     Some(substring)
 }
 
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
+pub enum Lane {
+    Index(u32),
+    Left,
+    Down,
+    Up,
+    Right,
+}
+
+impl Lane {
+    pub fn column_number_with_keymode(&self, keymode: u32) -> u32 {
+        match *self {
+            Lane::Index(lane) => lane,
+            Lane::Left => 0,
+            Lane::Down => 1,
+            Lane::Up => 2,
+            Lane::Right => if keymode == 3 { 2 } else { 3 }, // in 3k it goes left-down-right
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 enum NoteIdentifier {
-    Lane(u32),
+    Lane(Lane),
     Empty,
     Invalid,
 }
@@ -82,15 +75,15 @@ fn parse_note_identifier(note: &str) -> Result<NoteIdentifier, PatternParseError
         if lane == 0 {
             Ok(NoteIdentifier::Empty)
         } else {
-            // Must have checked that lane isn't zero!
-            Ok(NoteIdentifier::Lane(lane - 1))
+            // Must have checked that lane isn't zero! to prevent underflow
+            Ok(NoteIdentifier::Lane(Lane::Index(lane - 1)))
         }
     } else {
         match note.to_lowercase().as_str() {
-            "l" => Ok(NoteIdentifier::Lane(0)),
-            "d" => Ok(NoteIdentifier::Lane(1)),
-            "u" => Ok(NoteIdentifier::Lane(2)),
-            "r" => Ok(NoteIdentifier::Lane(3)),
+            "l" => Ok(NoteIdentifier::Lane(Lane::Left)),
+            "d" => Ok(NoteIdentifier::Lane(Lane::Down)),
+            "u" => Ok(NoteIdentifier::Lane(Lane::Up)),
+            "r" => Ok(NoteIdentifier::Lane(Lane::Right)),
             "" => Ok(NoteIdentifier::Empty),
             // other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
             _other => Ok(NoteIdentifier::Invalid),
@@ -117,7 +110,7 @@ fn parse_single_note(pattern: &mut &str) -> Result<NoteIdentifier, PatternParseE
 
 // Will panic if string is too short
 // If None is returned, an invalid character was popped
-fn parse_row(pattern: &mut &str) -> Result<Option<Vec<u32>>, PatternParseError> {
+fn parse_row(pattern: &mut &str) -> Result<Option<Vec<Lane>>, PatternParseError> {
     if pattern.starts_with('[') {
         let closing_bracket = pattern.find(']').ok_or(PatternParseError::UnclosedBracket)?;
         
@@ -168,16 +161,16 @@ mod tests {
 	#[test]
 	fn test_pattern_equality() {
 		assert_eq!(
-			SimplePattern { rows: vec![vec![0, 1, 2]] },
-			SimplePattern { rows: vec![vec![2, 1, 0]] },
+			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2)]] },
+			SimplePattern { rows: vec![vec![Lane::Index(2), Lane::Index(1), Lane::Index(0)]] },
 		);
 		assert_eq!(
-			SimplePattern { rows: vec![vec![0, 1, 2, 2]] },
-			SimplePattern { rows: vec![vec![2, 1, 0]] },
+			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(2)]] },
+			SimplePattern { rows: vec![vec![Lane::Index(2), Lane::Index(1), Lane::Index(0)]] },
 		);
 		assert_ne!(
-			SimplePattern { rows: vec![vec![0, 1, 2, 3]] },
-			SimplePattern { rows: vec![vec![0, 1, 2, 2]] },
+			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(3)]] },
+			SimplePattern { rows: vec![vec![Lane::Index(0), Lane::Index(1), Lane::Index(2), Lane::Index(2)]] },
 		);
 	}
 }

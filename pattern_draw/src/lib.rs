@@ -121,6 +121,8 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 
 	for (row_data, row_number) in rows {
 		for &note_lane in row_data {
+			let note_lane = note_lane.column_number_with_keymode(keymode as u32);
+
 			sprites.push(Sprite {
 				lane: note_lane as usize,
 				y_pos: match scroll_direction {
