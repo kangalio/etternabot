@@ -132,34 +132,34 @@ impl State {
 			noteskin_provider: NoteskinProvider {
 				dbz: pattern_draw::Noteskin::read_ldur(
 					64,
-					"noteskin/ldur-notes.png", "noteskin/ldur-receptor.png",
-					"noteskin/ldur-mine.png",
+					"assets/noteskin/dbz-notes.png", "assets/noteskin/dbz-receptor.png",
+					"assets/noteskin/dbz-mine.png",
 				)?,
 				delta_note: pattern_draw::Noteskin::read_pump(
 					64,
-					"noteskin/5k-center-notes.png", "noteskin/5k-center-receptor.png",
-					"noteskin/5k-corner-notes.png", "noteskin/5k-corner-receptor.png",
-					"noteskin/5k-mine.png",
+					"assets/noteskin/deltanote-center-notes.png", "assets/noteskin/deltanote-center-receptor.png",
+					"assets/noteskin/deltanote-corner-notes.png", "assets/noteskin/deltanote-corner-receptor.png",
+					"assets/noteskin/deltanote-mine.png",
 				)?,
 				sbz: pattern_draw::Noteskin::read_bar(
 					64,
-					"noteskin/bar-notes.png", "noteskin/bar-receptor.png",
-					"noteskin/ldur-mine.png",
+					"assets/noteskin/sbz-notes.png", "assets/noteskin/sbz-receptor.png",
+					"assets/noteskin/dbz-mine.png",
 				)?,
 				mbz: pattern_draw::Noteskin::read_bar(
 					64,
-					"noteskin/mbz-notes.png", "noteskin/mbz-receptor.png",
-					"noteskin/ldur-mine.png",
+					"assets/noteskin/mbz-notes.png", "assets/noteskin/mbz-receptor.png",
+					"assets/noteskin/dbz-mine.png",
 				)?,
 				lambda: pattern_draw::Noteskin::read_ldur(
 					128,
-					"noteskin/lambda-notes.png", "noteskin/lambda-receptor.png",
-					"noteskin/lambda-mine.png",
+					"assets/noteskin/lambda-notes.png", "assets/noteskin/lambda-receptor.png",
+					"assets/noteskin/lambda-mine.png",
 				)?,
 				wafles: pattern_draw::Noteskin::read_ldur(
 					64,
-					"noteskin/wafles-notes.png", "noteskin/wafles-receptor.png",
-					"noteskin/wafles-mine.png",
+					"assets/noteskin/wafles-notes.png", "assets/noteskin/wafles-receptor.png",
+					"assets/noteskin/wafles-mine.png",
 				)?,
 			},
 		})
