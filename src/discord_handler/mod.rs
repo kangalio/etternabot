@@ -1048,7 +1048,6 @@ Examples:
 		struct ScoringSystemComparison {
 			wife2_score: etterna::Wifescore,
 			wife3_score: etterna::Wifescore,
-			wife3_kang_system_score: etterna::Wifescore,
 			wife3_score_zero_mean: etterna::Wifescore,
 		}
 
@@ -1130,12 +1129,6 @@ Examples:
 						score.judgements.let_go_holds + score.judgements.missed_holds,
 						&etterna::J4,
 					)?,
-					wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
-						replay,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
 					wife3_score_zero_mean: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
 						&replay_zero_mean,
 						score.judgements.hit_mines,
@@ -1152,12 +1145,6 @@ Examples:
 							alternative_judge,
 						)?,
 						wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-							replay,
-							score.judgements.hit_mines,
-							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
-						)?,
-						wife3_kang_system_score: eo::rescore::<etterna::MatchingScorer, etterna::Wife3>(
 							replay,
 							score.judgements.hit_mines,
 							score.judgements.let_go_holds + score.judgements.missed_holds,
@@ -1203,17 +1190,14 @@ Examples:
 				if let Some(analysis) = &replay_analysis {
 					let alternative_text_1;
 					let alternative_text_2;
-					let alternative_text_3;
 					let alternative_text_4;
 					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
 						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, info.alternative_judge.unwrap().name);
 						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, info.alternative_judge.unwrap().name);
-						alternative_text_3 = format!(", {:.2} on {}", comparison.wife3_kang_system_score, info.alternative_judge.unwrap().name);
 						alternative_text_4 = format!(", {:.2} on {}", comparison.wife3_score_zero_mean, info.alternative_judge.unwrap().name);
 					} else {
 						alternative_text_1 = "".to_owned();
 						alternative_text_2 = "".to_owned();
-						alternative_text_3 = "".to_owned();
 						alternative_text_4 = "".to_owned();
 					}
 
@@ -1224,7 +1208,6 @@ Examples:
 								"{}",
 								"**Wife2**: {:.2}%{}\n",
 								"**Wife3**: {:.2}%{}\n",
-								"**Wife3**: {:.2}%{} ([no CB rushes](https://kangalioo.github.io/cb-rushes/))\n",
 								"**Wife3**: {:.2}%{} (mean of {:.1}ms corrected)",
 							),
 							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
@@ -1236,8 +1219,6 @@ Examples:
 							alternative_text_1,
 							analysis.scoring_system_comparison_j4.wife3_score.as_percent(),
 							alternative_text_2,
-							analysis.scoring_system_comparison_j4.wife3_kang_system_score.as_percent(),
-							alternative_text_3,
 							analysis.scoring_system_comparison_j4.wife3_score_zero_mean.as_percent(),
 							alternative_text_4,
 							analysis.mean_offset * 1000.0,
