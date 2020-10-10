@@ -737,6 +737,7 @@ impl State {
 To draw a chord, enclose the notes in bracketes: `[12][34][12][34]` creates a jumptrill.
 Empty rows are written with `0` or `[]`.
 Lane numbers beyond 9 must be enclosed in paranthesis: `123456789(10)` instead of `12345678910`.
+Insert `M` to switch to mine mode for the current note row.
 
 Examples:
 `+pattern [13]4[32]1[24]1[23]4` draws a simple jumpstream

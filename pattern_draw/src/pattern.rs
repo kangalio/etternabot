@@ -100,10 +100,6 @@ fn parse_note_identifier(note: &str, state: &mut State) -> Result<NoteIdentifier
                 state.selected_note_type = NoteType::Mine;
                 Ok(NoteIdentifier::ControlCharacter)
             },
-            "n" => {
-                state.selected_note_type = NoteType::Tap;
-                Ok(NoteIdentifier::ControlCharacter)
-            },
             // other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
             _other => Ok(NoteIdentifier::Invalid),
         }
@@ -130,7 +126,7 @@ fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdenti
 // Will panic if string is too short
 // If None is returned, an invalid or control character was popped
 fn parse_row(pattern: &mut &str, state: &mut State) -> Result<Option<Vec<(Lane, NoteType)>>, PatternParseError> {
-    if pattern.starts_with('[') {
+    let row = if pattern.starts_with('[') {
         let closing_bracket = pattern.find(']').ok_or(PatternParseError::UnclosedBracket)?;
         
         let mut bracket_contents = &pattern[1..closing_bracket];
@@ -144,15 +140,17 @@ fn parse_row(pattern: &mut &str, state: &mut State) -> Result<Option<Vec<(Lane, 
         
         *pattern = &pattern[closing_bracket+1..];
         
-        Ok(Some(row))
+        Some(row)
     } else {
         match parse_single_note(pattern, state)? {
-            NoteIdentifier::Note(lane, note_type) => Ok(Some(vec![(lane, note_type)])),
-            NoteIdentifier::Empty => Ok(Some(vec![])),
-            NoteIdentifier::Invalid => Ok(None),
-            NoteIdentifier::ControlCharacter => Ok(None),
+            NoteIdentifier::Note(lane, note_type) => Some(vec![(lane, note_type)]),
+            NoteIdentifier::Empty => return Ok(Some(vec![])),
+            NoteIdentifier::Invalid => return Ok(None),
+            NoteIdentifier::ControlCharacter => return Ok(None),
         }
-    }
+    };
+    state.selected_note_type = NoteType::Tap;
+    Ok(row)
 }
 
 pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, PatternParseError> {
