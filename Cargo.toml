@@ -20,6 +20,7 @@ rand = "0.7.3"
 etternaonline_api = { git = "https://github.com/kangalioo/etternaonline-api" }
 plotters = "0.3.0"
 plotters-backend = "0.3.0"
+plotters-bitmap = "0.3.0" # sjkhebrgkjhsdrfg why is plotters so segmentated
 #etterna = { package = "etterna_base", path = "../etterna-base", features = ["parallel", "serde"] }
 etterna = { package = "etterna_base", git = "https://github.com/kangalioo/etterna-base", features = ["parallel", "serde"] }
 chrono = "0.4.13"
