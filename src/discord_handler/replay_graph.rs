@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)] // type complexity is not my fault
+
 use plotters::{prelude::*, style::text_anchor::{Pos, HPos, VPos} /*style::RGBAColor*/};
 use plotters_backend::BackendColor;
 use etternaonline_api::v2 as eo;
@@ -67,10 +69,15 @@ impl IconStamper {
 	}
 }
 
-pub fn inner(
-	replay: &eo::Replay,
-	output_path: &str
-) -> Result<Option<()>, Box<dyn std::error::Error>> {
+struct ReplayStats {
+	hits: Vec<(f32, f32)>,
+	mine_hit_locations: Vec<f32>,
+	min_wifescore: f32,
+	max_wifescore: f32,
+	chart_length: f32,
+}
+
+fn gen_replay_stats(replay: &eo::Replay) -> Option<ReplayStats> {
 	let notes = &replay.notes;
 
 	let mut hits: Vec<(f32, f32)> = Vec::new();
@@ -80,10 +87,7 @@ pub fn inner(
 	let mut max_wifescore = f32::NEG_INFINITY;
 	// println!("{} mine entries", notes.iter().filter(|n| n.note_type == eo::NoteType::Mine).count());
 	for note in notes {
-		let note_type = match note.note_type {
-			Some(x) => x,
-			None => return Ok(None),
-		};
+		let note_type = note.note_type?;
 		match note_type {
 			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
 				points += etterna::wife3(note.hit, &etterna::J4);
@@ -106,7 +110,6 @@ pub fn inner(
 			eo::NoteType::HoldTail | eo::NoteType::Fake | eo::NoteType::Keysound => {},
 		}
 	}
-	// println!("final wifescore: {}", hits[hits.len() - 1].1);
 
 	// can't use the one-liner iterator method because float doesn't impl Ord >:(
 	let mut chart_length = 0.0;
@@ -116,35 +119,41 @@ pub fn inner(
 		}
 	}
 
-	let root = BitMapBackend::new(output_path, (1290, 400)).into_drawing_area();
-	root.fill(&BLACK)?;
-	
-	let wifescore_chart_x_range = 0.0f32..chart_length;
-	let wifescore_range = max_wifescore - min_wifescore;
-	let wifescore_chart_y_range = (min_wifescore - wifescore_range / 10.0)..(max_wifescore + wifescore_range / 10.0);
-	
-	let acc = wifescore_range < 0.5; // if true, the axis labels are more precise
-	
-	let mut wifescore_chart = ChartBuilder::on(&root)
-	.build_cartesian_2d(wifescore_chart_x_range.clone(), wifescore_chart_y_range.clone())?;
-	
-	// we leave a bit of space on the top for aesthetics, and even more space on the bottom to fit
-	// the mine hit icons
-	let mut dots_chart = ChartBuilder::on(&root)
-		.build_cartesian_2d(0.0f32..chart_length, -0.20..0.19f32)?;
-	
+	Some(ReplayStats { hits, mine_hit_locations, min_wifescore, max_wifescore, chart_length })
+}
+
+fn draw_mines(
+	canvas: &DrawingArea<BitMapBackend<plotters_bitmap::bitmap_pixel::RGBPixel>, plotters::coord::Shift>,
+	mine_hit_locations: &[f32],
+	mut chart_time_to_x_coord: impl FnMut(f32) -> i32,
+) -> Result<(), Box<dyn std::error::Error>> {
 	let mut mine_hit_icon = IconStamper::new("assets/icons/mine-hit.png", 24)?;
-	for mine_hit_location in mine_hit_locations {
-		mine_hit_icon.stamp_onto(&root, (
-			dots_chart.backend_coord(&(mine_hit_location, 0.0)).0 - ICON_SIZE as i32 / 2 + 4,
-			dots_chart.plotting_area().get_y_axis_pixel_range().end - ICON_SIZE as i32,
+
+	for &mine_hit_location in mine_hit_locations {
+		mine_hit_icon.stamp_onto(canvas, (
+			chart_time_to_x_coord(mine_hit_location) - ICON_SIZE as i32 / 2,
+			canvas.get_pixel_range().1.end - ICON_SIZE as i32 + 2,
 		))?;
 	}
 
+	Ok(())
+}
+
+fn draw_hit_dots<'a, 'b>(
+	replay: &eo::Replay,
+	stats: &ReplayStats,
+	x_range: &std::ops::Range<f32>,
+	canvas: &'a DrawingArea<BitMapBackend<'b, plotters_bitmap::bitmap_pixel::RGBPixel>, plotters::coord::Shift>
+) -> Result<ChartContext<'a, BitMapBackend<'b, plotters_bitmap::bitmap_pixel::RGBPixel>, Cartesian2d<plotters::coord::types::RangedCoordf32, plotters::coord::types::RangedCoordf32>>, Box<dyn std::error::Error>> {
+	// we leave a bit of space on the top for aesthetics, and even more space on the bottom to fit
+	// the mine hit icons
+	let mut dots_chart = ChartBuilder::on(canvas)
+		.build_cartesian_2d(x_range.clone(), -0.20..0.19f32)?;
+	
 	let draw_horizontal_line = |height: f32, color: &RGBColor| {
 		let path = PathElement::new(vec![
 			(0.0, height),
-			(chart_length, height)
+			(stats.chart_length, height)
 		], ShapeStyle {
 			color: color.to_rgba().mix(0.3),
 			filled: false,
@@ -165,7 +174,7 @@ pub fn inner(
 	draw_horizontal_line(-etterna::J4.bad_window, &BAD_COLOR)?;
 
 	dots_chart
-		.draw_series(notes.iter().map(|n| {
+		.draw_series(replay.notes.iter().map(|n| {
 			let x = n.time;
 			let y = n.hit.deviation().unwrap_or(0.1801); // show misses as a miss instead of a bad
 
@@ -176,16 +185,31 @@ pub fn inner(
 			)
 		}))?;
 	
+	Ok(dots_chart)
+}
+
+fn draw_wifescore_chart<'a, 'b>(
+	canvas: &'a DrawingArea<BitMapBackend<'b, plotters_bitmap::bitmap_pixel::RGBPixel>, plotters::coord::Shift>,
+	x_range: &std::ops::Range<f32>,
+	stats: &ReplayStats,
+) -> Result<(), Box<dyn std::error::Error>> {
+	let wifescore_span = stats.max_wifescore - stats.min_wifescore;
+	let y_range = (stats.min_wifescore - wifescore_span / 10.0)..(stats.max_wifescore + wifescore_span / 10.0);
+	let acc = wifescore_span < 0.5; // if the wifescore varies little, make axis labels more precise
+
+	let mut wifescore_chart = ChartBuilder::on(&canvas)
+		.build_cartesian_2d(x_range.clone(), y_range.clone())?;
+	
 	wifescore_chart
-		.draw_series(LineSeries::new(hits, ShapeStyle {
+		.draw_series(LineSeries::new(stats.hits.iter().copied(), ShapeStyle {
 			color: WHITE.to_rgba(),
 			filled: true,
 			stroke_width: 1,
 		}))?;
 
-	ChartBuilder::on(&root)
+	ChartBuilder::on(&canvas)
 		.y_label_area_size(if acc { 75 } else { 55 })
-		.build_cartesian_2d(wifescore_chart_x_range, wifescore_chart_y_range)?
+		.build_cartesian_2d(x_range.clone(), y_range)?
 		.configure_mesh()
 		.disable_mesh()
 		// .disable_x_mesh()
@@ -201,7 +225,30 @@ pub fn inner(
 		.y_label_formatter(&|y| if acc { format!("{:.3}%", y) } else { format!("{:.1}%", y) })
 		.y_labels(5)
 		.draw()?;
+	
+	Ok(())
+}
 
+fn inner(
+	replay: &eo::Replay,
+	output_path: &str
+) -> Result<Option<()>, Box<dyn std::error::Error>> {
+	let stats = match gen_replay_stats(replay) {
+		Some(stats) => stats,
+		None => return Ok(None),
+	};
+
+	let canvas = BitMapBackend::new(output_path, (1290, 400)).into_drawing_area();
+	canvas.fill(&BLACK)?;
+
+	let x_range = 0.0..stats.chart_length;
+	
+	let dots_chart = draw_hit_dots(&replay, &stats, &x_range, &canvas)?;
+	
+	draw_wifescore_chart(&canvas, &x_range, &stats)?;
+
+	draw_mines(&canvas, &stats.mine_hit_locations, |time| dots_chart.backend_coord(&(time, 0.0)).0)?;
+	
 	Ok(Some(()))
 }
 
