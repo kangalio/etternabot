@@ -840,7 +840,7 @@ Examples:
 
 				let latest_scores = self.v2()?.user_latest_scores(&eo_username)?;
 				let user_id = self.get_eo_user_id(&eo_username)?;
-				self.score_card(ctx, msg, ScoreCard {
+				self.score_card(ctx, msg.channel_id, ScoreCard {
 					scorekey: &latest_scores[0].scorekey,
 					user_id: Some(user_id),
 					show_ssrs_and_judgements_and_modifiers: true,
@@ -969,7 +969,7 @@ Examples:
 
 	fn score_card(&mut self,
 		ctx: &serenity::Context,
-		msg: &serenity::Message,
+		channel_id: serenity::ChannelId,
 		info: ScoreCard<'_>,
 	) -> Result<(), Error> {
 		let score = self.v2()?.score_data(info.scorekey)?;
@@ -992,10 +992,10 @@ Examples:
 		let mut description = String::new();
 		if let Some(triggerers) = info.triggerers {
 			description += "_Requested by ";
-			description += &triggerers.iter()
-				.map(|user| user.name.as_str())
-				.collect::<Vec<_>>()
-				.join(", ");
+			for user in triggerers.iter() {
+				description += &format!("<@{}>, ", user.id);
+			}
+			description.truncate(description.len() - 2); // Remove trailing ", "
 			description += "_\n";
 		}
 		if let Some(user_id) = info.user_id {
@@ -1171,7 +1171,7 @@ Examples:
 
 		let replay_analysis = do_replay_analysis(&score).transpose()?;
 
-		msg.channel_id.send_message(&ctx.http, |m| {
+		channel_id.send_message(&ctx.http, |m| {
 			m.embed(|e| {
 				e
 					.color(crate::ETTERNA_COLOR)
@@ -1321,7 +1321,7 @@ Examples:
 				};
 				
 				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, &msg, ScoreCard {
+				if let Err(e) = self.score_card(&ctx, msg.channel_id, ScoreCard {
 					scorekey: &scorekey,
 					user_id: None,
 					show_ssrs_and_judgements_and_modifiers: true,
@@ -1552,7 +1552,7 @@ Examples:
 			let scorekey = score_info.scorekey.clone();
 			let eo_user_id = score_info.eo_user_id;
 
-			self.score_card(&ctx, &reaction.message(&ctx.http)?, ScoreCard {
+			self.score_card(&ctx, self.config.score_ocr_card_channel.into(), ScoreCard {
 				scorekey: &scorekey,
 				user_id: Some(eo_user_id),
 				show_ssrs_and_judgements_and_modifiers: false,

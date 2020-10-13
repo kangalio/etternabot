@@ -16,12 +16,20 @@ pub struct Config {
 	pub minanyms: Vec<String>,
 	pub quotes: Vec<Quote>,
 
+	/// Channel where the MAX 300 role acquisition gratulations are posted
 	pub promotion_gratulations_channel: u64,
+	/// Channel where bot listens for messages without any files or links
 	pub work_in_progress_channel: u64,
+	/// Channel that the bot redirects to in the above circumstances
 	pub work_in_progress_discussion_channel: u64,
+	/// Channels in which bot commands can be used
 	pub allowed_channels: Vec<u64>,
+	/// Channel to scan for score screenshots in
 	pub score_channel: u64,
+	/// Channel to post the requested score cards into
+	pub score_ocr_card_channel: u64,
 	pub etterna_online_guild_id: u64,
+	// Only these people's images in `score_channel` will be used
 	pub score_ocr_allowed_eo_role: u64,
 }
 
