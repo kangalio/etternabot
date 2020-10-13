@@ -151,11 +151,15 @@ impl State {
 					"assets/noteskin/mbz-notes.png", "assets/noteskin/mbz-receptor.png",
 					"assets/noteskin/dbz-mine.png",
 				)?,
-				lambda: pattern_draw::Noteskin::read_ldur(
-					128,
-					"assets/noteskin/lambda-notes.png", "assets/noteskin/lambda-receptor.png",
-					"assets/noteskin/lambda-mine.png",
-				)?,
+				lambda: {
+					let mut lambda = pattern_draw::Noteskin::read_ldur(
+						128,
+						"assets/noteskin/lambda-notes.png", "assets/noteskin/lambda-receptor.png",
+						"assets/noteskin/lambda-mine.png",
+					)?;
+					lambda.resize_sprites(64);
+					lambda
+				},
 				wafles: pattern_draw::Noteskin::read_ldur(
 					64,
 					"assets/noteskin/wafles-notes.png", "assets/noteskin/wafles-receptor.png",
@@ -591,7 +595,7 @@ impl State {
 			keymode,
 			vertical_spacing_multiplier,
 			pattern: &segments,
-			max_image_dimensions: (5000, 5000),
+			max_image_dimensions: (5000, 10000),
 			max_sprites: 1000,
 		})?;
 

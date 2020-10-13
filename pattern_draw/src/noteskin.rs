@@ -253,4 +253,46 @@ impl Noteskin {
 	pub fn sprite_resolution(&self) -> usize {
 		self.sprite_resolution
 	}
+
+	fn for_each_texture(&mut self, mut f: impl FnMut(&mut image::RgbaImage)) {
+		match &mut self.textures {
+			Textures::Ldur { mine, notes, receptors } => {
+				f(mine);
+				for row in notes {
+					for note in row {
+						f(note);
+					}
+				}
+				for receptor in receptors {
+					f(receptor);
+				}
+			},
+			Textures::Pump { mine, notes, receptors } => {
+				f(mine);
+				for row in notes {
+					for note in row {
+						f(note);
+					}
+				}
+				for receptor in receptors {
+					f(receptor);
+				}
+			},
+			Textures::Bar { mine, notes, receptor } => {
+				f(mine);
+				for note in notes {
+					f(note);
+				}
+				f(receptor);
+			}
+		}
+	}
+
+	pub fn resize_sprites(&mut self, sprite_resolution: u32) {
+		self.for_each_texture(|texture| {
+			// Triangle (aka bilinear) is the fastest resize algorithm that doesn't look garbage
+			*texture = image::imageops::resize(texture, sprite_resolution, sprite_resolution, image::imageops::FilterType::Triangle);
+		});
+		self.sprite_resolution = sprite_resolution as usize;
+	}
 }
