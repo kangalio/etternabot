@@ -443,19 +443,18 @@ impl State {
 	) -> Result<(), Error> {
 		let mut noteskin_override = None;
 		let mut keymode_override = None;
-		let mut row_interval = 192 / 16; // default snap is 16ths
+		let mut snap = etterna::Snap::_16th.into();
 		let mut vertical_spacing_multiplier = 1.0;
 		let mut scroll_direction = self.data.scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
 		let mut segments = Vec::new();
 
-		let extract_row_interval = |string: &str, user_intended: &mut bool| {
+		let extract_snap = |string: &str, user_intended: &mut bool| {
 			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "rd", "rds", "th", "ths"];
 
 			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
-			let snap: usize = string[..(string.len() - characters_to_truncate)].parse().ok()?;
+			let snap: u32 = string[..(string.len() - characters_to_truncate)].parse().ok()?;
 			*user_intended = true;
-			if 192_usize.checked_rem(snap)? != 0 { return None } // user entered 57ths or 23ths or so
-			Some(192 / snap)
+			pattern_draw::FractionalSnap::from_snap_number(snap)
 		};
 		let extract_noteskin = |string: &str, _user_intended: &mut bool| {
 			// make lowercase and remove all special characters
@@ -504,12 +503,12 @@ impl State {
 		let mut pattern_buffer = String::new();
 		for arg in args.split_whitespace() {
 			let mut did_user_intend = false;
-			if let Some(new_row_interval) = extract_row_interval(arg, &mut did_user_intend) {
+			if let Some(new_snap) = extract_snap(arg, &mut did_user_intend) {
 				if pattern_buffer.len() > 0 {
-					segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, row_interval));
+					segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, snap));
 					pattern_buffer.clear();
 				}
-				row_interval = new_row_interval;
+				snap = new_snap;
 				continue;
 			}
 			if did_user_intend {
@@ -556,7 +555,7 @@ impl State {
 			pattern_buffer += arg;
 		}
 		if pattern_buffer.len() > 0 {
-			segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, row_interval));
+			segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, snap));
 			pattern_buffer.clear();
 		}
 		
@@ -729,7 +728,7 @@ impl State {
 						r#"
 **+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
 - `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
-- `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern
+- `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern. Can even be something like 20ths or 57ths!
 - `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`. If omitted, a default will be chosen
 - `zoom` applies a certain stretch to the notes
 - `keymode` can be used to force a certain keymode when it's not obvious

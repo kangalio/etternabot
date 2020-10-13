@@ -7,6 +7,9 @@ pub use pattern::*;
 mod noteskin;
 pub use noteskin::*;
 
+mod fractional_snap;
+pub use fractional_snap::*;
+
 #[derive(Debug, Error)]
 pub enum Error {
 	#[error("Given pattern is empty")]
@@ -88,7 +91,8 @@ pub struct PatternRecipe<'a> {
 	pub scroll_direction: etterna::ScrollDirection,
 	pub keymode: usize,
 	pub vertical_spacing_multiplier: f32,
-	pub pattern: &'a [(SimplePattern, usize)],
+	// List of pattern segments and their snap
+	pub pattern: &'a [(SimplePattern, FractionalSnap)],
 	pub max_image_dimensions: (usize, usize),
 	pub max_sprites: usize,
 }
@@ -101,9 +105,11 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 	let mut rows = Vec::new();
 	let mut row_number = 0;
 	for &(ref pattern, snap) in pattern {
+		let mut snap_192nd_intervals = snap.iter_192nd_intervals();
+
 		for row_data in &pattern.rows {
 			rows.push((row_data, row_number));
-			row_number += snap;
+			row_number += snap_192nd_intervals.next() as usize;
 		}
 	}
 	let highest_row = rows.iter().map(|&(_, row_number)| row_number).max().unwrap_or(0);
@@ -141,12 +147,13 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 		return Err(Error::TooManySprites { count: sprites.len(), limit: max_sprites });
 	}
 
-	let smallest_snap = pattern.iter().map(|&(_, snap)| snap).min()
+	let highest_snap = pattern.iter().map(|&(_, snap)| snap.snap_number()).min()
 		.ok_or(Error::EmptyPattern)?;
+	let smallest_192nd_interval = 192.0 / highest_snap as f32;
 
 	render_sprite_map(SpriteMap {
 		sprites,
 		sprite_resolution: noteskin.sprite_resolution(),
-		vertical_spacing_multiplier: (1.0 / smallest_snap as f32) * vertical_spacing_multiplier,
+		vertical_spacing_multiplier: (1.0 / smallest_192nd_interval) * vertical_spacing_multiplier,
 	}, max_image_dimensions)
 }
