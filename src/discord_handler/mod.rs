@@ -746,7 +746,11 @@ Examples:
 			"profile" => {
 				self.profile(ctx, msg, args)?;
 			},
-			"lastsession" => {
+			"advprof" => {
+				msg.channel_id.say(&ctx.http, "Note: +profile now does the same thing as +advprof; there's no reason to use +advprof anymore")?;
+				self.profile(ctx, msg, args)?;
+			}
+			"lastsession" | "ls" => {
 				self.latest_scores(ctx, msg, args)?;
 			},
 			"pattern" => {
