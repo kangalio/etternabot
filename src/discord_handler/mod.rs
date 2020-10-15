@@ -379,18 +379,7 @@ impl State {
 			text.to_owned()
 		};
 
-		let details = match self.v2()?.user_details(&eo_username) {
-			Ok(details) => details,
-			Err(eo::Error::UserNotFound) => {
-				msg.channel_id.say(
-					&ctx.http,
-					format!("User `{}` was not found (maybe run `+userset`)", eo_username),
-				)?;
-				return Ok(());
-			},
-			Err(e) => return Err(e.into()),
-		};
-
+		let details = self.v2()?.user_details(&eo_username)?;
 		let ranks = self.v2()?.user_ranks_per_skillset(&eo_username)?;
 
 		let mut title = eo_username.to_owned();
