@@ -452,7 +452,7 @@ impl State {
 		let extract_noteskin = |string: &str, _user_intended: &mut bool| {
 			// make lowercase and remove all special characters
 			let mut normalized_noteskin_name = string.to_ascii_lowercase();
-			normalized_noteskin_name.retain(|c| c.is_alphabetic());
+			normalized_noteskin_name.retain(|c| c.is_alphanumeric());
 
 			match normalized_noteskin_name.as_str() {
 				"dbz" | "dividebyzero" => Some(&self.noteskin_provider.dbz),
@@ -484,7 +484,7 @@ impl State {
 		let extract_keymode = |string: &str, user_intended: &mut bool| {
 			if !(string.ends_with('k') || string.ends_with('K')) { return None }
 
-			let keymode: usize = string[..(string.len() - 1)].parse().ok()?;
+			let keymode: u32 = string[..(string.len() - 1)].parse().ok()?;
 			*user_intended = true;
 			if keymode > 0 {
 				Some(keymode)
@@ -562,7 +562,7 @@ impl State {
 				// decided to assume 4k in the fallback case
 				.filter_map(|row| row.iter().map(|(lane, _note_type)| lane.column_number_with_keymode(4)).max())
 				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
-			let keymode = (highest_lane + 1) as usize;
+			let keymode = (highest_lane + 1) as u32;
 			keymode.max(4) // clamp keymode to a minimum of 4k. yes, 3k exists, but it's so niche that even if only three lanes are populated, the pattern is probably meant to be 4k
 		};
 
