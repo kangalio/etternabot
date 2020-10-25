@@ -652,38 +652,68 @@ impl State {
 		msg: &serenity::Message,
 		args: &str,
 	) -> Result<(), Error> {
-		let eo_username = if args.is_empty() {
-			self.get_eo_username(ctx, msg)?
-		} else {
-			args.to_owned()
+		let (eo_username_1, eo_username_2) = match *args.split_whitespace().collect::<Vec<_>>() {
+			[] => (self.get_eo_username(ctx, msg)?, None),
+			[username] => (username.to_owned(), None),
+			[username, username_2] => (username.to_owned(), Some(username_2.to_owned())),
+			_ => {
+				msg.channel_id.say(&ctx.http, "Only two users' skillgraphs can be displayed at once!")?;
+				return Ok(());
+			}
 		};
 
-		msg.channel_id.say(&ctx.http, format!("Requesting data for {} (this may take a while)", eo_username))?;
-		let user_id = self.web_session.user_details(&eo_username)?.user_id;
-		let scores = self.web_session.user_scores(
-			user_id,
-			..,
-			None,
-			eo::web::UserScoresSortBy::Date,
-			eo::web::SortDirection::Ascending,
-			false, // exclude invalid
-			
-		)?;
+		if let Some(eo_username_2) = &eo_username_2 {
+			msg.channel_id.say(&ctx.http, format!("Requesting data for {} and {} (this may take a while)", eo_username_1, eo_username_2))?;
+		} else {
+			msg.channel_id.say(&ctx.http, format!("Requesting data for {} (this may take a while)", eo_username_1))?;
+		}
 
-		let skill_timeline = etterna::skill_timeline(
-			scores.scores.iter()
-				.filter_map(|s| s
-					.validity_dependant
-					.as_ref()
-					.map(|u| (s.date.as_str(), u.nerfed_ssr()))
-				)
-				.filter(|(_date, ssr)| etterna::Skillset7::iter()
-					.map(|ss| ssr.get(ss)).all(|x| x < 40.0)
-				),
-			true,
-		);
-		draw_skill_graph::draw_skill_graph(&skill_timeline, "output.png")
-			.map_err(Error::SkillGraphError)?;
+		fn download_skill_timeline<'a>(
+			username: &str,
+			web_session: &eo::web::Session,
+			storage: &'a mut Option<eo::web::UserScores>,
+		) -> Result<etterna::SkillTimeline<&'a str>, Error> {
+			let user_id = web_session.user_details(&username)?.user_id;
+			let scores = web_session.user_scores(
+				user_id,
+				..,
+				None,
+				eo::web::UserScoresSortBy::Date,
+				eo::web::SortDirection::Ascending,
+				false, // exclude invalid
+			)?;
+
+			*storage = Some(scores);
+			let scores = storage.as_ref().expect("impossible");
+
+			Ok(etterna::skill_timeline(
+				scores.scores.iter()
+					.filter_map(|score| Some((score.date.as_str(), &score.validity_dependant.as_ref()?.ssr))),
+				true,
+			))
+		}
+
+		let (mut storage_1, mut storage_2) = (None, None);
+		let (skill_timeline_1, skill_timeline_2);
+		if let Some(eo_username_2) = &eo_username_2 {
+			// SAFETY: this is safe as long as the handle is not memory leaked, which we're not doing
+			let skill_timeline_2_join_handle = unsafe { thread_scoped::scoped(|| {
+				download_skill_timeline(eo_username_2, &self.web_session, &mut storage_2)
+			}) };
+			skill_timeline_1 = download_skill_timeline(&eo_username_1, &self.web_session, &mut storage_1)?;
+			skill_timeline_2 = Some(skill_timeline_2_join_handle.join()?);
+		} else {
+			skill_timeline_1 = download_skill_timeline(&eo_username_1, &self.web_session, &mut storage_1)?;
+			skill_timeline_2 = None;
+		};
+		
+		draw_skill_graph::draw_skill_graph(
+			&skill_timeline_1,
+			&eo_username_1,
+			skill_timeline_2.as_ref(),
+			eo_username_2.as_deref(),
+			"output.png"
+		).map_err(Error::SkillGraphError)?;
 
 		msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 

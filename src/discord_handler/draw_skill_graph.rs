@@ -10,9 +10,16 @@ impl std::fmt::Display for StringError {
 }
 impl std::error::Error for StringError {}
 
+fn f32_max(iter: impl Iterator<Item = f32>) -> f32 {
+	iter.fold(f32::NEG_INFINITY, f32::max)
+}
+
 fn inner_draw_skill_graph(
-	skill_timeline: &etterna::SkillTimeline<&str>,
-	output_path: &str
+	skill_timeline_1: &etterna::SkillTimeline<&str>,
+	username_1: &str,
+	skill_timeline_2: Option<&etterna::SkillTimeline<&str>>,
+	username_2: Option<&str>,
+	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let label_text_style = TextStyle {
 		color: BackendColor { rgb: (255, 255, 255), alpha: 0.8 },
@@ -40,16 +47,39 @@ fn inner_draw_skill_graph(
 		)
 	};
 
-	let first = skill_timeline.changes.first().ok_or(StringError("Empty skill timeline"))?;
-	let last = skill_timeline.changes.last().ok_or(StringError("Empty skill timeline"))?;
+	fn first_and_last<T>(arr: &[T]) -> Result<(&T, &T), StringError> {
+		Ok((
+			arr.first().ok_or(StringError("Empty skill timeline"))?,
+			arr.last().ok_or(StringError("Empty skill timeline"))?,
+		))
+	}
+
+	let (left_bound, right_bound, upper_bound);
+	if let Some(skill_timeline_2) = skill_timeline_2 {
+		let (first_1, last_1) = first_and_last(&skill_timeline_1.changes)?;
+		let (first_2, last_2) = first_and_last(&skill_timeline_2.changes)?;
+
+		left_bound = std::cmp::min(first_1.0, first_2.0);
+		right_bound = std::cmp::max(last_1.0, last_2.0);
+		upper_bound = f32::max(
+			f32_max(etterna::Skillset8::iter().map(|ss| last_1.1.get(ss))),
+			f32_max(etterna::Skillset8::iter().map(|ss| last_2.1.get(ss))),
+		);
+	} else {
+		let (first, last) = first_and_last(&skill_timeline_1.changes)?;
+
+		left_bound = first.0;
+		right_bound = last.0;
+		upper_bound = f32_max(etterna::Skillset8::iter().map(|ss| last.1.get(ss)));
+	}
 	
 	let mut chart = ChartBuilder::on(&root)
 		.x_label_area_size(25)
 		.y_label_area_size(35)
 		.margin(10)
 		.build_cartesian_2d(
-			parsedate(first.0)..parsedate(last.0),
-			0.0..etterna::Skillset8::iter().map(|ss| last.1.get(ss)).fold(f32::NEG_INFINITY, f32::max)
+			parsedate(&left_bound)..parsedate(&right_bound),
+			0.0..upper_bound,
 		)?;
 
 	chart.configure_mesh()
@@ -62,31 +92,53 @@ fn inner_draw_skill_graph(
 		.y_label_formatter(&|rating| format!("{:.0}", rating))
 		.draw()?;
 	
-	for ss in etterna::Skillset8::iter() {
-		let color = skillset_color_map.get(&ss).unwrap();
+	let mut draw_timeline = |
+		timeline: &etterna::SkillTimeline<&str>,
+		ss: etterna::Skillset8,
+		label: String,
+		shape_style: ShapeStyle
+	| -> Result<(), Box<dyn std::error::Error>> {
+		let color = shape_style.color.clone();
 		chart
 			.draw_series(LineSeries::new(
-				skill_timeline.changes.iter().zip((1..).map(|i| skill_timeline.changes.get(i)))
+				timeline.changes.iter().zip((1..).map(|i| timeline.changes.get(i)))
 					.map(|((datetime, ssr), next)| {
 						let next_datetime = match next {
 							Some((dt, _ssr)) => parsedate(dt),
 							None => chrono::Utc::now().date(),
 						};
 						let ssr = ssr.get_pre_070(ss);
-						vec![ // who needs memory efficiency lolololololol
+						vec![ // who needs allocation efficiency lolololololol
 							(parsedate(datetime), ssr),
 							(next_datetime, ssr),
 						]
 					})
 					.flatten(),
-				ShapeStyle {
-					color: color.clone(),
-					filled: true,
-					stroke_width: if ss == etterna::Skillset8::Overall { 3 } else { 1 },
-				}
+				shape_style
 			))?
-			.label(ss.to_string())
-			.legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], color));
+			.label(label)
+			.legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &color));
+		Ok(())
+	};
+	if let (Some(skill_timeline_2), Some(username_2)) = (skill_timeline_2, username_2) {
+		draw_timeline(&skill_timeline_1, etterna::Skillset8::Overall, username_1.to_owned(), ShapeStyle {
+			color: RGBColor(128, 255, 128).to_rgba(),
+			filled: true,
+			stroke_width: 2,
+		})?;
+		draw_timeline(&skill_timeline_2, etterna::Skillset8::Overall, username_2.to_owned(), ShapeStyle {
+			color: RGBColor(128, 255, 255).to_rgba(),
+			filled: true,
+			stroke_width: 2,
+		})?;
+	} else {
+		for ss in etterna::Skillset8::iter() {
+			draw_timeline(&skill_timeline_1, ss, ss.to_string(), ShapeStyle {
+				color: skillset_color_map.get(&ss).unwrap().clone(),
+				filled: true,
+				stroke_width: if ss == etterna::Skillset8::Overall { 3 } else { 1 },
+			})?;
+		}
 	}
 
 	chart
@@ -103,8 +155,12 @@ fn inner_draw_skill_graph(
 }
 
 pub fn draw_skill_graph(
-	skill_timeline: &etterna::SkillTimeline<&str>,
-	output_path: &str
+	skill_timeline_1: &etterna::SkillTimeline<&str>,
+	username_1: &str,
+	skill_timeline_2: Option<&etterna::SkillTimeline<&str>>,
+	username_2: Option<&str>,
+	output_path: &str,
 ) -> Result<(), String> {
-	inner_draw_skill_graph(skill_timeline, output_path).map_err(|e| e.to_string())
+	inner_draw_skill_graph(skill_timeline_1, username_1, skill_timeline_2, username_2, output_path)
+		.map_err(|e| e.to_string())
 }
