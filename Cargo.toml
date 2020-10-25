@@ -16,14 +16,15 @@ regex = { version = "1.3", default-features = false }
 html2md = "0.2.9"
 thiserror = "1.0.20"
 rand = "0.7.3"
-#etternaonline_api = { path = "../eo-api" }
+# etternaonline_api = { path = "../eo-api" }
 etternaonline_api = { git = "https://github.com/kangalioo/etternaonline-api" }
 plotters = "0.3.0"
 plotters-backend = "0.3.0"
 plotters-bitmap = "0.3.0" # sjkhebrgkjhsdrfg why is plotters so segmentated
-#etterna = { package = "etterna_base", path = "../etterna-base", features = ["parallel", "serde"] }
+# etterna = { package = "etterna_base", path = "../etterna-base", features = ["parallel", "serde"] }
 etterna = { package = "etterna_base", git = "https://github.com/kangalioo/etterna-base", features = ["parallel", "serde"] }
 chrono = "0.4.13"
 once_cell = "1.4.1"
 score_ocr = { path = "score_ocr" }
 pattern_draw = { path = "pattern_draw" }
+thread-scoped = "1.0.2"
