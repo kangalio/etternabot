@@ -11,7 +11,7 @@ mod serenity {
 			user::User,
 			gateway::Ready,
 			channel::{Message, Reaction},
-			id::{UserId, ChannelId, MessageId},
+			id::{UserId, ChannelId, MessageId, GuildId},
 			guild::Member
 		},
 		http::error::{ErrorResponse, Error as HttpError, DiscordJsonError},

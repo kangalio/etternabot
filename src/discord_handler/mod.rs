@@ -87,7 +87,8 @@ struct ScoreCard<'a> {
 	user_id: Option<u32>, // pass None if score link shouldn't shown
 	show_ssrs_and_judgements_and_modifiers: bool,
 	alternative_judge: Option<&'a etterna::Judge>,
-	triggerers: Option<&'a [serenity::User]>,
+	#[allow(clippy::type_complexity)]
+	triggerers: Option<(&'a [serenity::User], (serenity::GuildId, serenity::ChannelId, serenity::MessageId))>,
 }
 
 struct NoteskinProvider {
@@ -987,8 +988,14 @@ Examples:
 		};
 
 		let mut description = String::new();
-		if let Some(triggerers) = info.triggerers {
-			description += "_Requested by ";
+		if let Some((triggerers, trigger_msg)) = info.triggerers {
+			let (server_id, channel_id, msg_id) = trigger_msg;
+			description += &format!(
+				"_[Requested](https://discord.com/channels/{}/{}/{}) by ",
+				server_id,
+				channel_id,
+				msg_id
+			);
 			for user in triggerers.iter() {
 				description += &format!("<@{}>, ", user.id);
 			}
@@ -1421,6 +1428,11 @@ Examples:
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<(), Error> {
+		let guild_id = match msg.guild_id {
+			Some(x) => x,
+			None => return Ok(()), // this msg was sent in DMs
+		};
+
 		if msg.channel_id.0 != self.config.score_channel {
 			return Ok(());
 		}
@@ -1530,7 +1542,7 @@ Examples:
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.ocr_score_card_manager.add_candidate(msg.id, msg.author.id, scorekey, user_id);
+		self.ocr_score_card_manager.add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
 
 		Ok(())
 	}
@@ -1548,13 +1560,14 @@ Examples:
 			let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();
 			let eo_user_id = score_info.eo_user_id;
+			let trigger_msg = score_info.trigger_msg;
 
 			self.score_card(&ctx, self.config.score_ocr_card_channel.into(), ScoreCard {
 				scorekey: &scorekey,
 				user_id: Some(eo_user_id),
 				show_ssrs_and_judgements_and_modifiers: false,
 				alternative_judge: None,
-				triggerers: Some(&reactors),
+				triggerers: Some((&reactors, trigger_msg)),
 			})?;
 		}
 
@@ -1563,6 +1576,8 @@ Examples:
 }
 
 struct Candidate {
+	guild_id: serenity::GuildId,
+	channel_id: serenity::ChannelId,
 	message_id: serenity::MessageId,
 	#[allow(dead_code)] // idk maybe we will need this again in the future
 	author_id: serenity::UserId,
@@ -1577,7 +1592,8 @@ struct Candidate {
 struct ScoreCardTrigger<'a> {
 	scorekey: &'a etterna::Scorekey,
 	eo_user_id: u32,
-	reactors: &'a std::collections::HashSet<serenity::User>
+	reactors: &'a std::collections::HashSet<serenity::User>,
+	trigger_msg: (serenity::GuildId, serenity::ChannelId, serenity::MessageId),
 }
 
 struct OcrScoreCardManager {
@@ -1590,6 +1606,8 @@ impl OcrScoreCardManager {
 	}
 
 	pub fn add_candidate(&mut self,
+		guild_id: serenity::GuildId,
+		channel_id: serenity::ChannelId,
 		message_id: serenity::MessageId,
 		author_id: serenity::UserId,
 		scorekey: etterna::Scorekey,
@@ -1597,7 +1615,7 @@ impl OcrScoreCardManager {
 	) {
 		println!("Added new candidate {}, author id {}", &scorekey, author_id.0);
 		self.candidates.push(Candidate {
-			message_id, author_id, scorekey, user_id,
+			guild_id, channel_id, message_id, author_id, scorekey, user_id,
 			
 			reactors: std::collections::HashSet::new(),
 			score_card_has_been_printed: false,
@@ -1639,7 +1657,8 @@ impl OcrScoreCardManager {
 			Some(ScoreCardTrigger {
 				scorekey: &candidate.scorekey,
 				eo_user_id: candidate.user_id,
-				reactors: &candidate.reactors
+				reactors: &candidate.reactors,
+				trigger_msg: (candidate.guild_id, candidate.channel_id, candidate.message_id),
 			})
 		} else {
 			None
