@@ -43,7 +43,7 @@ pub struct Iter192ndIntervals {
 }
 
 impl Iter192ndIntervals {
-	pub fn next(&mut self) -> u32 {
+	pub fn next_interval(&mut self) -> u32 {
 		let interval = self.exact_192nd_interval + self.carry;
 		self.carry = interval.fract();
 		interval.floor() as u32
@@ -54,6 +54,6 @@ impl Iterator for Iter192ndIntervals {
 	type Item = u32;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		Some(Iter192ndIntervals::next(self))
+		Some(Iter192ndIntervals::next_interval(self))
 	}
 }

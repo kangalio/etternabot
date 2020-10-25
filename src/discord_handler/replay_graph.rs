@@ -89,11 +89,11 @@ fn gen_replay_stats(replay: &eo::Replay) -> Option<ReplayStats> {
 	for note in notes {
 		let note_type = note.note_type?;
 		match note_type {
-			eo::NoteType::Tap | eo::NoteType::HoldHead | eo::NoteType::Lift => {
+			etterna::NoteType::Tap | etterna::NoteType::HoldHead | etterna::NoteType::Lift => {
 				points += etterna::wife3(note.hit, &etterna::J4);
 
 				// if we miss a hold head, we additionally get the hold drop penalty
-				if note.hit.was_missed() && note_type == eo::NoteType::HoldHead {
+				if note.hit.was_missed() && note_type == etterna::NoteType::HoldHead {
 					points += etterna::Wife3::HOLD_DROP_WEIGHT;
 				}
 		
@@ -103,11 +103,11 @@ fn gen_replay_stats(replay: &eo::Replay) -> Option<ReplayStats> {
 				if wifescore < min_wifescore { min_wifescore = wifescore }
 				if wifescore > max_wifescore { max_wifescore = wifescore }
 			},
-			eo::NoteType::Mine => {
+			etterna::NoteType::Mine => {
 				points += etterna::Wife3::MINE_HIT_WEIGHT;
 				mine_hit_locations.push(note.time);
 			},
-			eo::NoteType::HoldTail | eo::NoteType::Fake | eo::NoteType::Keysound => {},
+			etterna::NoteType::HoldTail | etterna::NoteType::Fake | etterna::NoteType::Keysound => {},
 		}
 	}
 

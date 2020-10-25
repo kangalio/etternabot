@@ -249,7 +249,7 @@ impl State {
 			skillset = None;
 			eo_username = self.get_eo_username(ctx, msg)?;
 		} else if args.len() == 1 {
-			match eo::Skillset7::from_user_input(args[0]) {
+			match etterna::Skillset7::from_user_input(args[0]) {
 				Some(parsed_skillset) => {
 					skillset = Some(parsed_skillset);
 					eo_username = self.get_eo_username(ctx, msg)?;
@@ -260,7 +260,7 @@ impl State {
 				},
 			}
 		} else if args.len() == 2 {
-			skillset = match eo::Skillset7::from_user_input(args[0]) {
+			skillset = match etterna::Skillset7::from_user_input(args[0]) {
 				Some(parsed_skillset) => Some(parsed_skillset),
 				None => {
 					msg.channel_id.say(
@@ -391,7 +391,7 @@ impl State {
 		}
 
 		let mut rating_string = "```Prolog\n".to_owned();
-		for skillset in eo::Skillset8::iter() {
+		for skillset in etterna::Skillset8::iter() {
 			rating_string += &format!(
 				"{: >10}:   {: >5.2} (#{})\n",
 				skillset.to_string(),
@@ -581,7 +581,7 @@ impl State {
 		let generated_pattern = pattern_draw::draw_pattern(pattern_draw::PatternRecipe {
 			noteskin,
 			scroll_direction,
-			keymode,
+			keymode: keymode as usize /* I thought I had changedit to u32 in pattern_draw???? */,
 			vertical_spacing_multiplier,
 			pattern: &segments,
 			max_image_dimensions: (5000, 10000),
@@ -614,7 +614,7 @@ impl State {
 		let you = self.v2()?.user_details(you)?;
 
 		let mut string = "```Prolog\n".to_owned();
-		for skillset in eo::Skillset8::iter() {
+		for skillset in etterna::Skillset8::iter() {
 			string += &format!(
 				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work

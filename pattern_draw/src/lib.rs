@@ -109,7 +109,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 
 		for row_data in &pattern.rows {
 			rows.push((row_data, row_number));
-			row_number += snap_192nd_intervals.next() as usize;
+			row_number += snap_192nd_intervals.next_interval() as usize;
 		}
 	}
 	let highest_row = rows.iter().map(|&(_, row_number)| row_number).max().unwrap_or(0);
@@ -136,7 +136,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 					etterna::ScrollDirection::Downscroll => highest_row - row_number,
 				},
 				image: match note_type {
-					NoteType::Tap => noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number))?,
+					NoteType::Tap => noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number as _))?,
 					NoteType::Mine => noteskin.mine()?,
 				},
 			});
