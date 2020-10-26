@@ -687,8 +687,12 @@ impl State {
 			let scores = storage.as_ref().expect("impossible");
 
 			Ok(etterna::skill_timeline(
-				scores.scores.iter()
-					.filter_map(|score| Some((score.date.as_str(), &score.validity_dependant.as_ref()?.ssr))),
+				scores.scores.iter().filter_map(|score| {
+					Some((
+						score.date.as_str(),
+						score.validity_dependant.as_ref()?.nerfed_ssr(),
+					))
+				}),
 				true,
 			))
 		}
