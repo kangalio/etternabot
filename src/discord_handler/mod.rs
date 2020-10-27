@@ -664,26 +664,37 @@ impl State {
 		Ok(())
 	}
 
+	#[allow(clippy::needless_collect)] // false positive
 	fn skillgraph(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
 	) -> Result<(), Error> {
-		let (eo_username_1, eo_username_2) = match *args.split_whitespace().collect::<Vec<_>>() {
-			[] => (self.get_eo_username(ctx, msg)?, None),
-			[username] => (username.to_owned(), None),
-			[username, username_2] => (username.to_owned(), Some(username_2.to_owned())),
-			_ => {
-				msg.channel_id.say(&ctx.http, "Only two users' skillgraphs can be displayed at once!")?;
-				return Ok(());
-			}
-		};
-
-		if let Some(eo_username_2) = &eo_username_2 {
-			msg.channel_id.say(&ctx.http, format!("Requesting data for {} and {} (this may take a while)", eo_username_1, eo_username_2))?;
-		} else {
-			msg.channel_id.say(&ctx.http, format!("Requesting data for {} (this may take a while)", eo_username_1))?;
+		let mut usernames = args.split_whitespace().collect::<Vec<_>>();
+		let self_username;
+		if usernames.len() == 0 {
+			self_username = self.get_eo_username(ctx, msg)?;
+			usernames.push(&self_username);
 		}
+		// the usernames vector is at least one element from now on!
+
+		if usernames.len() > 20 {
+			msg.channel_id.say(&ctx.http, "Relax, now. 10 simultaneous skillgraphs ought to be enough")?;
+			return Ok(());
+		}
+
+		match usernames.as_slice() {
+			[username] => msg.channel_id.say(&ctx.http, format!(
+				"Requesting data for {} (this may take a while)",
+				username,
+			))?,
+			[usernames @ .., last] => msg.channel_id.say(&ctx.http, format!(
+				"Requesting data for {} and {} (this may take a while)",
+				usernames.join(", "),
+				last,
+			))?,
+			[] => unreachable!(),
+		};
 
 		fn download_skill_timeline<'a>(
 			username: &str,
@@ -714,25 +725,30 @@ impl State {
 			))
 		}
 
-		let (mut storage_1, mut storage_2) = (None, None);
-		let (skill_timeline_1, skill_timeline_2);
-		if let Some(eo_username_2) = &eo_username_2 {
-			// SAFETY: this is safe as long as the handle is not memory leaked, which we're not doing
-			let skill_timeline_2_join_handle = unsafe { thread_scoped::scoped(|| {
-				download_skill_timeline(eo_username_2, &self.web_session, &mut storage_2)
-			}) };
-			skill_timeline_1 = download_skill_timeline(&eo_username_1, &self.web_session, &mut storage_1)?;
-			skill_timeline_2 = Some(skill_timeline_2_join_handle.join()?);
-		} else {
-			skill_timeline_1 = download_skill_timeline(&eo_username_1, &self.web_session, &mut storage_1)?;
-			skill_timeline_2 = None;
-		};
-		
+		const MAX_SIMULTANEOUS_DOWNLOADS: usize = 3;
+
+		let mut storages = (0..usernames.len()).map(|_| None).collect::<Vec<_>>();
+		let mut skill_timelines = Vec::with_capacity(usernames.len());
+		for (username_chunk, storage_chunk) in usernames.chunks(MAX_SIMULTANEOUS_DOWNLOADS).zip(storages.chunks_mut(MAX_SIMULTANEOUS_DOWNLOADS)) {
+			let join_handles = username_chunk.iter().zip(storage_chunk)
+				.map(|(username, storage)| {
+					// SAFETY: this is safe as long as the returned handle is not leaked, which we're not doing
+					unsafe {
+						thread_scoped::scoped(move || {
+							download_skill_timeline(username, &self.web_session, storage)
+						})
+					}
+				})
+				.collect::<Vec<_>>();
+			
+			for join_handle in join_handles {
+				skill_timelines.push(join_handle.join()?);
+			}
+		}
+
 		draw_skill_graph::draw_skill_graph(
-			&skill_timeline_1,
-			&eo_username_1,
-			skill_timeline_2.as_ref(),
-			eo_username_2.as_deref(),
+			&skill_timelines,
+			&usernames,
 			"output.png"
 		).map_err(Error::SkillGraphError)?;
 
