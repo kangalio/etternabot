@@ -100,14 +100,27 @@ struct NoteskinProvider {
 	mbz: pattern_draw::Noteskin,
 }
 
+// The contained Option must be Some!!!
+struct IdkWhatImDoing<'a> {
+	guard: std::sync::MutexGuard<'a, Option<eo::v2::Session>>,
+}
+
+impl std::ops::Deref for IdkWhatImDoing<'_> {
+	type Target = eo::v2::Session;
+
+	fn deref(&self) -> &Self::Target {
+		self.guard.as_ref().unwrap()
+	}
+}
+
 pub struct State {
 	config: Config,
-	data: Data,
-	v2_session: Option<eo::v2::Session>, // stores the session, or None if login failed
+	data: std::sync::Mutex<Data>,
+	v2_session: std::sync::Mutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	noteskin_provider: NoteskinProvider,
 	user_id: serenity::UserId,
-	ocr_score_card_manager: OcrScoreCardManager,
+	ocr_score_card_manager: std::sync::Mutex<OcrScoreCardManager>,
 }
 
 impl State {
@@ -118,18 +131,18 @@ impl State {
 		);
 
 		Ok(Self {
-			v2_session: match Self::attempt_v2_login() {
+			v2_session: std::sync::Mutex::new(match Self::attempt_v2_login() {
 				Ok(v2) => Some(v2),
 				Err(e) => {
 					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
 					None
 				}
-			}, // is set with attempt_v2_login below
+			}),
 			web_session,
 			config: Config::load(),
-			data: Data::load(),
+			data: std::sync::Mutex::new(Data::load()),
 			user_id: bot_user_id,
-			ocr_score_card_manager: OcrScoreCardManager::new(),
+			ocr_score_card_manager: std::sync::Mutex::new(OcrScoreCardManager::new()),
 			noteskin_provider: NoteskinProvider {
 				dbz: pattern_draw::Noteskin::read_ldur(
 					64,
@@ -182,31 +195,35 @@ impl State {
 
 	/// attempt to retrieve the v2 session object. If there is none because login had failed,
 	/// retry login just to make sure that EO is _really_ done
-	fn v2(&mut self) -> Result<&mut eo::v2::Session, Error> {
+	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
+	/// holds the result from its call to v2(), thread 1 will block.
+	fn v2(&self) -> Result<IdkWhatImDoing, Error> {
+		let mut v2_session = self.v2_session.lock().unwrap();
+
 		// the unwrap()'s in here are literally unreachable. But for some reason the borrow checker
 		// always throws a fit when I try to restructure the code to avoid the unwraps
-
-		if self.v2_session.is_some() {
-			Ok(self.v2_session.as_mut().unwrap())
+		
+		if v2_session.is_some() {
+			Ok(IdkWhatImDoing { guard: v2_session })
 		} else {
 			match Self::attempt_v2_login() {
 				Ok(v2) => {
-					self.v2_session = Some(v2);
-					Ok(self.v2_session.as_mut().unwrap())
+					*v2_session = Some(v2);
+					Ok(IdkWhatImDoing { guard: v2_session })
 				},
 				Err(e) => {
-					self.v2_session = None;
+					*v2_session = None;
 					Err(Error::FailedEoLogin(e))
 				}
 			}
 		}
 	}
 
-	fn get_eo_username(&mut self,
+	fn get_eo_username(&self,
 		_ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<String, Error> {
-		if let Some(user_entry) = self.data.user_registry.iter()
+		if let Some(user_entry) = self.data.lock().unwrap().user_registry.iter()
 			.find(|user| user.discord_id == msg.author.id.0)
 		{
 			return Ok(user_entry.eo_username.to_owned());
@@ -224,14 +241,14 @@ impl State {
 		}
 	}
 
-	fn get_eo_user_id(&mut self, eo_username: &str) -> Result<u32, Error> {
-		match self.data.user_registry.iter().find(|user| user.eo_username == eo_username) {
+	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
+		match self.data.lock().unwrap().user_registry.iter().find(|user| user.eo_username == eo_username) {
 			Some(user) => Ok(user.eo_id),
 			None => Ok(self.web_session.user_details(eo_username)?.user_id),
 		}
 	}
 
-	fn top_scores(&mut self,
+	fn top_scores(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
@@ -326,7 +343,7 @@ impl State {
 		Ok(())
 	}
 
-	fn latest_scores(&mut self,
+	fn latest_scores(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
@@ -369,7 +386,7 @@ impl State {
 		Ok(())
 	}
 
-	fn profile(&mut self,
+	fn profile(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
@@ -430,7 +447,7 @@ impl State {
 		Ok(())
 	}
 	
-	fn pattern(&mut self,
+	fn pattern(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
@@ -439,7 +456,7 @@ impl State {
 		let mut keymode_override = None;
 		let mut snap = etterna::Snap::_16th.into();
 		let mut vertical_spacing_multiplier = 1.0;
-		let mut scroll_direction = self.data.scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
+		let mut scroll_direction = self.data.lock().unwrap().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
 		let mut segments = Vec::new();
 
 		let extract_snap = |string: &str, user_intended: &mut bool| {
@@ -605,7 +622,7 @@ impl State {
 		Ok(())
 	}
 
-	fn profile_compare(&mut self,
+	fn profile_compare(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		me: &str,
@@ -647,7 +664,7 @@ impl State {
 		Ok(())
 	}
 
-	fn skillgraph(&mut self,
+	fn skillgraph(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
@@ -724,7 +741,7 @@ impl State {
 		Ok(())
 	}
 
-	fn command(&mut self,
+	fn command(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		cmd: &str,
@@ -773,7 +790,7 @@ Examples:
 `+pattern 6k [34]52[34]25` draws a pattern in 6k mode, even though the notes span across just 5 lanes
 						"#.to_owned()
 					} else {
-						self.data.make_description(&self.config.minanyms)
+						self.data.lock().unwrap().make_description(&self.config.minanyms)
 					})
 					.color(crate::ETTERNA_COLOR)
 				))?;
@@ -800,7 +817,7 @@ Examples:
 					return Ok(());
 				}
 
-				if let Some(user) = self.data.user_registry.iter()
+				if let Some(user) = self.data.lock().unwrap().user_registry.iter()
 					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
 				{
 					msg.channel_id.say(&ctx.http, format!(
@@ -893,8 +910,8 @@ Examples:
 						return Ok(());
 					},
 				};
-				self.data.set_scroll(msg.author.id.0, scroll);
-				self.data.save();
+				self.data.lock().unwrap().set_scroll(msg.author.id.0, scroll);
+				self.data.lock().unwrap().save();
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
@@ -910,7 +927,7 @@ Examples:
 					eo_username: args.to_owned(),
 				};
 				
-				match self.data.user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
+				match self.data.lock().unwrap().user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
 					Some(existing_user_entry) => {
 						msg.channel_id.say(&ctx.http, format!(
 							"Successfully updated username from `{}` to `{}`",
@@ -926,10 +943,10 @@ Examples:
 							args
 						))?;
 
-						self.data.user_registry.push(new_user_entry);
+						self.data.lock().unwrap().user_registry.push(new_user_entry);
 					},
 				};
-				self.data.save();
+				self.data.lock().unwrap().save();
 			},
 			"rivalset" => {
 				if args.is_empty() {
@@ -941,7 +958,7 @@ Examples:
 					return Ok(());
 				}
 
-				let response = match self.data.set_rival(
+				let response = match self.data.lock().unwrap().set_rival(
 					msg.author.id.0,
 					args.to_owned()
 				) {
@@ -953,11 +970,11 @@ Examples:
 					None => format!("Successfully set your rival to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.data.save();
+				self.data.lock().unwrap().save();
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
-				let you = match self.data.rival(msg.author.id.0) {
+				let you = match self.data.lock().unwrap().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -989,7 +1006,7 @@ Examples:
 		Ok(())
 	}
 
-	fn song_card(&mut self,
+	fn song_card(&self,
 		_ctx: &serenity::Context,
 		_msg: &serenity::Message,
 		song_id: u32,
@@ -999,7 +1016,7 @@ Examples:
 		Ok(())
 	}
 
-	fn score_card(&mut self,
+	fn score_card(&self,
 		ctx: &serenity::Context,
 		channel_id: serenity::ChannelId,
 		info: ScoreCard<'_>,
@@ -1290,7 +1307,7 @@ Examples:
 		Ok(())
 	}
 
-	pub fn message(&mut self,
+	pub fn message(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		was_explicitly_invoked: &mut bool,
@@ -1405,7 +1422,7 @@ Examples:
 		Ok(())
 	}
 
-	pub fn check_member_update_for_max_300(&mut self,
+	pub fn check_member_update_for_max_300(&self,
 		ctx: serenity::Context,
 		old: serenity::Member,
 		new: serenity::Member
@@ -1439,16 +1456,16 @@ Examples:
 		Ok(())
 	}
 
-	pub fn guild_member_update(&mut self,
+	pub fn guild_member_update(&self,
 		ctx: serenity::Context,
 		old: Option<serenity::Member>,
 		new: serenity::Member
 	) -> Result<(), Error> {
-		if let Some(user_entry) = self.data.user_registry.iter_mut()
+		if let Some(user_entry) = self.data.lock().unwrap().user_registry.iter_mut()
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
 			user_entry.discord_username = new.user.read().name.clone();
-			self.data.save();
+			self.data.lock().unwrap().save();
 		}
 
 		if let Some(old) = old {
@@ -1458,7 +1475,7 @@ Examples:
 		Ok(())
 	}
 
-	pub fn check_potential_score_screenshot(&mut self,
+	pub fn check_potential_score_screenshot(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<(), Error> {
@@ -1576,12 +1593,12 @@ Examples:
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.ocr_score_card_manager.add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
+		self.ocr_score_card_manager.lock().unwrap().add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
 
 		Ok(())
 	}
 
-	pub fn reaction_add(&mut self,
+	pub fn reaction_add(&self,
 		ctx: serenity::Context,
 		reaction: serenity::Reaction,
 	) -> Result<(), Error> {
@@ -1589,7 +1606,7 @@ Examples:
 			return Ok(());
 		}
 
-		if let Some(score_info) = self.ocr_score_card_manager.add_reaction(&ctx, &reaction)? {
+		if let Some(score_info) = self.ocr_score_card_manager.lock().unwrap().add_reaction(&ctx, &reaction)? {
 			// borrow checker headaches because this thing is monolithic
 			let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();

@@ -26,26 +26,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	macro_rules! lock {
 		($this:ident, $state:ident) => {
 			// if poisened, kill the whole process instead of failing over and over again
-			let mut guard = $this.state.lock().unwrap_or_else(|_| {
-				println!("Mutex locking failed! TERMINATING THE PROGRAM!");
+			let guard = $this.state.read().unwrap_or_else(|_| {
+				println!("RwLock locking failed! TERMINATING THE PROGRAM!");
 				std::process::exit(1);
 			});
 
-			let $state = match *guard {
-				Some(ref mut state) => state,
-				None => return, // if the bot is not ready yet, don't execute
+			let $state = match &*guard {
+				Some(state) => state,
+				None => return, // if the bot is not ready yet, don't execute the command
 			};
 		}
 	}
 
 	struct Handler {
-		state: std::sync::Mutex<Option<discord_handler::State>>,
+		state: std::sync::RwLock<Option<discord_handler::State>>,
 	}
 
 	impl serenity::EventHandler for Handler {
 		fn ready(&self, _: serenity::Context, ready: serenity::Ready) {
 			println!("Connected to Discord as {}", ready.user.name);
-			*self.state.lock().unwrap() = Some(discord_handler::State::load(ready.user.id)
+			*self.state.write().unwrap() = Some(discord_handler::State::load(ready.user.id)
 				.expect("Failed to initialize"));
 			println!("Logged into EO");
 
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	}
 
-	let handler = Handler { state: std::sync::Mutex::new(None) };
+	let handler = Handler { state: std::sync::RwLock::new(None) };
 
 	// Login to Discord and start bot
 	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
