@@ -104,49 +104,4 @@ impl Data {
 	pub fn rival(&self, discord_user: u64) -> Option<&str> {
 		self.rival_mapping.get(&discord_user).map(|x| x as _)
 	}
-
-	pub fn make_description(&mut self, minanyms: &[String]) -> String {
-		let description = format!(
-			r#"
-Here are my commands: (Descriptions by Fission)
-
-**+profile [username]**
-*Show your fabulously superberful profile*
-**+top10 [username] [skillset]**
-*For when top9 isn't enough*
-**+top[nn] [username] [skillset]**
-*Sometimes we take things too far*
-**+compare [user1] [user2]**
-*One person is an objectively better person than the other, find out which one!*
-**+rival**
-*But are you an objectively better person than gary oak?*
-**+rivalset [username]**
-*Replace gary oak with a more suitable rival*
-**+userset [username]**
-*Don't you dare set your user to* {} *you imposter*
-
-More commands:
-**+pattern [pattern string]**
-*Visualize note patterns, for example `lrlr` or `[14]3[12]`. This command has many options, type `+help pattern` for that*
-**+scrollset [down/up]**
-*Set your preferred scroll type that will be used as a default*
-**+skillgraph [user]**
-*Show a graph of your profile rating over time, including all skillsets*
-**+rs [username] [judge]**
-*Show your most recent score*
-**+quote**
-*Print one of various random quotes, phrases and memes from various rhythm gaming communities*
-**+lastsession [username]**
-*Show the last 10 scores*
-**+help**
-*Print this message*
-
-You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
-your message, I will also show the wifescores with that judge.
-			"#,
-			minanyms[(rand::random::<f64>() * minanyms.len() as f64) as usize]
-		);
-
-		description
-	}
 }
