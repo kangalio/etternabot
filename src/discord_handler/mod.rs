@@ -663,32 +663,26 @@ impl State {
 
 		Ok(())
 	}
-
-	#[allow(clippy::needless_collect)] // false positive
+	
+	// usernames slice must contain at least one element!
 	fn skillgraph(&self,
 		ctx: &serenity::Context,
-		msg: &serenity::Message,
-		args: &str,
+		channel_id: serenity::ChannelId,
+		usernames: &[&str],
 	) -> Result<(), Error> {
-		let mut usernames = args.split_whitespace().collect::<Vec<_>>();
-		let self_username;
-		if usernames.len() == 0 {
-			self_username = self.get_eo_username(ctx, msg)?;
-			usernames.push(&self_username);
-		}
-		// the usernames vector is at least one element from now on!
+		assert!(usernames.len() >= 1);
 
 		if usernames.len() > 20 {
-			msg.channel_id.say(&ctx.http, "Relax, now. 10 simultaneous skillgraphs ought to be enough")?;
+			channel_id.say(&ctx.http, "Relax, now. 10 simultaneous skillgraphs ought to be enough")?;
 			return Ok(());
 		}
 
-		match usernames.as_slice() {
-			[username] => msg.channel_id.say(&ctx.http, format!(
+		match usernames {
+			[username] => channel_id.say(&ctx.http, format!(
 				"Requesting data for {} (this may take a while)",
 				username,
 			))?,
-			[usernames @ .., last] => msg.channel_id.say(&ctx.http, format!(
+			[usernames @ .., last] => channel_id.say(&ctx.http, format!(
 				"Requesting data for {} and {} (this may take a while)",
 				usernames.join(", "),
 				last,
@@ -752,7 +746,7 @@ impl State {
 			"output.png"
 		).map_err(Error::SkillGraphError)?;
 
-		msg.channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+		channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 
 		Ok(())
 	}
@@ -825,7 +819,12 @@ Examples:
 				self.pattern(ctx, msg, args)?;
 			},
 			"skillgraph" => {
-				self.skillgraph(ctx, msg, args)?;
+				let usernames = args.split_whitespace().collect::<Vec<_>>();
+				if usernames.len() == 0 {
+					self.skillgraph(ctx, msg.channel_id, &[&self.get_eo_username(ctx, msg)?])?;
+				} else {
+					self.skillgraph(ctx, msg.channel_id, &usernames)?;
+				}
 			},
 			"lookup" => {
 				if args.is_empty() {
@@ -998,6 +997,17 @@ Examples:
 					}
 				};
 				self.profile_compare(ctx, msg, me, &you)?;
+			},
+			"rivalgraph" => {
+				let me = self.get_eo_username(ctx, msg)?;
+				let you = match self.data.lock().unwrap().rival(msg.author.id.0) {
+					Some(rival) => rival.to_owned(),
+					None => {
+						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+						return Ok(());
+					}
+				};
+				self.skillgraph(ctx, msg.channel_id, &[&me, &you])?;
 			}
 			"compare" => {
 				let args: Vec<&str> = args.split_whitespace().collect();
