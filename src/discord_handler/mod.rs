@@ -1789,6 +1789,11 @@ impl OcrScoreCardManager {
 	) -> Result<Option<ScoreCardTrigger>, Error> {
 		println!("Got reaction in score ocr card manager");
 
+		// Let's check that the user even clicked the correct emoji type
+		if reaction.emoji != serenity::ReactionType::Unicode("🔍".to_owned()) {
+			return Ok(None);
+		}
+
 		// Find the Candidate that this reaction was made on, or return if the user made the
 		// reaction on some unrelated message, i.e. a non-candidate
 		let mut candidate = match self.candidates.iter_mut()

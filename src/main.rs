@@ -11,7 +11,7 @@ mod serenity {
 		model::{
 			user::User,
 			gateway::Ready,
-			channel::{Message, Reaction},
+			channel::{Message, Reaction, ReactionType},
 			id::{UserId, ChannelId, MessageId, GuildId},
 			guild::Member
 		},
