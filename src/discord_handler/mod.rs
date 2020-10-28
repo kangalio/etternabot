@@ -745,6 +745,7 @@ your message, I will also show the wifescores with that judge.
 		string += "```";
 
 		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
+			.color(crate::ETTERNA_COLOR)
 			.title(format!(
 				"{} {} vs. {} {}",
 				country_code_to_flag_emoji(&me.country_code),
