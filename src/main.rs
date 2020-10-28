@@ -26,15 +26,22 @@ pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146)
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	macro_rules! lock {
 		($this:ident, $state:ident) => {
-			// if poisened, kill the whole process instead of failing over and over again
-			let guard = $this.state.read().unwrap_or_else(|_| {
-				println!("RwLock locking failed! TERMINATING THE PROGRAM!");
-				std::process::exit(1);
-			});
-
-			let $state = match &*guard {
-				Some(state) => state,
-				None => return, // if the bot is not ready yet, don't execute the command
+			let mut guard;
+			let $state = loop {
+				// if poisened, kill the whole process instead of failing over and over again
+				guard = $this.state.read().unwrap_or_else(|_| {
+					println!("RwLock locking failed! TERMINATING THE PROGRAM!");
+					std::process::exit(1);
+				});
+	
+				match &*guard {
+					Some(state) => break state,
+					None => {
+						drop(guard); // important! or the login attempt can't finish
+						// if the bot is not ready yet, wait a bit and check again
+						std::thread::sleep(std::time::Duration::from_millis(100));
+					}
+				};
 			};
 		}
 	}
