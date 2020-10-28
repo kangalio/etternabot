@@ -62,6 +62,44 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 		.collect()
 }
 
+/// Returns a string that may be shorter than `max_length`, but never longer
+/// (measured in chars, not in bytes!)
+fn gen_unicode_block_bar(min_length: usize, max_length: usize, proportion: f32) -> String {
+    // index x = x 8ths of a full block
+    const BLOCK_CHARS: [char; 9] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+
+    let mut string = String::with_capacity(max_length);
+    for _ in 0..min_length {
+        string.push(BLOCK_CHARS[8]);
+    }
+    
+    let num_possible_steps = (max_length - min_length) * 8;
+    let step = (proportion * num_possible_steps as f32) as usize;
+    for _ in 0..(step / 8) {
+        string.push(BLOCK_CHARS[8]);
+	}
+	// UNWRAP: due to the modulo the index is guaranteed to be in bounds
+    string.push(*BLOCK_CHARS.get(step % 8).unwrap());
+    
+    if let Some((truncation_point, _)) = string.char_indices().nth(max_length) {
+        string.truncate(truncation_point);
+    }
+    
+    string
+}
+
+/// Maps a value from src_range to dest_range. The value doesn't need to be inside src_range
+/// 
+/// ```rust
+/// assert_eq!(map_range(15.0, 10.0..20.0, 3.0..4.0), 3.5);
+/// assert_eq!(map_range(15.0, 10.0..20.0, -1.0, -3.0), -2.0);
+/// assert_eq!(map_range(30.0, 10.0..20.0, -1.0, -3.0), -5.0);
+/// ```
+fn map_range(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Range<f32>) -> f32 {
+	let proportion = (value - src_range.start) / (src_range.end - src_range.start);
+	dest_range.start + proportion * (dest_range.end - dest_range.start)
+}
+
 fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 	JUDGE_REGEX.captures_iter(string)
 		.filter_map(|groups| {
@@ -508,13 +546,22 @@ your message, I will also show the wifescores with that judge.
 			title += " (Patron)";
 		}
 
-		let mut rating_string = "```Prolog\n".to_owned();
+		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
+		for ss in etterna::Skillset8::iter() {
+			let ss_rating = details.rating.get_pre_070(ss);
+			if ss_rating < min_ss_rating { min_ss_rating = ss_rating; }
+			if ss_rating > max_ss_rating { max_ss_rating = ss_rating; }
+		}
+		
+		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
+			let ss_rating = details.rating.get_pre_070(skillset);
 			rating_string += &format!(
-				"{: >10}:   {: >5.2} (#{})\n",
+				"{: >10}:   {: >5.2}  #{: <4} ░▒▓{}\n",
 				skillset.to_string(),
-				details.rating.get_pre_070(skillset),
+				ss_rating,
 				ranks.get(skillset),
+				gen_unicode_block_bar(0, 9, map_range(ss_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
 			);
 		}
 		rating_string += "```";
