@@ -103,6 +103,7 @@ struct NoteskinProvider {
 	sbz: pattern_draw::Noteskin,
 	mbz: pattern_draw::Noteskin,
 	eo_baner: pattern_draw::Noteskin,
+	rustmania: pattern_draw::Noteskin,
 }
 
 // The contained Option must be Some!!!
@@ -192,6 +193,15 @@ impl State {
 					"assets/noteskin/eobaner-note-right.png", "assets/noteskin/eobaner-receptor-right.png",
 					"assets/noteskin/eobaner-mine.png",
 				)?,
+				rustmania: {
+					let mut rustmania = pattern_draw::Noteskin::read_ldur_with_6k(
+						224,
+						"assets/noteskin/rustmania-notes.png", "assets/noteskin/rustmania-receptor.png",
+						"assets/noteskin/rustmania-mine.png",
+					)?;
+					rustmania.turn_sprites_upside_down(); // I made an oopsie in gimp
+					rustmania
+				},
 			},
 		})
 	}
@@ -261,13 +271,14 @@ impl State {
 		}
 	}
 
+	/// The returned string must be displayed in an embed
 	fn make_help_message(&self, pattern_help: bool) -> String {
 		if pattern_help {
 			r#"
 **+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
 - `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
 - `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern. Can even be something like 20ths or 57ths!
-- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, `wafles`/`wafles3`, or `eo-baner`. If omitted, a default will be chosen
+- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`[.](https://pastebin.com/raw/5We1buQU) If omitted, a default will be chosen
 - `zoom` applies a certain stretch to the notes
 - `keymode` can be used to force a certain keymode when it's not obvious
 
@@ -571,6 +582,7 @@ your message, I will also show the wifescores with that judge.
 				"sbz" | "subtractbyzero" => Some(&self.noteskin_provider.sbz),
 				"mbz" | "multiplybyzero" => Some(&self.noteskin_provider.mbz),
 				"eo_baner" | "eobaner" => Some(&self.noteskin_provider.eo_baner),
+				"rustmania" => Some(&self.noteskin_provider.rustmania),
 				_ => None,
 			}
 		};

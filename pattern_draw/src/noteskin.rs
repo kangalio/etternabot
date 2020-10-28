@@ -350,4 +350,8 @@ impl Noteskin {
 		});
 		self.sprite_resolution = sprite_resolution as usize;
 	}
+
+	pub fn turn_sprites_upside_down(&mut self) {
+		self.for_each_texture(|texture| image::imageops::rotate180_in_place(texture));
+	}
 }
