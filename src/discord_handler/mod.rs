@@ -102,6 +102,7 @@ struct NoteskinProvider {
 	delta_note: pattern_draw::Noteskin,
 	sbz: pattern_draw::Noteskin,
 	mbz: pattern_draw::Noteskin,
+	eo_baner: pattern_draw::Noteskin,
 }
 
 // The contained Option must be Some!!!
@@ -183,6 +184,14 @@ impl State {
 					"assets/noteskin/wafles-notes.png", "assets/noteskin/wafles-receptor.png",
 					"assets/noteskin/wafles-mine.png",
 				)?,
+				eo_baner: pattern_draw::Noteskin::read_ldur(
+					120,
+					"assets/noteskin/eobaner-note-left.png", "assets/noteskin/eobaner-receptor-left.png",
+					"assets/noteskin/eobaner-note-down.png", "assets/noteskin/eobaner-receptor-down.png",
+					"assets/noteskin/eobaner-note-up.png", "assets/noteskin/eobaner-receptor-up.png",
+					"assets/noteskin/eobaner-note-right.png", "assets/noteskin/eobaner-receptor-right.png",
+					"assets/noteskin/eobaner-mine.png",
+				)?,
 			},
 		})
 	}
@@ -258,7 +267,7 @@ impl State {
 **+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
 - `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
 - `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern. Can even be something like 20ths or 57ths!
-- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`. If omitted, a default will be chosen
+- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, `wafles`/`wafles3`, or `eo-baner`. If omitted, a default will be chosen
 - `zoom` applies a certain stretch to the notes
 - `keymode` can be used to force a certain keymode when it's not obvious
 
@@ -561,6 +570,7 @@ your message, I will also show the wifescores with that judge.
 				"delta-note" | "delta" => Some(&self.noteskin_provider.delta_note),
 				"sbz" | "subtractbyzero" => Some(&self.noteskin_provider.sbz),
 				"mbz" | "multiplybyzero" => Some(&self.noteskin_provider.mbz),
+				"eo_baner" | "eobaner" => Some(&self.noteskin_provider.eo_baner),
 				_ => None,
 			}
 		};
