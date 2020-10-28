@@ -57,10 +57,12 @@ fn inner_draw_skill_graph(
 	}
 
 	let (mut left_bound, mut right_bound, mut upper_bound) = {
-		let (first, last) = first_and_last(&skill_timelines[0].changes)?;
+		// UNWRAP: we check above that skill_timelines has at least one element
+		let (first, last) = first_and_last(&skill_timelines.get(0).unwrap().changes)?;
 		(first.0, last.0, f32_max(etterna::Skillset8::iter().map(|ss| last.1.get(ss))))
 	};
-	for skill_timeline in &skill_timelines[1..] {
+	// UNWRAP: see above
+	for skill_timeline in skill_timelines.get(1..).unwrap() {
 		let (first, last) = first_and_last(&skill_timeline.changes)?;
 
 		if first.0 < left_bound { left_bound = first.0 }
@@ -117,7 +119,8 @@ fn inner_draw_skill_graph(
 	};
 
 	if skill_timelines.len() == 1 {
-		let skill_timeline = &skill_timelines[0];
+		// UNWRAP: see above
+		let skill_timeline = &skill_timelines.get(0).unwrap();
 		for ss in etterna::Skillset8::iter() {
 			draw_timeline(&skill_timeline, ss, ss.to_string(), ShapeStyle {
 				color: skillset_color_map.get(&ss).unwrap().clone(),

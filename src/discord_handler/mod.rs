@@ -65,7 +65,11 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 	JUDGE_REGEX.captures_iter(string)
 		.filter_map(|groups| {
-			let judge_num: u32 = groups[1].parse().ok()?;
+			// UNWRAP: the regex definition contains a group
+			let judge_num_string = groups.get(1).unwrap().as_str();
+
+			let judge_num: u32 = judge_num_string.parse().ok()?;
+
 			match judge_num {
 				1 => Some(etterna::J1),
 				2 => Some(etterna::J2),
@@ -311,7 +315,10 @@ More commands:
 You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
 your message, I will also show the wifescores with that judge.
 				"#,
-				&self.config.minanyms[(rand::random::<f64>() * self.config.minanyms.len() as f64) as usize],
+				// UNWRAP: rand::random() is always <1.0, hence the index must be in bounds
+				&self.config.minanyms.get(
+					(rand::random::<f64>() * self.config.minanyms.len() as f64) as usize
+				).unwrap(),
 			)
 		}
 	}
@@ -319,7 +326,7 @@ your message, I will also show the wifescores with that judge.
 	fn top_scores(&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-		text: &str,
+		args: &str,
 		mut limit: u32,
 	) -> Result<(), Error> {
 		if !(1..=30).contains(&limit) {
@@ -327,38 +334,43 @@ your message, I will also show the wifescores with that judge.
 			return Ok(());
 		}
 
-		let args: Vec<&str> = text.split_whitespace().collect();
+		let args: Vec<&str> = args.split_whitespace().collect();
 
 		let skillset;
 		let eo_username;
-		if args.len() == 0 {
-			skillset = None;
-			eo_username = self.get_eo_username(ctx, msg)?;
-		} else if args.len() == 1 {
-			match etterna::Skillset7::from_user_input(args[0]) {
-				Some(parsed_skillset) => {
-					skillset = Some(parsed_skillset);
-					eo_username = self.get_eo_username(ctx, msg)?;
-				},
-				None => {
-					skillset = None;
-					eo_username = args[0].to_owned(); // to_owned not strictly needed
-				},
-			}
-		} else if args.len() == 2 {
-			skillset = match etterna::Skillset7::from_user_input(args[0]) {
-				Some(parsed_skillset) => Some(parsed_skillset),
-				None => {
-					msg.channel_id.say(
-						&ctx.http,
-						format!("Unrecognized skillset \"{}\"", args[0]))?;
-					return Ok(());
+		match *args.as_slice() {
+			[] => {
+				skillset = None;
+				eo_username = self.get_eo_username(ctx, msg)?;
+			},
+			[skillset_or_username] => {
+				match etterna::Skillset7::from_user_input(skillset_or_username) {
+					Some(parsed_skillset) => {
+						skillset = Some(parsed_skillset);
+						eo_username = self.get_eo_username(ctx, msg)?;
+					},
+					None => {
+						skillset = None;
+						eo_username = skillset_or_username.to_owned();
+					},
 				}
-			};
-			eo_username = args[1].to_owned(); // to_owned not strictly needed
-		} else {
-			msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
-			return Ok(());
+			},
+			[skillset_str, username] => {
+				skillset = match etterna::Skillset7::from_user_input(skillset_str) {
+					Some(parsed_skillset) => Some(parsed_skillset),
+					None => {
+						msg.channel_id.say(
+							&ctx.http,
+							format!("Unrecognized skillset \"{}\"", username))?;
+						return Ok(());
+					}
+				};
+				eo_username = username.to_owned();
+			},
+			_ => {
+				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
+				return Ok(());
+			}
 		}
 
 		// Download top scores
@@ -531,7 +543,9 @@ your message, I will also show the wifescores with that judge.
 			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "rd", "rds", "th", "ths"];
 
 			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
-			let snap: u32 = string[..(string.len() - characters_to_truncate)].parse().ok()?;
+			// UNWRAP: we're only removing up to the string length, so we can't go out-of-bounds
+			let string_without_ending = string.get(..(string.len() - characters_to_truncate)).unwrap();
+			let snap: u32 = string_without_ending.parse().ok()?;
 			*user_intended = true;
 			pattern_draw::FractionalSnap::from_snap_number(snap)
 		};
@@ -552,7 +566,8 @@ your message, I will also show the wifescores with that judge.
 		};
 		let extract_vertical_spacing_multiplier = |string: &str, user_intended: &mut bool| {
 			if !string.ends_with('x') { return None };
-			let vertical_spacing_multiplier: f32 = string[..(string.len() - 1)].parse().ok()?;
+			// UNWRAP: at this point the string must have 'x' at the end so we can safely strip one char
+			let vertical_spacing_multiplier: f32 = string.get(..(string.len() - 1)).unwrap().parse().ok()?;
 			*user_intended = true;
 			if vertical_spacing_multiplier > 0.0 {
 				Some(vertical_spacing_multiplier)
@@ -570,7 +585,8 @@ your message, I will also show the wifescores with that judge.
 		let extract_keymode = |string: &str, user_intended: &mut bool| {
 			if !(string.ends_with('k') || string.ends_with('K')) { return None }
 
-			let keymode: u32 = string[..(string.len() - 1)].parse().ok()?;
+			// UNWRAP: at this point the string must have 'k' at the end so we can safely strip one char
+			let keymode: u32 = string.get(..(string.len() - 1)).unwrap().parse().ok()?;
 			*user_intended = true;
 			if keymode > 0 {
 				Some(keymode)
@@ -828,7 +844,8 @@ your message, I will also show the wifescores with that judge.
 		println!("Executing command '{}' with args '{}'", cmd, args);
 
 		if cmd.starts_with("top") {
-			if let Ok(limit) = cmd[3..].parse() {
+			// UNWRAP: we can safely strip because we checked that the string has it at the start
+			if let Ok(limit) = cmd.get(3..).unwrap().parse() {
 				self.top_scores(ctx, msg, args, limit)?;
 			} else {
 				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
@@ -892,7 +909,8 @@ your message, I will also show the wifescores with that judge.
 				}
 			},
 			"quote" => {
-				let quote = &self.config.quotes[rand::random::<usize>() % self.config.quotes.len()];
+				// UNWRAP: rand::random() is always <1.0, hence the index must be in bounds
+				let quote = self.config.quotes.get(rand::random::<usize>() % self.config.quotes.len()).unwrap();
 				let string = match &quote.source {
 					Some(source) => format!("> {}\n~ {}", quote.quote, source),
 					None => format!("> {}", quote.quote),
@@ -949,9 +967,17 @@ your message, I will also show the wifescores with that judge.
 				};
 
 				let latest_scores = self.v2()?.user_latest_scores(&eo_username)?;
+				let latest_score = match latest_scores.first() {
+					Some(x) => x,
+					None => {
+						msg.channel_id.say(&ctx.http, "User has no scores")?;
+						return Ok(());
+					}
+				};
+
 				let user_id = self.get_eo_user_id(&eo_username)?;
 				self.score_card(ctx, msg.channel_id, ScoreCard {
-					scorekey: &latest_scores[0].scorekey,
+					scorekey: &latest_score.scorekey,
 					user_id: Some(user_id),
 					show_ssrs_and_judgements_and_modifiers: true,
 					alternative_judge,
@@ -1058,18 +1084,14 @@ your message, I will also show the wifescores with that judge.
 			"compare" => {
 				let args: Vec<&str> = args.split_whitespace().collect();
 
-				let me;
-				let you;
-				if args.len() == 1 {
-					me = self.get_eo_username(ctx, msg)?;
-					you = args[0];
-				} else if args.len() == 2 {
-					me = args[0].to_owned();
-					you = args[1];
-				} else {
-					msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
-					return Ok(());
-				}
+				let (me, you) = match *args.as_slice() {
+					[you] => (self.get_eo_username(ctx, msg)?, you),
+					[me, you] => (me.to_owned(), you),
+					_ => {
+						msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
+						return Ok(());
+					}
+				};
 
 				self.profile_compare(ctx, msg, &me, you)?;
 			}
@@ -1434,15 +1456,18 @@ your message, I will also show the wifescores with that judge.
 		if user_is_allowed_bot_interaction {
 			let alternative_judge = extract_judge_from_string(&msg.content);
 			for groups in SCORE_LINK_REGEX.captures_iter(&msg.content) {
-				let scorekey = match etterna::Scorekey::new(groups[1].to_owned()) {
+				// UNWRAP: regex has this group
+				let scorekey = match etterna::Scorekey::new(groups.get(1).unwrap().as_str().to_owned()) {
 					Some(valid_scorekey) => valid_scorekey,
 					None => continue,
 				};
 
-				let user_id: u32 = match groups[2].parse() {
+				let user_id_group = groups.get(2).unwrap().as_str();
+				let user_id: u32 = match user_id_group.parse() {
 					Ok(x) => x,
 					Err(e) => {
-						println!("Error while parsing '{}' (\\d+) as u32: {}", &groups[2], e);
+						// UNWRAP: regex has this group
+						println!("Error while parsing '{}' (\\d+) as u32: {}", user_id_group, e);
 						continue;
 					}
 				};
@@ -1461,7 +1486,8 @@ your message, I will also show the wifescores with that judge.
 	
 			for groups in SONG_LINK_REGEX.captures_iter(&msg.content) {
 				println!("{:?}", groups);
-				let song_id = match groups[1].parse() {
+				// UNWRAP: regex has this group
+				let song_id = match groups.get(1).unwrap().as_str().parse() {
 					Ok(song_id) => song_id,
 					Err(_) => continue, // this wasn't a valid song view url after all
 				};
@@ -1476,7 +1502,8 @@ your message, I will also show the wifescores with that judge.
 		if msg.content.starts_with('+') {
 			*was_explicitly_invoked = true;
 
-			let text = &msg.content[1..];
+			// UNWRAP: we just checked it has a string at the beginning that we can chop away
+			let text = &msg.content.get(1..).unwrap();
 
 			// Split message into command part and parameter part
 			let mut a = text.splitn(2, ' ');

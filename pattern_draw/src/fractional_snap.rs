@@ -24,6 +24,7 @@ impl FractionalSnap {
 impl From<etterna::Snap> for FractionalSnap {
 	fn from(snap: etterna::Snap) -> Self {
 		match snap {
+			// UNWRAP: These are all valid snaps
 			etterna::Snap::_4th => Self::from_snap_number(4).unwrap(),
 			etterna::Snap::_8th => Self::from_snap_number(8).unwrap(),
 			etterna::Snap::_12th => Self::from_snap_number(12).unwrap(),

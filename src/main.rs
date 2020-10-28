@@ -1,4 +1,5 @@
 #![allow(clippy::len_zero, clippy::tabs_in_doc_comments, clippy::collapsible_if, clippy::needless_bool)]
+#![warn(clippy::indexing_slicing)]
 
 mod discord_handler;
 mod auth;
