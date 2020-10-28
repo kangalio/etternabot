@@ -64,22 +64,22 @@ fn country_code_to_flag_emoji(country_code: &str) -> String {
 
 /// Returns a string that may be shorter than `max_length`, but never longer
 /// (measured in chars, not in bytes!)
-fn gen_unicode_block_bar(min_length: usize, max_length: usize, proportion: f32) -> String {
+fn gen_unicode_block_bar(max_length: usize, proportion: f32) -> String {
     // index x = x 8ths of a full block
     const BLOCK_CHARS: [char; 9] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
 
+    let num_possible_steps = max_length * 8;
+	let step = (proportion * num_possible_steps as f32) as usize;
+	
+	let num_full_blocks = step / 8;
+	let type_of_last_block = step % 8;
+	
     let mut string = String::with_capacity(max_length);
-    for _ in 0..min_length {
-        string.push(BLOCK_CHARS[8]);
-    }
-    
-    let num_possible_steps = (max_length - min_length) * 8;
-    let step = (proportion * num_possible_steps as f32) as usize;
-    for _ in 0..(step / 8) {
+    for _ in 0..num_full_blocks {
         string.push(BLOCK_CHARS[8]);
 	}
 	// UNWRAP: due to the modulo the index is guaranteed to be in bounds
-    string.push(*BLOCK_CHARS.get(step % 8).unwrap());
+    string.push(*BLOCK_CHARS.get(type_of_last_block).unwrap());
     
     if let Some((truncation_point, _)) = string.char_indices().nth(max_length) {
         string.truncate(truncation_point);
@@ -95,7 +95,7 @@ fn gen_unicode_block_bar(min_length: usize, max_length: usize, proportion: f32) 
 /// assert_eq!(map_range(15.0, 10.0..20.0, -1.0, -3.0), -2.0);
 /// assert_eq!(map_range(30.0, 10.0..20.0, -1.0, -3.0), -5.0);
 /// ```
-fn map_range(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Range<f32>) -> f32 {
+fn rescale(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Range<f32>) -> f32 {
 	let proportion = (value - src_range.start) / (src_range.end - src_range.start);
 	dest_range.start + proportion * (dest_range.end - dest_range.start)
 }
@@ -561,7 +561,7 @@ your message, I will also show the wifescores with that judge.
 				skillset.to_string(),
 				ss_rating,
 				ranks.get(skillset),
-				gen_unicode_block_bar(0, 9, map_range(ss_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
+				gen_unicode_block_bar(7, rescale(ss_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
 			);
 		}
 		rating_string += "```";
