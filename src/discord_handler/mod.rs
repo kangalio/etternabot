@@ -148,7 +148,7 @@ impl State {
 			user_id: bot_user_id,
 			ocr_score_card_manager: std::sync::Mutex::new(OcrScoreCardManager::new()),
 			noteskin_provider: NoteskinProvider {
-				dbz: pattern_draw::Noteskin::read_ldur(
+				dbz: pattern_draw::Noteskin::read_ldur_with_6k(
 					64,
 					"assets/noteskin/dbz-notes.png", "assets/noteskin/dbz-receptor.png",
 					"assets/noteskin/dbz-mine.png",
@@ -170,7 +170,7 @@ impl State {
 					"assets/noteskin/dbz-mine.png",
 				)?,
 				lambda: {
-					let mut lambda = pattern_draw::Noteskin::read_ldur(
+					let mut lambda = pattern_draw::Noteskin::read_ldur_with_6k(
 						128,
 						"assets/noteskin/lambda-notes.png", "assets/noteskin/lambda-receptor.png",
 						"assets/noteskin/lambda-mine.png",
@@ -178,7 +178,7 @@ impl State {
 					lambda.resize_sprites(64);
 					lambda
 				},
-				wafles: pattern_draw::Noteskin::read_ldur(
+				wafles: pattern_draw::Noteskin::read_ldur_with_6k(
 					64,
 					"assets/noteskin/wafles-notes.png", "assets/noteskin/wafles-receptor.png",
 					"assets/noteskin/wafles-mine.png",

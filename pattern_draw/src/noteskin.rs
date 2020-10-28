@@ -49,9 +49,14 @@ fn snap_to_texture_index(snap: etterna::Snap) -> usize {
 }
 
 enum Textures {
-	Ldur {
+	LdurWith6k {
 		receptors: [image::RgbaImage; 6],
 		notes: [[image::RgbaImage; 6]; 8], // first four are LDUR, then come left-up and right-up
+		mine: image::RgbaImage,
+	},
+	MonoSnapLdur {
+		receptors: [image::RgbaImage; 4],
+		notes: [image::RgbaImage; 4],
 		mine: image::RgbaImage,
 	},
 	Pump {
@@ -118,7 +123,7 @@ impl Noteskin {
 		})
 	}
 
-	pub fn read_ldur(
+	pub fn read_ldur_with_6k(
 		sprite_resolution: usize,
 		notes_path: &str,
 		receptor_path: &str,
@@ -131,7 +136,7 @@ impl Noteskin {
 
 		Ok(Self {
 			sprite_resolution,
-			textures: Textures::Ldur {
+			textures: Textures::LdurWith6k {
 				receptors: [
 					image::imageops::rotate90(&receptor),
 					receptor.clone(),
@@ -156,6 +161,39 @@ impl Noteskin {
 				},
 				mine,
 			},
+		})
+	}
+
+	#[allow(clippy::too_many_arguments)] // ehhhhhhh this is fine
+	pub fn read_ldur(
+		sprite_resolution: usize,
+		left_note_path: &str,
+		left_receptor_path: &str,
+		down_note_path: &str,
+		down_receptor_path: &str,
+		up_note_path: &str,
+		up_receptor_path: &str,
+		right_note_path: &str,
+		right_receptor_path: &str,
+		mine_path: &str,
+	) -> Result<Self, crate::Error> {
+		Ok(Self {
+			sprite_resolution,
+			textures: Textures::MonoSnapLdur {
+				notes: [
+					image::open(left_note_path)?.into_rgba(),
+					image::open(down_note_path)?.into_rgba(),
+					image::open(up_note_path)?.into_rgba(),
+					image::open(right_note_path)?.into_rgba(),
+				],
+				receptors: [
+					image::open(left_receptor_path)?.into_rgba(),
+					image::open(down_receptor_path)?.into_rgba(),
+					image::open(up_receptor_path)?.into_rgba(),
+					image::open(right_receptor_path)?.into_rgba(),
+				],
+				mine: image::open(mine_path)?.into_rgba(),
+			}
 		})
 	}
 
@@ -191,7 +229,8 @@ impl Noteskin {
 		}
 
 		let keymode_is_supported = match self.textures {
-			Textures::Ldur { .. } => matches!(keymode, 3 | 4 | 6 | 8),
+			Textures::LdurWith6k { .. } => matches!(keymode, 3 | 4 | 6 | 8),
+			Textures::MonoSnapLdur { .. } => matches!(keymode, 3 | 4 | 8),
 			Textures::Pump { .. } => matches!(keymode, 5 | 10),
 			// honestly there's no reason not to make the bar skin accept all keymodes. And if it
 			// didn't it would be impossible to draw any patterns with more than 10 lanes
@@ -209,8 +248,12 @@ impl Noteskin {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match self.textures {
-			Textures::Ldur { .. } => match keymode {
+			Textures::LdurWith6k { .. } => match keymode {
 				6 => [0, 4, 1, 2, 5, 3][lane],
+				3 => [0, 1, 3][lane],
+				_ => lane % 4,
+			},
+			Textures::MonoSnapLdur { .. } => match keymode {
 				3 => [0, 1, 3][lane],
 				_ => lane % 4,
 			}
@@ -224,7 +267,8 @@ impl Noteskin {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
-			Textures::Ldur { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
+			Textures::LdurWith6k { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
+			Textures::MonoSnapLdur { notes, .. } => &notes[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Pump { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Bar { notes, .. } => &notes[snap_to_texture_index(snap)],
 		})
@@ -235,7 +279,8 @@ impl Noteskin {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
-			Textures::Ldur { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
+			Textures::LdurWith6k { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
+			Textures::MonoSnapLdur { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Pump { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
 			Textures::Bar { receptor, .. } => &receptor,
 		})
@@ -244,7 +289,8 @@ impl Noteskin {
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
 	pub fn mine(&self) -> Result<&image::RgbaImage, crate::Error> {
 		Ok(match &self.textures {
-			Textures::Ldur { mine, .. } => &mine,
+			Textures::LdurWith6k { mine, .. } => &mine,
+			Textures::MonoSnapLdur { mine, .. } => &mine,
 			Textures::Pump { mine, .. } => &mine,
 			Textures::Bar { mine, .. } => &mine,
 		})
@@ -256,7 +302,7 @@ impl Noteskin {
 
 	fn for_each_texture(&mut self, mut f: impl FnMut(&mut image::RgbaImage)) {
 		match &mut self.textures {
-			Textures::Ldur { mine, notes, receptors } => {
+			Textures::LdurWith6k { mine, notes, receptors } => {
 				f(mine);
 				for row in notes {
 					for note in row {
@@ -267,6 +313,15 @@ impl Noteskin {
 					f(receptor);
 				}
 			},
+			Textures::MonoSnapLdur { mine, notes, receptors } => {
+				f(mine);
+				for note in notes {
+					f(note);
+				}
+				for receptor in receptors {
+					f(receptor);
+				}
+			}
 			Textures::Pump { mine, notes, receptors } => {
 				f(mine);
 				for row in notes {
