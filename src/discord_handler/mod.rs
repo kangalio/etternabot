@@ -124,6 +124,20 @@ fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 		.next()
 }
 
+// Returns None if msg was sent in DMs
+fn get_guild_member(
+	ctx: &serenity::Context,
+	msg: &serenity::Message
+) -> Result<Option<serenity::Member>, serenity::Error> {
+	Ok(match msg.guild_id {
+		Some(guild_id) => Some(match msg.member(&ctx.cache) {
+			Some(cached_member) => cached_member,
+			None => ctx.http.get_member(guild_id.0, msg.author.id.0)?,
+		}),
+		None => None,
+	})
+}
+
 struct ScoreCard<'a> {
 	scorekey: &'a etterna::Scorekey,
 	user_id: Option<u32>, // pass None if score link shouldn't shown
@@ -1485,21 +1499,13 @@ your message, I will also show the wifescores with that judge.
 		// If the message is in etternaonline server, and not in an allowed channel, and not sent
 		// by a person with the permission to manage the guild, don't process the command
 		let user_is_allowed_bot_interaction = {
-			if let Some(guild_id) = msg.guild_id { // if msg is in server (opposed to DMs)
-				if let Some(guild_member) = msg.member(&ctx.cache) {
-					if *guild_id.as_u64() == self.config.etterna_online_guild_id
-						&& !self.config.allowed_channels.contains(msg.channel_id.as_u64())
-						&& !guild_member.permissions(&ctx.cache)?.manage_guild()
-					{
-						false
-					} else {
-						true
-					}
+			if let Some(guild_member) = get_guild_member(ctx, msg)? { // if msg is in server (opposed to DMs)
+				if guild_member.guild_id.0 == self.config.etterna_online_guild_id
+					&& !self.config.allowed_channels.contains(&msg.channel_id.0)
+					&& !guild_member.permissions(&ctx.cache)?.manage_guild()
+				{
+					false
 				} else {
-					println!("Failed to retrieve guild information.... is this worrisome?");
-					// "true" should really every user be allowed bot usage everyhwere, just because we
-					// failed to retrieve guild information? (probably; the alternative is completely
-					// denying bot usage)
 					true
 				}
 			} else {
@@ -1663,13 +1669,7 @@ your message, I will also show the wifescores with that judge.
 		};
 
 		// sigh, I wish serenity had nice things, like methods built-in for this
-		let member = match msg.guild_id {
-			Some(guild_id) => Some(match msg.member(&ctx.cache) {
-				Some(cached_member) => cached_member,
-				None => ctx.http.get_member(guild_id.0, msg.author.id.0)?,
-			}),
-			None => None,
-		};
+		let member = get_guild_member(&ctx, &msg)?;
 
 		if let Some(member) = member { // if was sent in a guild (as opposed to DMs)
 			// If message was sent in EO and user doesn't have the appropriate role for the
