@@ -8,7 +8,7 @@ use config::{Config, Data};
 use thiserror::Error;
 
 const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
-const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`";
+const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
 const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
@@ -53,12 +53,15 @@ pub enum Error {
 	ScoreOcr(#[from] score_ocr::Error),
 }
 
-fn country_code_to_flag_emoji(country_code: &str) -> String {
+fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
+	if country_code.chars().any(|c| !c.is_alphabetic()) {
+		return None;
+	}
+
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
 	country_code
-		.to_lowercase()
 		.chars()
-		.map(|c| std::char::from_u32(c as u32 + regional_indicator_value_offset).unwrap_or(c))
+		.map(|c| std::char::from_u32(c.to_ascii_lowercase() as u32 + regional_indicator_value_offset))
 		.collect()
 }
 
@@ -359,7 +362,7 @@ Here are my commands: (Descriptions by Fission)
 *Sometimes we take things too far*
 **+compare [user1] [user2]**
 *One person is an objectively better person than the other, find out which one!*
-**+rival**
+**+rival**/**+rival expanded**
 *But are you an objectively better person than gary oak?*
 **+rivalgraph**
 
@@ -794,6 +797,7 @@ your message, I will also show the wifescores with that judge.
 		msg: &serenity::Message,
 		me: &str,
 		you: &str,
+		expanded: bool,
 	) -> Result<(), Error> {
 		let me = self.v2()?.user_details(me)?;
 		let you = self.v2()?.user_details(you)?;
@@ -817,17 +821,56 @@ your message, I will also show the wifescores with that judge.
 		}
 		string += "```";
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-			.color(crate::ETTERNA_COLOR)
-			.title(format!(
-				"{} {} vs. {} {}",
-				country_code_to_flag_emoji(&me.country_code),
-				me.username,
-				you.username,
-				country_code_to_flag_emoji(&you.country_code),
-			))
-			.description(string)
-		))?;
+		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
+		for ss in etterna::Skillset8::iter() {
+			let my_rating = me.rating.get_pre_070(ss);
+			let your_rating = you.rating.get_pre_070(ss);
+			if my_rating < min_ss_rating { min_ss_rating = my_rating; }
+			if your_rating < min_ss_rating { min_ss_rating = your_rating; }
+			if my_rating > max_ss_rating { max_ss_rating = my_rating; }
+			if your_rating > max_ss_rating { max_ss_rating = your_rating; }
+		}
+
+		let bar_graph_block = if expanded {
+			let mut bar_graph_block = "```prolog\n".to_owned();
+			for skillset in etterna::Skillset8::iter() {
+				let my_rating = me.rating.get_pre_070(skillset);
+				let your_rating = you.rating.get_pre_070(skillset);
+				bar_graph_block += &format!(
+					"{: >10}:   \"░▒▓{}\"\n              “░▒▓{}“\n\n",
+					skillset.to_string(), // to_string, or the padding won't work
+					gen_unicode_block_bar(18, rescale(my_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
+					gen_unicode_block_bar(18, rescale(your_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
+				)
+			}
+			bar_graph_block += "```";
+			Some(bar_graph_block)
+		} else {
+			None
+		};
+
+		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| {
+			e
+				.color(crate::ETTERNA_COLOR)
+				.title(format!(
+					"{} {} vs. {} {}",
+					country_code_to_flag_emoji(&me.country_code).unwrap_or_else(|| "❓".into()),
+					me.username,
+					you.username,
+					country_code_to_flag_emoji(&you.country_code).unwrap_or_else(|| "❓".into()),
+				))
+				.description(string);
+			
+			if let Some(bar_graph_block) = bar_graph_block {
+				e.field(
+					format!("Above is {}, below is {}", me.username, you.username),
+					bar_graph_block,
+					false
+				);
+			}
+			
+			e
+		}))?;
 
 		Ok(())
 	}
@@ -1152,7 +1195,10 @@ your message, I will also show the wifescores with that judge.
 						return Ok(());
 					}
 				};
-				self.profile_compare(ctx, msg, me, &you)?;
+				
+				let expanded = args == "expanded";
+
+				self.profile_compare(ctx, msg, me, &you, expanded)?;
 			},
 			"rivalgraph" => {
 				let me = self.get_eo_username(ctx, msg)?;
@@ -1168,16 +1214,18 @@ your message, I will also show the wifescores with that judge.
 			"compare" => {
 				let args: Vec<&str> = args.split_whitespace().collect();
 
-				let (me, you) = match *args.as_slice() {
-					[you] => (self.get_eo_username(ctx, msg)?, you),
-					[me, you] => (me.to_owned(), you),
+				let (me, you, expanded) = match *args.as_slice() {
+					[you] => (self.get_eo_username(ctx, msg)?, you, false),
+					[you, "expanded"] => (self.get_eo_username(ctx, msg)?, you, true),
+					[me, you] => (me.to_owned(), you, false),
+					[me, you, "expanded"] => (me.to_owned(), you, true),
 					_ => {
 						msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
 						return Ok(());
 					}
 				};
 
-				self.profile_compare(ctx, msg, &me, you)?;
+				self.profile_compare(ctx, msg, &me, you, expanded)?;
 			}
 			_ => {},
 		}
