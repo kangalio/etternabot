@@ -3,6 +3,7 @@
 
 mod discord_handler;
 mod auth;
+mod mutex;
 
 // This is my custom serenity prelude module
 mod serenity {
