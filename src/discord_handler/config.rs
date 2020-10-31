@@ -56,6 +56,7 @@ pub struct UserRegistryEntry {
 	pub discord_username: String,
 	pub eo_id: u32,
 	pub eo_username: String,
+	pub last_known_num_scores: Option<u32>,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]

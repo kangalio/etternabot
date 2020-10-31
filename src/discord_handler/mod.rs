@@ -6,6 +6,7 @@ use crate::serenity; // use my custom serenity prelude
 use etternaonline_api as eo;
 use config::{Config, Data};
 use thiserror::Error;
+use rand::Rng as _;
 
 const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic";
@@ -51,6 +52,10 @@ pub enum Error {
 	SkillGraphError(String),
 	#[error("Failed analyzing the score evaluation screenshot: {0:?}")]
 	ScoreOcr(#[from] score_ocr::Error),
+	#[error("A score was requested from EO but none was sent")]
+	NoScoreEvenThoughOneWasRequested,
+	#[error("User not found in registry (`+userset` must have been called at least once)")]
+	UserNotInRegistry,
 }
 
 fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
@@ -103,6 +108,42 @@ fn rescale(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Ra
 	dest_range.start + proportion * (dest_range.end - dest_range.start)
 }
 
+fn get_random_score(
+	registry_entry: &mut config::UserRegistryEntry,
+	web_session: &eo::web::Session,
+) -> Result<eo::web::UserScore, Error> {
+	let scores = if let Some(last_known_num_scores) = registry_entry.last_known_num_scores {
+		// choose a random score
+		let score_index = rand::thread_rng().gen_range(0, last_known_num_scores);
+
+		web_session.user_scores(
+			registry_entry.eo_id,
+			score_index..=score_index,
+			None,
+			etternaonline_api::web::UserScoresSortBy::Date, // doesnt matter
+			etternaonline_api::web::SortDirection::Ascending, // doesnt matter
+			true,
+		)?
+	} else {
+		// let's get the first score by scorekey - the scorekey is pretty random, so this will seem
+		// sufficiently random - at least for the first time. Doing it multiple times would yield
+		// the same score every time BUT since we're writing the number of scores after this, future
+		// invocations can directly request a random index
+		web_session.user_scores(
+			registry_entry.eo_id,
+			0..1,
+			None,
+			etternaonline_api::web::UserScoresSortBy::Scorekey,
+			etternaonline_api::web::SortDirection::Ascending,
+			true,
+		)?
+	};
+
+	registry_entry.last_known_num_scores = Some(scores.entries_before_search_filtering);
+
+	scores.scores.into_iter().next().ok_or(Error::NoScoreEvenThoughOneWasRequested)
+}
+
 fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 	JUDGE_REGEX.captures_iter(string)
 		.filter_map(|groups| {
@@ -143,7 +184,7 @@ fn get_guild_member(
 
 struct ScoreCard<'a> {
 	scorekey: &'a etterna::Scorekey,
-	user_id: Option<u32>, // pass None if score link shouldn't shown
+	user_id: Option<u32>, // pass None if score link shouldn't be shown
 	show_ssrs_and_judgements_and_modifiers: bool,
 	alternative_judge: Option<&'a etterna::Judge>,
 	#[allow(clippy::type_complexity)]
@@ -163,7 +204,7 @@ struct NoteskinProvider {
 
 // The contained Option must be Some!!!
 struct IdkWhatImDoing<'a> {
-	guard: std::sync::MutexGuard<'a, Option<eo::v2::Session>>,
+	guard: crate::mutex::MutexGuard<'a, Option<eo::v2::Session>>,
 }
 
 impl std::ops::Deref for IdkWhatImDoing<'_> {
@@ -176,12 +217,12 @@ impl std::ops::Deref for IdkWhatImDoing<'_> {
 
 pub struct State {
 	config: Config,
-	data: std::sync::Mutex<Data>,
-	v2_session: std::sync::Mutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
+	data: crate::mutex::Mutex<Data>,
+	v2_session: crate::mutex::Mutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	noteskin_provider: NoteskinProvider,
 	user_id: serenity::UserId,
-	ocr_score_card_manager: std::sync::Mutex<OcrScoreCardManager>,
+	ocr_score_card_manager: crate::mutex::Mutex<OcrScoreCardManager>,
 }
 
 impl State {
@@ -192,7 +233,7 @@ impl State {
 		);
 
 		Ok(Self {
-			v2_session: std::sync::Mutex::new(match Self::attempt_v2_login() {
+			v2_session: crate::mutex::Mutex::new(match Self::attempt_v2_login() {
 				Ok(v2) => Some(v2),
 				Err(e) => {
 					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
@@ -201,9 +242,9 @@ impl State {
 			}),
 			web_session,
 			config: Config::load(),
-			data: std::sync::Mutex::new(Data::load()),
+			data: crate::mutex::Mutex::new(Data::load()),
 			user_id: bot_user_id,
-			ocr_score_card_manager: std::sync::Mutex::new(OcrScoreCardManager::new()),
+			ocr_score_card_manager: crate::mutex::Mutex::new(OcrScoreCardManager::new()),
 			noteskin_provider: NoteskinProvider {
 				dbz: pattern_draw::Noteskin::read_ldur_with_6k(
 					64,
@@ -276,7 +317,7 @@ impl State {
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
 	/// holds the result from its call to v2(), thread 1 will block.
 	fn v2(&self) -> Result<IdkWhatImDoing, Error> {
-		let mut v2_session = self.v2_session.lock().unwrap();
+		let mut v2_session = self.v2_session.lock();
 
 		// the unwrap()'s in here are literally unreachable. But for some reason the borrow checker
 		// always throws a fit when I try to restructure the code to avoid the unwraps
@@ -301,7 +342,7 @@ impl State {
 		_ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<String, Error> {
-		if let Some(user_entry) = self.data.lock().unwrap().user_registry.iter()
+		if let Some(user_entry) = self.data.lock().user_registry.iter()
 			.find(|user| user.discord_id == msg.author.id.0)
 		{
 			return Ok(user_entry.eo_username.to_owned());
@@ -320,7 +361,7 @@ impl State {
 	}
 
 	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
-		match self.data.lock().unwrap().user_registry.iter().find(|user| user.eo_username == eo_username) {
+		match self.data.lock().user_registry.iter().find(|user| user.eo_username == eo_username) {
 			Some(user) => Ok(user.eo_id),
 			None => Ok(self.web_session.user_details(eo_username)?.user_id),
 		}
@@ -390,9 +431,9 @@ More commands:
 You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
 your message, I will also show the wifescores with that judge.
 				"#,
-				// UNWRAP: rand::random() is always <1.0, hence the index must be in bounds
+				// UNWRAP: as per gen_range docs the index is always below the vector length
 				&self.config.minanyms.get(
-					(rand::random::<f64>() * self.config.minanyms.len() as f64) as usize
+					rand::thread_rng().gen_range(0, self.config.minanyms.len())
 				).unwrap(),
 			)
 		}
@@ -620,7 +661,7 @@ your message, I will also show the wifescores with that judge.
 		let mut keymode_override = None;
 		let mut snap = etterna::Snap::_16th.into();
 		let mut vertical_spacing_multiplier = 1.0;
-		let mut scroll_direction = self.data.lock().unwrap().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
+		let mut scroll_direction = self.data.lock().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
 		let mut segments = Vec::new();
 
 		let extract_snap = |string: &str, user_intended: &mut bool| {
@@ -1016,24 +1057,53 @@ your message, I will also show the wifescores with that judge.
 					self.skillgraph(ctx, msg.channel_id, &usernames)?;
 				}
 			},
+			"random" | "randomscore" => {
+				let username = match args.split_ascii_whitespace().next() {
+					Some(x) => x.to_owned(),
+					None => self.get_eo_username(ctx, msg)?,
+				};
+
+				let mut data = self.data.lock();
+				let user = data.user_registry.iter_mut()
+					.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
+					.ok_or(Error::UserNotInRegistry)?;
+				
+				let user_eo_id = user.eo_id;
+
+				// find a random score. If it's invalid, find another one
+				let scorekey = loop {
+					let score = get_random_score(user, &self.web_session)?;
+					if let Some(validity_dependant) = score.validity_dependant {
+						break validity_dependant.scorekey;
+					}
+				};
+				data.save();
+				
+				self.score_card(ctx, msg.channel_id, ScoreCard {
+					scorekey: &scorekey,
+					triggerers: None,
+					user_id: Some(user_eo_id),
+					show_ssrs_and_judgements_and_modifiers: true,
+					alternative_judge: extract_judge_from_string(args),
+				})?;
+			}
 			"lookup" => {
 				if args.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_LOOKUP_HELP)?;
 					return Ok(());
 				}
 
-				if let Some(user) = self.data.lock().unwrap().user_registry.iter()
+				let data = self.data.lock();
+				let user = data.user_registry.iter()
 					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
-				{
-					msg.channel_id.say(&ctx.http, format!(
-						"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
-						user.discord_username,
-						user.eo_username,
-						user.eo_username,
-					))?;
-				} else {
-					msg.channel_id.say(&ctx.http, "User not found in registry (`+userset` must have been called at least once)")?;
-				}
+					.ok_or(Error::UserNotInRegistry)?;
+				
+				msg.channel_id.say(&ctx.http, format!(
+					"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
+					user.discord_username,
+					user.eo_username,
+					user.eo_username,
+				))?;
 			},
 			"quote" => {
 				// UNWRAP: rand::random() is always <1.0, hence the index must be in bounds
@@ -1124,8 +1194,8 @@ your message, I will also show the wifescores with that judge.
 						return Ok(());
 					},
 				};
-				self.data.lock().unwrap().set_scroll(msg.author.id.0, scroll);
-				self.data.lock().unwrap().save();
+				self.data.lock().set_scroll(msg.author.id.0, scroll);
+				self.data.lock().save();
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
@@ -1139,9 +1209,11 @@ your message, I will also show the wifescores with that judge.
 					discord_username: msg.author.name.to_owned(),
 					eo_id: self.web_session.user_details(args)?.user_id,
 					eo_username: args.to_owned(),
+					last_known_num_scores: None,
 				};
 				
-				match self.data.lock().unwrap().user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
+				let mut data = self.data.lock();
+				match data.user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
 					Some(existing_user_entry) => {
 						msg.channel_id.say(&ctx.http, format!(
 							"Successfully updated username from `{}` to `{}`",
@@ -1157,10 +1229,10 @@ your message, I will also show the wifescores with that judge.
 							args
 						))?;
 
-						self.data.lock().unwrap().user_registry.push(new_user_entry);
+						data.user_registry.push(new_user_entry);
 					},
 				};
-				self.data.lock().unwrap().save();
+				data.save();
 			},
 			"rivalset" => {
 				if args.is_empty() {
@@ -1172,7 +1244,7 @@ your message, I will also show the wifescores with that judge.
 					return Ok(());
 				}
 
-				let response = match self.data.lock().unwrap().set_rival(
+				let response = match self.data.lock().set_rival(
 					msg.author.id.0,
 					args.to_owned()
 				) {
@@ -1184,11 +1256,11 @@ your message, I will also show the wifescores with that judge.
 					None => format!("Successfully set your rival to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.data.lock().unwrap().save();
+				self.data.lock().save();
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
-				let you = match self.data.lock().unwrap().rival(msg.author.id.0) {
+				let you = match self.data.lock().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -1202,7 +1274,7 @@ your message, I will also show the wifescores with that judge.
 			},
 			"rivalgraph" => {
 				let me = self.get_eo_username(ctx, msg)?;
-				let you = match self.data.lock().unwrap().rival(msg.author.id.0) {
+				let you = match self.data.lock().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -1684,11 +1756,11 @@ your message, I will also show the wifescores with that judge.
 		old: Option<serenity::Member>,
 		new: serenity::Member
 	) -> Result<(), Error> {
-		if let Some(user_entry) = self.data.lock().unwrap().user_registry.iter_mut()
+		if let Some(user_entry) = self.data.lock().user_registry.iter_mut()
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
 			user_entry.discord_username = new.user.read().name.clone();
-			self.data.lock().unwrap().save();
+			self.data.lock().save();
 		}
 
 		if let Some(old) = old {
@@ -1810,7 +1882,7 @@ your message, I will also show the wifescores with that judge.
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.ocr_score_card_manager.lock().unwrap().add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
+		self.ocr_score_card_manager.lock().add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
 
 		Ok(())
 	}
@@ -1823,7 +1895,7 @@ your message, I will also show the wifescores with that judge.
 			return Ok(());
 		}
 
-		if let Some(score_info) = self.ocr_score_card_manager.lock().unwrap().add_reaction(&ctx, &reaction)? {
+		if let Some(score_info) = self.ocr_score_card_manager.lock().add_reaction(&ctx, &reaction)? {
 			// borrow checker headaches because this thing is monolithic
 			let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();
