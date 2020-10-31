@@ -215,9 +215,33 @@ impl std::ops::Deref for IdkWhatImDoing<'_> {
 	}
 }
 
+struct AutoSaveGuard<'a> {
+	guard: crate::mutex::MutexGuard<'a, Data>,
+}
+
+impl std::ops::Deref for AutoSaveGuard<'_> {
+	type Target = Data;
+
+	fn deref(&self) -> &Self::Target {
+		&*self.guard
+	}
+}
+
+impl std::ops::DerefMut for AutoSaveGuard<'_> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut *self.guard
+	}
+}
+
+impl Drop for AutoSaveGuard<'_> {
+	fn drop(&mut self) {
+		self.guard.save();
+	}
+}
+
 pub struct State {
 	config: Config,
-	data: crate::mutex::Mutex<Data>,
+	_data: crate::mutex::Mutex<Data>,
 	v2_session: crate::mutex::Mutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	noteskin_provider: NoteskinProvider,
@@ -242,7 +266,7 @@ impl State {
 			}),
 			web_session,
 			config: Config::load(),
-			data: crate::mutex::Mutex::new(Data::load()),
+			_data: crate::mutex::Mutex::new(Data::load()),
 			user_id: bot_user_id,
 			ocr_score_card_manager: crate::mutex::Mutex::new(OcrScoreCardManager::new()),
 			noteskin_provider: NoteskinProvider {
@@ -312,6 +336,13 @@ impl State {
 		)
 	}
 
+	// Automatically saves when the returned guard goes out of scope
+	fn lock_data(&self) -> AutoSaveGuard {
+		AutoSaveGuard {
+			guard: self._data.lock(),
+		}
+	}
+
 	/// attempt to retrieve the v2 session object. If there is none because login had failed,
 	/// retry login just to make sure that EO is _really_ done
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
@@ -342,7 +373,7 @@ impl State {
 		_ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<String, Error> {
-		if let Some(user_entry) = self.data.lock().user_registry.iter()
+		if let Some(user_entry) = self.lock_data().user_registry.iter()
 			.find(|user| user.discord_id == msg.author.id.0)
 		{
 			return Ok(user_entry.eo_username.to_owned());
@@ -361,7 +392,7 @@ impl State {
 	}
 
 	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
-		match self.data.lock().user_registry.iter().find(|user| user.eo_username == eo_username) {
+		match self.lock_data().user_registry.iter().find(|user| user.eo_username == eo_username) {
 			Some(user) => Ok(user.eo_id),
 			None => Ok(self.web_session.user_details(eo_username)?.user_id),
 		}
@@ -661,7 +692,7 @@ your message, I will also show the wifescores with that judge.
 		let mut keymode_override = None;
 		let mut snap = etterna::Snap::_16th.into();
 		let mut vertical_spacing_multiplier = 1.0;
-		let mut scroll_direction = self.data.lock().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
+		let mut scroll_direction = self.lock_data().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
 		let mut segments = Vec::new();
 
 		let extract_snap = |string: &str, user_intended: &mut bool| {
@@ -1063,13 +1094,13 @@ your message, I will also show the wifescores with that judge.
 					None => self.get_eo_username(ctx, msg)?,
 				};
 
-				let mut data = self.data.lock();
+				let mut data = self.lock_data();
 				let user = data.user_registry.iter_mut()
 					.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
 					.ok_or(Error::UserNotInRegistry)?;
 				
 				let user_eo_id = user.eo_id;
-
+				
 				// find a random score. If it's invalid, find another one
 				let scorekey = loop {
 					let score = get_random_score(user, &self.web_session)?;
@@ -1077,7 +1108,7 @@ your message, I will also show the wifescores with that judge.
 						break validity_dependant.scorekey;
 					}
 				};
-				data.save();
+				drop(data);
 				
 				self.score_card(ctx, msg.channel_id, ScoreCard {
 					scorekey: &scorekey,
@@ -1093,7 +1124,7 @@ your message, I will also show the wifescores with that judge.
 					return Ok(());
 				}
 
-				let data = self.data.lock();
+				let data = self.lock_data();
 				let user = data.user_registry.iter()
 					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
 					.ok_or(Error::UserNotInRegistry)?;
@@ -1194,8 +1225,7 @@ your message, I will also show the wifescores with that judge.
 						return Ok(());
 					},
 				};
-				self.data.lock().set_scroll(msg.author.id.0, scroll);
-				self.data.lock().save();
+				self.lock_data().set_scroll(msg.author.id.0, scroll);
 				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
@@ -1212,7 +1242,7 @@ your message, I will also show the wifescores with that judge.
 					last_known_num_scores: None,
 				};
 				
-				let mut data = self.data.lock();
+				let mut data = self.lock_data();
 				match data.user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
 					Some(existing_user_entry) => {
 						msg.channel_id.say(&ctx.http, format!(
@@ -1232,7 +1262,6 @@ your message, I will also show the wifescores with that judge.
 						data.user_registry.push(new_user_entry);
 					},
 				};
-				data.save();
 			},
 			"rivalset" => {
 				if args.is_empty() {
@@ -1244,7 +1273,7 @@ your message, I will also show the wifescores with that judge.
 					return Ok(());
 				}
 
-				let response = match self.data.lock().set_rival(
+				let response = match self.lock_data().set_rival(
 					msg.author.id.0,
 					args.to_owned()
 				) {
@@ -1256,11 +1285,10 @@ your message, I will also show the wifescores with that judge.
 					None => format!("Successfully set your rival to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-				self.data.lock().save();
 			},
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
-				let you = match self.data.lock().rival(msg.author.id.0) {
+				let you = match self.lock_data().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -1274,7 +1302,7 @@ your message, I will also show the wifescores with that judge.
 			},
 			"rivalgraph" => {
 				let me = self.get_eo_username(ctx, msg)?;
-				let you = match self.data.lock().rival(msg.author.id.0) {
+				let you = match self.lock_data().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
 						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
@@ -1756,11 +1784,10 @@ your message, I will also show the wifescores with that judge.
 		old: Option<serenity::Member>,
 		new: serenity::Member
 	) -> Result<(), Error> {
-		if let Some(user_entry) = self.data.lock().user_registry.iter_mut()
+		if let Some(user_entry) = self.lock_data().user_registry.iter_mut()
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
 			user_entry.discord_username = new.user.read().name.clone();
-			self.data.lock().save();
 		}
 
 		if let Some(old) = old {
