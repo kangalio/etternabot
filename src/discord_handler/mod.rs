@@ -635,16 +635,18 @@ your message, I will also show the wifescores with that judge.
 			title += " (Patron)";
 		}
 
+		let rating = details.rating.calc_player_overall_pre_070();
+		
 		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
 		for ss in etterna::Skillset8::iter() {
-			let ss_rating = details.rating.get_pre_070(ss);
+			let ss_rating = rating.get(ss);
 			if ss_rating < min_ss_rating { min_ss_rating = ss_rating; }
 			if ss_rating > max_ss_rating { max_ss_rating = ss_rating; }
 		}
 		
 		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
-			let ss_rating = details.rating.get_pre_070(skillset);
+			let ss_rating = rating.get(skillset);
 			rating_string += &format!(
 				"{: >10}:   {: >5.2}  #{: <4} ░▒▓{}\n",
 				skillset.to_string(),
@@ -874,29 +876,32 @@ your message, I will also show the wifescores with that judge.
 		let me = self.v2()?.user_details(me)?;
 		let you = self.v2()?.user_details(you)?;
 
+		let my_rating = me.rating.calc_player_overall_pre_070();
+		let your_rating = you.rating.calc_player_overall_pre_070();
+
 		let mut string = "```Prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
 			string += &format!(
 				"{: >10}:   {: >5.2}  {}  {: >5.2}   {:+.2}\n",
 				skillset.to_string(), // to_string, or the padding won't work
-				me.rating.get_pre_070(skillset),
-				if (me.rating.get_pre_070(skillset) - you.rating.get_pre_070(skillset)).abs() < f32::EPSILON {
+				my_rating.get(skillset),
+				if (my_rating.get(skillset) - your_rating.get(skillset)).abs() < f32::EPSILON {
 					"="
-				} else if me.rating.get_pre_070(skillset) > you.rating.get_pre_070(skillset) { 
+				} else if my_rating.get(skillset) > your_rating.get(skillset) { 
 					">"
 				} else {
 					"<"
 				},
-				you.rating.get_pre_070(skillset),
-				me.rating.get_pre_070(skillset) - you.rating.get_pre_070(skillset),
+				your_rating.get(skillset),
+				my_rating.get(skillset) - your_rating.get(skillset),
 			);
 		}
 		string += "```";
 
 		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
 		for ss in etterna::Skillset8::iter() {
-			let my_rating = me.rating.get_pre_070(ss);
-			let your_rating = you.rating.get_pre_070(ss);
+			let my_rating = my_rating.get(ss);
+			let your_rating = your_rating.get(ss);
 			if my_rating < min_ss_rating { min_ss_rating = my_rating; }
 			if your_rating < min_ss_rating { min_ss_rating = your_rating; }
 			if my_rating > max_ss_rating { max_ss_rating = my_rating; }
@@ -906,8 +911,8 @@ your message, I will also show the wifescores with that judge.
 		let bar_graph_block = if expanded {
 			let mut bar_graph_block = "```prolog\n".to_owned();
 			for skillset in etterna::Skillset8::iter() {
-				let my_rating = me.rating.get_pre_070(skillset);
-				let your_rating = you.rating.get_pre_070(skillset);
+				let my_rating = my_rating.get(skillset);
+				let your_rating = your_rating.get(skillset);
 				bar_graph_block += &format!(
 					"{: >10}:   \"░▒▓{}\"\n              “░▒▓{}“\n\n",
 					skillset.to_string(), // to_string, or the padding won't work
@@ -995,7 +1000,7 @@ your message, I will also show the wifescores with that judge.
 				scores.scores.iter().filter_map(|score| {
 					Some((
 						score.date.as_str(),
-						score.validity_dependant.as_ref()?.nerfed_ssr(),
+						score.validity_dependant.as_ref()?.nerfed_ssr().into(),
 					))
 				}),
 				true,
@@ -1416,7 +1421,7 @@ your message, I will also show the wifescores with that judge.
 				)
 			},
 			score.max_combo, score.judgements.perfects,
-			score.ssr.overall_pre_070(), score.judgements.greats,
+			score.ssr.overall, score.judgements.greats,
 			score.ssr.stream, score.judgements.goods,
 			score.ssr.stamina, score.judgements.bads,
 			score.ssr.jumpstream, score.judgements.misses,
@@ -1873,7 +1878,7 @@ your message, I will also show the wifescores with that judge.
 				judgements: Some(score.judgements.into()),
 				song: Some(score.song_name),
 				msd: None,
-				ssr: Some(validity_dependant.ssr.overall_pre_070()),
+				ssr: Some(validity_dependant.ssr.overall),
 				pack: None,
 				rate: Some(score.rate),
 				wifescore: Some(score.wifescore.as_percent()),
