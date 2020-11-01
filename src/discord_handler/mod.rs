@@ -510,7 +510,7 @@ your message, I will also show the wifescores with that judge.
 					None => {
 						msg.channel_id.say(
 							&ctx.http,
-							format!("Unrecognized skillset \"{}\"", username))?;
+							format!("Unrecognized skillset \"{}\"", skillset_str))?;
 						return Ok(());
 					}
 				};
