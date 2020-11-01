@@ -238,6 +238,7 @@ impl Drop for AutoSaveGuard<'_> {
 }
 
 pub struct State {
+	start_time: std::time::Instant,
 	config: Config,
 	_data: crate::mutex::Mutex<Data>,
 	v2_session: crate::mutex::Mutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
@@ -260,6 +261,7 @@ impl State {
 		}
 
 		Ok(Self {
+			start_time: std::time::Instant::now(),
 			v2_session: crate::mutex::Mutex::new(match Self::attempt_v2_login() {
 				Ok(v2) => Some(v2),
 				Err(e) => {
@@ -1084,6 +1086,32 @@ your message, I will also show the wifescores with that judge.
 			},
 			"pattern" => {
 				self.pattern(ctx, msg, args)?;
+			},
+			"servers" => {
+				let guilds = ctx.http.get_current_user()?.guilds(&ctx.http)?;
+
+				let mut response = format!("I am currently in {} servers!\n", guilds.len());
+				for guild in guilds {
+					response += &format!("- {}\n", guild.name);
+				}
+
+				msg.channel_id.say(&ctx.http, response)?;
+			},
+			"uptime" => {
+				let uptime = std::time::Instant::now() - self.start_time;
+				
+				let div_mod = |a, b| (a / b, a % b);
+				
+				let millis = uptime.as_millis();
+				let (seconds, millis) = div_mod(millis, 1000);
+				let (minutes, seconds) = div_mod(seconds, 60);
+				let (hours, minutes) = div_mod(minutes, 60);
+				let (days, hours) = div_mod(hours, 24);
+
+				msg.channel_id.say(&ctx.http, format!(
+					"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
+					days, hours, minutes, seconds, millis
+				))?;
 			},
 			"skillgraph" => {
 				let usernames = args.split_whitespace().collect::<Vec<_>>();
