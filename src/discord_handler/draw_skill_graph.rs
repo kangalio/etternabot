@@ -123,6 +123,7 @@ fn inner_draw_skill_graph(
 		let skill_timeline = &skill_timelines.get(0).unwrap();
 		for ss in etterna::Skillset8::iter() {
 			draw_timeline(&skill_timeline, ss, ss.to_string(), ShapeStyle {
+				// UNWRAP: above we filled the hashmap with every skillset
 				color: skillset_color_map.get(&ss).unwrap().clone(),
 				filled: true,
 				stroke_width: if ss == etterna::Skillset8::Overall { 3 } else { 1 },

@@ -48,7 +48,6 @@ fn recognize_rect<T>(
 		(rect_y * img_h / 1080) as i32,
 		(rect_w * img_w / 1920) as i32,
 		(rect_h * img_h / 1080) as i32,
-	// ).unwrap();
 	)?; // sometimes this messes up idk
 
 	// println!("{:?}", bounding_box.get_val());

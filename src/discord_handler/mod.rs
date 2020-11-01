@@ -16,6 +16,7 @@ const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`"
 const CMD_RS_HELP: &str = "Call this command with `+rs [username] [judge]`";
 const CMD_LOOKUP_HELP: &str = "Call this command with `+lookup DISCORDUSERNAME`";
 
+// UNWRAP: those are valid regexes
 static SCORE_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
 	regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)").unwrap()
 });
@@ -202,15 +203,15 @@ struct NoteskinProvider {
 	rustmania: pattern_draw::Noteskin,
 }
 
-// The contained Option must be Some!!!
+/// The contained Option must be Some!!!
 struct IdkWhatImDoing<'a> {
 	guard: crate::mutex::MutexGuard<'a, Option<eo::v2::Session>>,
 }
-
 impl std::ops::Deref for IdkWhatImDoing<'_> {
 	type Target = eo::v2::Session;
 
 	fn deref(&self) -> &Self::Target {
+		// UNWRAP: this will work because it's an invariant of this type
 		self.guard.as_ref().unwrap()
 	}
 }
@@ -218,7 +219,6 @@ impl std::ops::Deref for IdkWhatImDoing<'_> {
 struct AutoSaveGuard<'a> {
 	guard: crate::mutex::MutexGuard<'a, Data>,
 }
-
 impl std::ops::Deref for AutoSaveGuard<'_> {
 	type Target = Data;
 
@@ -226,13 +226,11 @@ impl std::ops::Deref for AutoSaveGuard<'_> {
 		&*self.guard
 	}
 }
-
 impl std::ops::DerefMut for AutoSaveGuard<'_> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut *self.guard
 	}
 }
-
 impl Drop for AutoSaveGuard<'_> {
 	fn drop(&mut self) {
 		self.guard.save();
@@ -250,11 +248,16 @@ pub struct State {
 }
 
 impl State {
-	pub fn load(bot_user_id: serenity::UserId) -> Result<Self, Error> {
+	pub fn load(ctx: &serenity::Context, bot_user_id: serenity::UserId) -> Result<Self, Error> {
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
 		);
+
+		let config = Config::load();
+		if ctx.http.get_channel(config.promotion_gratulations_channel)?.guild().is_none() {
+			panic!("Configured promotion gratulations channel is not a valid guild channel!");
+		}
 
 		Ok(Self {
 			v2_session: crate::mutex::Mutex::new(match Self::attempt_v2_login() {
@@ -265,7 +268,7 @@ impl State {
 				}
 			}),
 			web_session,
-			config: Config::load(),
+			config,
 			_data: crate::mutex::Mutex::new(Data::load()),
 			user_id: bot_user_id,
 			ocr_score_card_manager: crate::mutex::Mutex::new(OcrScoreCardManager::new()),
@@ -350,9 +353,6 @@ impl State {
 	fn v2(&self) -> Result<IdkWhatImDoing, Error> {
 		let mut v2_session = self.v2_session.lock();
 
-		// the unwrap()'s in here are literally unreachable. But for some reason the borrow checker
-		// always throws a fit when I try to restructure the code to avoid the unwraps
-		
 		if v2_session.is_some() {
 			Ok(IdkWhatImDoing { guard: v2_session })
 		} else {
@@ -1142,8 +1142,9 @@ your message, I will also show the wifescores with that judge.
 				))?;
 			},
 			"quote" => {
-				// UNWRAP: rand::random() is always <1.0, hence the index must be in bounds
-				let quote = self.config.quotes.get(rand::random::<usize>() % self.config.quotes.len()).unwrap();
+				let quote_index = rand::thread_rng().gen_range(0, self.config.quotes.len());
+				// UNWRAP: index is below quotes len because we instructed the rand crate to do so
+				let quote = self.config.quotes.get(quote_index).unwrap();
 				let string = match &quote.source {
 					Some(source) => format!("> {}\n~ {}", quote.quote, source),
 					None => format!("> {}", quote.quote),
@@ -1410,6 +1411,7 @@ your message, I will also show the wifescores with that judge.
 						"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
 					),
 					score.wifescore.as_percent(),
+					// UWNRAP: if alternative_judge_wifescore is Some, info.alternative_judge is too
 					info.alternative_judge.unwrap().name,
 					alternative_judge_wifescore.as_percent(),
 					score.judgements.marvelouses,
@@ -1478,14 +1480,12 @@ your message, I will also show the wifescores with that judge.
 			let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
 			let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
 
-			let sorted_hit_seconds = {
-				#[allow(clippy::redundant_clone)] // it's redundant RIGHT NOW but it won't when I start to use unsorted_hit_seconds
-				let mut temp = unsorted_hit_seconds.clone();
-				temp.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-				temp
-			};
-			let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
+			let mut sorted_hit_seconds = unsorted_hit_seconds;
+			// UNWRAP: if one of those values is NaN... something is pretty wrong
+			sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+			let sorted_hit_seconds = sorted_hit_seconds;
 
+			let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
 
 			let mean_offset = replay.mean_deviation();
 			let replay_zero_mean = eo::Replay {
@@ -1578,6 +1578,7 @@ your message, I will also show the wifescores with that judge.
 					let alternative_text_2;
 					let alternative_text_4;
 					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
+						// UNWRAP: if we're in this branch, info.alternative_judge is Some
 						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, info.alternative_judge.unwrap().name);
 						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, info.alternative_judge.unwrap().name);
 						alternative_text_4 = format!(", {:.2} on {}", comparison.wife3_score_zero_mean, info.alternative_judge.unwrap().name);
@@ -1691,6 +1692,7 @@ your message, I will also show the wifescores with that judge.
 					None => continue,
 				};
 
+				// UNWRAP: regex has this group
 				let user_id_group = groups.get(2).unwrap().as_str();
 				let user_id: u32 = match user_id_group.parse() {
 					Ok(x) => x,
@@ -1736,6 +1738,7 @@ your message, I will also show the wifescores with that judge.
 
 			// Split message into command part and parameter part
 			let mut a = text.splitn(2, ' ');
+			// UNWRAP: msg.content can't be empty, hence the token iterator has at least one elem
 			let command_name = a.next().unwrap().trim();
 			let parameters = a.next().unwrap_or("").trim();
 	
@@ -1766,13 +1769,12 @@ your message, I will also show the wifescores with that judge.
 			}
 		};
 
-		let has_max_300_now = new.roles.iter()
-			.any(|r| get_guild_role(r) == Some("MAX 300"));
-		let had_max_300_previously = old.roles.iter()
-			.any(|r| get_guild_role(r) == Some("MAX 300"));
+		let has_max_300_now = new.roles.iter().any(|r| get_guild_role(r) == Some("MAX 300"));
+		let had_max_300_previously = old.roles.iter().any(|r| get_guild_role(r) == Some("MAX 300"));
 		
 		if has_max_300_now && !had_max_300_previously {
 			ctx.http.get_channel(self.config.promotion_gratulations_channel)?
+				// UNWRAP: we verified in Self::load()
 				.guild().unwrap().read()
 				.say(
 					&ctx.http,

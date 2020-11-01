@@ -52,9 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 
 	impl serenity::EventHandler for Handler {
-		fn ready(&self, _: serenity::Context, ready: serenity::Ready) {
+		fn ready(&self, ctx: serenity::Context, ready: serenity::Ready) {
 			println!("Connected to Discord as {}", ready.user.name);
-			*self.state.write().unwrap() = Some(discord_handler::State::load(ready.user.id)
+			// UNWRAP: propagate poison
+			*self.state.write().unwrap() = Some(discord_handler::State::load(&ctx, ready.user.id)
 				.expect("Failed to initialize"));
 			println!("Logged into EO");
 

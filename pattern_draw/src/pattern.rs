@@ -106,7 +106,7 @@ fn parse_note_identifier(note: &str, state: &mut State) -> Result<NoteIdentifier
     }
 }
 
-// Will panic if string is too short
+/// Will panic if string is too short
 fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdentifier, PatternParseError> {
     let note;
 
@@ -117,6 +117,7 @@ fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdenti
         
         *pattern = &pattern[closing_paran+1..];
     } else {
+        // UNWRAP: documented panic behavior
         note = parse_note_identifier(pop_first_char(pattern).unwrap(), state)?;
     }
     
