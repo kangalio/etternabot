@@ -636,19 +636,17 @@ your message, I will also show the wifescores with that judge.
 		if details.is_patreon {
 			title += " (Patron)";
 		}
-
-		let rating = details.rating.calc_player_overall_pre_070();
 		
 		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
 		for ss in etterna::Skillset8::iter() {
-			let ss_rating = rating.get(ss);
+			let ss_rating = details.rating.get(ss);
 			if ss_rating < min_ss_rating { min_ss_rating = ss_rating; }
 			if ss_rating > max_ss_rating { max_ss_rating = ss_rating; }
 		}
 		
 		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
-			let ss_rating = rating.get(skillset);
+			let ss_rating = details.rating.get(skillset);
 			rating_string += &format!(
 				"{: >10}:   {: >5.2}  #{: <4} ░▒▓{}\n",
 				skillset.to_string(),
@@ -878,8 +876,8 @@ your message, I will also show the wifescores with that judge.
 		let me = self.v2()?.user_details(me)?;
 		let you = self.v2()?.user_details(you)?;
 
-		let my_rating = me.rating.calc_player_overall_pre_070();
-		let your_rating = you.rating.calc_player_overall_pre_070();
+		let my_rating = &me.rating;
+		let your_rating = &you.rating;
 
 		let mut string = "```Prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
@@ -1002,10 +1000,10 @@ your message, I will also show the wifescores with that judge.
 				scores.scores.iter().filter_map(|score| {
 					Some((
 						score.date.as_str(),
-						score.validity_dependant.as_ref()?.nerfed_ssr().into(),
+						score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
 					))
 				}),
-				true,
+				false,
 			))
 		}
 
