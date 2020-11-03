@@ -1600,14 +1600,34 @@ your message, I will also show the wifescores with that judge.
 					);
 				
 				if let Some(analysis) = &replay_analysis {
+					let wifescore_floating_point_digits = match analysis.scoring_system_comparison_j4.wife3_score.as_percent() > 99.7 {
+						true => 4,
+						false => 2,
+					};
+
 					let alternative_text_1;
 					let alternative_text_2;
 					let alternative_text_4;
 					if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
 						// UNWRAP: if we're in this branch, info.alternative_judge is Some
-						alternative_text_1 = format!(", {:.2} on {}", comparison.wife2_score, info.alternative_judge.unwrap().name);
-						alternative_text_2 = format!(", {:.2} on {}", comparison.wife3_score, info.alternative_judge.unwrap().name);
-						alternative_text_4 = format!(", {:.2} on {}", comparison.wife3_score_zero_mean, info.alternative_judge.unwrap().name);
+						alternative_text_1 = format!(
+							", {:.digits$} on {}",
+							comparison.wife2_score,
+							info.alternative_judge.unwrap().name,
+							digits = wifescore_floating_point_digits,
+						);
+						alternative_text_2 = format!(
+							", {:.digits$} on {}",
+							comparison.wife3_score,
+							info.alternative_judge.unwrap().name,
+							digits = wifescore_floating_point_digits,
+						);
+						alternative_text_4 = format!(
+							", {:.digits$} on {}",
+							comparison.wife3_score_zero_mean,
+							info.alternative_judge.unwrap().name,
+							digits = wifescore_floating_point_digits,
+						);
 					} else {
 						alternative_text_1 = "".to_owned();
 						alternative_text_2 = "".to_owned();
@@ -1619,9 +1639,9 @@ your message, I will also show the wifescores with that judge.
 						.field("Score comparisons", format!(
 							concat!(
 								"{}",
-								"**Wife2**: {:.2}%{}\n",
-								"**Wife3**: {:.2}%{}\n",
-								"**Wife3**: {:.2}%{} (mean of {:.1}ms corrected)",
+								"**Wife2**: {:.digits$}%{}\n",
+								"**Wife3**: {:.digits$}%{}\n",
+								"**Wife3**: {:.digits$}%{} (mean of {:.1}ms corrected)",
 							),
 							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
 								"_Note: these calculated scores are slightly inaccurate_\n"
@@ -1635,6 +1655,7 @@ your message, I will also show the wifescores with that judge.
 							analysis.scoring_system_comparison_j4.wife3_score_zero_mean.as_percent(),
 							alternative_text_4,
 							analysis.mean_offset * 1000.0,
+							digits = wifescore_floating_point_digits,
 						), false)
 						.field("Tap speeds", format!(
 							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
