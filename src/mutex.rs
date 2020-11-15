@@ -21,7 +21,7 @@ impl<T> Mutex<T> {
 	/// 
 	/// If the mutex was poisened, the panic will be propagated
 	pub fn lock(&self) -> MutexGuard<'_, T> {
-		// UNSAFE: too tired to explain
+		// UNSAFE: ThreadId is just a wrapper around u64, so it can be transmuted to u64
 		let current_thread_id: u64 = unsafe { std::mem::transmute(std::thread::current().id())};
 
 		if self.current_holder.load(Ordering::Relaxed) == current_thread_id {

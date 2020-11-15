@@ -24,6 +24,12 @@ mod serenity {
 
 pub const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146);
 
+fn assume_same_type<T>(_: T, _: T) {}
+
+struct FuckThis<T>(T);
+unsafe impl<T> std::marker::Send for FuckThis<T> {}
+unsafe impl<T> std::marker::Sync for FuckThis<T> {}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	macro_rules! lock {
 		($this:ident, $state:ident) => {
@@ -120,10 +126,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 
 	let handler = Handler { state: std::sync::RwLock::new(None) };
-
+	
 	// Login to Discord and start bot
 	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
 		.expect("Unable to create Discord client");
+	client.threadpool.set_num_threads(3); // decrease threadpool size to provoke the deadlock stuck in order for me to debug it
+	
+	let thread_pool_ptr = unsafe { &*(&client.threadpool as *const _) }; // screw the rules
+	assume_same_type(thread_pool_ptr, &client.threadpool);
+	let thread_pool_ptr = FuckThis(thread_pool_ptr);
+
+	std::thread::Builder::new().name("stupid checker thread".to_owned()).spawn(move || {
+		let thread_pool = thread_pool_ptr.0;
+
+		let mut maxed_out_in_a_row = 0;
+		loop {
+			let (active, max) = (thread_pool.active_count(), thread_pool.max_count());
+			println!("Serenity thread pool: {}/{} threads active", active, max);
+			if active == max {
+				maxed_out_in_a_row += 1;
+				if maxed_out_in_a_row >= 3 {
+					// Thread pool was maxed out for three minutes straight. This can't be right
+					// Let's spawn a new process to take over, but keep this instance running to
+					// allow debugging
+					println!("THIS INSTANCE IS STUCK STUCK STUCK!!!!");
+
+					let current_exe = std::env::current_exe()
+						.expect("Can't get current exe path :(");
+					std::process::Command::new(current_exe).spawn()
+						.expect("Failed to start bot clone");
+					
+					println!("Started bot process to take over, stalling current instance's \
+						watchdog thread...");
+					loop {
+						std::thread::park();
+					}
+				}
+			} else {
+				maxed_out_in_a_row = 0;
+			}
+
+			std::thread::sleep(std::time::Duration::from_secs(10)); // REMEMBER
+			// std::thread::sleep(std::time::Duration::from_secs(60));
+		}
+	}).unwrap();
+	
 	client.start()?;
 
 	Ok(())

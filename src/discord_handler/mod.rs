@@ -1045,7 +1045,7 @@ your message, I will also show the wifescores with that judge.
 		cmd: &str,
 		args: &str
 	) -> Result<(), Error> {
-		println!("Executing command '{}' with args '{}'", cmd, args);
+		println!("Executing command '{}' from {} at {:?} with args '{}'", cmd, &msg.author.name, msg.timestamp.date(), args);
 
 		if cmd.starts_with("top") {
 			// UNWRAP: we can safely strip because we checked that the string has it at the start

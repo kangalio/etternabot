@@ -19,7 +19,7 @@ fn recognize_rect<T>(
 	rect_x: u32, rect_y: u32, rect_w: u32, rect_h: u32, // the coordinates are in 1920x1080 format
 	processor: impl FnOnce(&str) -> Option<T>
 ) -> Option<T> {
-	print!("a");
+	// print!("a");
 	let (img_w, img_h) = lt.get_image_dimensions()
 		.expect("hey caller, you should've set an image by now");
 	// let (actual_img_w, actual_img_h) = lt.get_image_dimensions()
@@ -42,7 +42,7 @@ fn recognize_rect<T>(
 	// 	rect_x += img_w - 1920.0;
 	// }
 
-	print!("b");
+	// print!("b");
 	let bounding_box = &leptess::leptonica::Box::new(
 		(rect_x * img_w / 1920) as i32,
 		(rect_y * img_h / 1080) as i32,
@@ -52,13 +52,13 @@ fn recognize_rect<T>(
 
 	// println!("{:?}", bounding_box.get_val());
 
-	print!("c");
+	// print!("c");
 	lt.set_rectangle(bounding_box);
-	print!("d");
+	// print!("d");
 	let text = lt.get_utf8_text().ok()?;
 	let text = text.trim();
 	// println!("Recognized string {:?}", text);
-	print!("E - ");
+	// print!("E - ");
 	processor(text)
 }
 
@@ -82,7 +82,7 @@ fn recognize_til_death(
 	mut eng_lt: &mut LepTess,
 	mut num_lt: &mut LepTess,
 ) -> Result<EvaluationScreenData, Error> {
-	println!("Alrighty we're in recognize_til_death");
+	// println!("Alrighty we're in recognize_til_death");
 	Ok(EvaluationScreenData {
 		rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
 			Rate::from_f32(s.parse().ok()?)
@@ -247,9 +247,9 @@ impl EvaluationScreenData {
 
 	pub fn recognize_from_image_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
 		Self::recognize(|lt| {
-			println!("before set_image_from_mem");
+			// println!("before set_image_from_mem");
 			let img = lt.set_image_from_mem(bytes);
-			println!("after set_image_from_mem");
+			// println!("after set_image_from_mem");
 			img
 		})
 	}
@@ -257,23 +257,23 @@ impl EvaluationScreenData {
 	pub fn recognize(
 		mut image_setter: impl FnMut(&mut LepTess) -> Option<()>
 	) -> Result<Vec<Self>, Error> {
-		println!("Creating english LepTess");
+		// println!("Creating english LepTess");
 		let mut eng_lt = LepTess::new(Some("ocr_data"), "eng")?;
-		println!("Creating digits LepTess");
+		// println!("Creating digits LepTess");
 		let mut num_lt = LepTess::new(Some("ocr_data"), "digitsall_layer")?;
 
 		// that's apparently the full screen dpi and our images are fullscreen so let's use this value
 		let dpi = 96;
 
-		println!("Setting eng image and fallback res");
+		// println!("Setting eng image and fallback res");
 		(image_setter)(&mut eng_lt).ok_or(Error::CouldNotReadImage)?;
 		eng_lt.set_fallback_source_resolution(dpi);
-		println!("Setting digits image");
+		// println!("Setting digits image");
 		(image_setter)(&mut num_lt).ok_or(Error::CouldNotReadImage)?;
-		println!("Setting fallback res");
+		// println!("Setting fallback res");
 		num_lt.set_fallback_source_resolution(dpi);
 
-		println!("Got everything set up, now recognizing...");
+		// println!("Got everything set up, now recognizing...");
 		Ok(vec![
 			recognize_til_death(&mut eng_lt, &mut num_lt)?,
 			recognize_scwh(&mut eng_lt, &mut num_lt)?,
