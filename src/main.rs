@@ -166,8 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 				maxed_out_in_a_row = 0;
 			}
 
-			std::thread::sleep(std::time::Duration::from_secs(10)); // REMEMBER
-			// std::thread::sleep(std::time::Duration::from_secs(60));
+			std::thread::sleep(std::time::Duration::from_secs(60));
 		}
 	}).unwrap();
 	

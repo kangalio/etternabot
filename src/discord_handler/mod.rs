@@ -2048,7 +2048,7 @@ impl OcrScoreCardManager {
 		ctx: &serenity::Context,
 		reaction: &serenity::Reaction,
 	) -> Result<Option<ScoreCardTrigger>, Error> {
-		println!("Got reaction in score ocr card manager");
+		// println!("Got reaction in score ocr card manager");
 
 		// Let's check that the user even clicked the correct emoji type
 		if reaction.emoji != serenity::ReactionType::Unicode("🔍".to_owned()) {
