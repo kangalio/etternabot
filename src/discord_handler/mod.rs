@@ -1730,6 +1730,14 @@ your message, I will also show the wifescores with that judge.
 			}
 		}
 
+		if msg.channel_id.0 == self.config.pack_releases_channel {
+			let num_links = LINK_REGEX.find_iter(&msg.content).count();
+			if num_links == 0 && msg.attachments.is_empty() {
+				msg.delete(&ctx.http)?;
+				return Ok(());
+			}
+		}
+
 		if user_is_allowed_bot_interaction {
 			let alternative_judge = extract_judge_from_string(&msg.content);
 			for groups in SCORE_LINK_REGEX.captures_iter(&msg.content) {
