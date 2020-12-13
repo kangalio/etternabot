@@ -18,7 +18,9 @@ pub struct Config {
 
 	/// Channel where the MAX 300 role acquisition gratulations are posted
 	pub promotion_gratulations_channel: u64,
-	/// Channel where bot listens for messages without any files or links
+	/// Channel where bot watches and deletes messages without any links
+	pub pack_releases_channel: u64,
+	/// Channel where bot watches and deletes messages without any files or links
 	pub work_in_progress_channel: u64,
 	/// Channel that the bot redirects to in the above circumstances
 	pub work_in_progress_discussion_channel: u64,
