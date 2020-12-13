@@ -1,8 +1,10 @@
 {
   "promotion_gratulations_channel": 389194939881488385,
+  "pack_releases_channel": 378588992859537409,
   "work_in_progress_channel": 374774075865956355,
   "work_in_progress_discussion_channel": 374775369330589696,
   "score_channel": 352646080346849281,
+  "score_ocr_card_channel": 384829579308564480,
   "allowed_channels": [384829579308564480, 352646080346849281, 367466722405515264, 427509181457629184, 424545864351219712],
   "etterna_online_guild_id": 339597420239519755,
   "score_ocr_allowed_eo_role": 395383013342445569,
