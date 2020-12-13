@@ -14,7 +14,8 @@ mod serenity {
 			gateway::Ready,
 			channel::{Message, Reaction, ReactionType},
 			id::{UserId, ChannelId, MessageId, GuildId},
-			guild::Member
+			guild::Member,
+			permissions::Permissions,
 		},
 		http::error::{ErrorResponse, Error as HttpError, DiscordJsonError},
 		utils::Colour as Color,
@@ -142,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let mut maxed_out_in_a_row = 0;
 		loop {
 			let (active, max) = (thread_pool.active_count(), thread_pool.max_count());
-			println!("Serenity thread pool: {}/{} threads active", active, max);
+			// println!("Serenity thread pool: {}/{} threads active", active, max);
 			if active == max {
 				maxed_out_in_a_row += 1;
 				if maxed_out_in_a_row >= 3 {

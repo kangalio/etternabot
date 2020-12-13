@@ -172,7 +172,7 @@ fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 // Returns None if msg was sent in DMs
 fn get_guild_member(
 	ctx: &serenity::Context,
-	msg: &serenity::Message
+	msg: &serenity::Message,
 ) -> Result<Option<serenity::Member>, serenity::Error> {
 	Ok(match msg.guild_id {
 		Some(guild_id) => Some(match msg.member(&ctx.cache) {
@@ -181,6 +181,35 @@ fn get_guild_member(
 		}),
 		None => None,
 	})
+}
+
+// My Fucking GODDDDDDD WHY DOES SERENITY NOT PROVIDE THIS BASIC STUFF
+fn get_guild_permissions(
+	ctx: &serenity::Context,
+	msg: &serenity::Message,
+) -> Result<Option<serenity::Permissions>, serenity::Error> {
+	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx, msg)?, msg.guild_id) {
+		let permissions = if let Ok(permissions) = guild_member.permissions(&ctx.cache) {
+			// try accessing permissions from cache
+			permissions
+		} else if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
+			// try accessing guild data from cache and deriving permissions ourselves
+			let guild = guild.read();
+			guild_member.roles.iter()
+				.filter_map(|r| guild.roles.get(r))
+				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
+		} else {
+			// request guild data from http and derive permissions ourselves
+			let guild = guild_id.to_partial_guild(&ctx.http)?;
+			guild_member.roles.iter()
+				.filter_map(|r| guild.roles.get(r))
+				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
+		};
+
+		Ok(Some(permissions))
+	} else {
+		Ok(None)
+	}
 }
 
 struct ScoreCard<'a> {
@@ -1691,19 +1720,23 @@ your message, I will also show the wifescores with that judge.
 		msg: &serenity::Message,
 		was_explicitly_invoked: &mut bool,
 	) -> Result<(), Error> {
-		// Let's not do this, because if a non existing command is called (e.g. `+asdfg`) there'll
+		// Let's not do this, because if a non existant command is called (e.g. `+asdfg`) there'll
 		// be typing broadcasted, but no actual response, which is stupid
 		// if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http) {
 		// 	println!("Couldn't broadcast typing: {}", e);
 		// }
 
+		let guild_member = get_guild_member(ctx, msg)?;
+		// true if sent in DMs
+		let manages_messages = get_guild_permissions(ctx, msg)?.map_or(true, |p| p.manage_messages());
+
 		// If the message is in etternaonline server, and not in an allowed channel, and not sent
 		// by a person with the permission to manage the guild, don't process the command
 		let user_is_allowed_bot_interaction = {
-			if let Some(guild_member) = get_guild_member(ctx, msg)? { // if msg is in server (opposed to DMs)
+			if let Some(guild_member) = &guild_member { // if msg is in server (opposed to DMs)
 				if guild_member.guild_id.0 == self.config.etterna_online_guild_id
 					&& !self.config.allowed_channels.contains(&msg.channel_id.0)
-					&& !guild_member.permissions(&ctx.cache)?.manage_guild()
+					&& !manages_messages
 				{
 					false
 				} else {
@@ -1716,7 +1749,7 @@ your message, I will also show the wifescores with that judge.
 
 		self.check_potential_score_screenshot(ctx, msg)?;
 
-		if msg.channel_id.0 == self.config.work_in_progress_channel {
+		if msg.channel_id.0 == self.config.work_in_progress_channel && !manages_messages {
 			let num_links = LINK_REGEX.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
@@ -1730,10 +1763,13 @@ your message, I will also show the wifescores with that judge.
 			}
 		}
 
-		if msg.channel_id.0 == self.config.pack_releases_channel {
+		if msg.channel_id.0 == self.config.pack_releases_channel && !manages_messages {
 			let num_links = LINK_REGEX.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
+				let notice_msg = msg.channel_id.say(&ctx.http, "Only links and attachments are allowed in this channel.")?;
+				std::thread::sleep(std::time::Duration::from_millis(5000));
+				notice_msg.delete(&ctx.http)?;
 				return Ok(());
 			}
 		}
