@@ -455,7 +455,7 @@ More commands:
 **+rs [username] [judge]**
 *Show your most recent score*
 **+quote**
-*Print one of various random quotes, phrases and memes from various rhythm gaming communities*
+*Print one of various random quotes, phrases and memes from various rhythm gaming communities ([Credit](https://github.com/ca25nada/spawncamping-wallhack/blob/master/Scripts/Quotes.lua))*
 **+lastsession [username]**
 *Show the last 10 scores*
 **+help**
