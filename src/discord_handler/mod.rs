@@ -684,18 +684,37 @@ your message, I will also show the wifescores with that judge.
 			if ss_rating > max_ss_rating { max_ss_rating = ss_rating; }
 		}
 		
+		let mut data = self.lock_data();
+		// None if user is not in registry, None(None) if user is in registry but no prev rating
+		let previous_ratings = data.user_registry.iter_mut()
+			.find(|entry| entry.eo_username.eq_ignore_ascii_case(&eo_username))
+			.map(|entry| &mut entry.last_rating);
+		
+		
 		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
-			let ss_rating = details.rating.get(skillset);
-			rating_string += &format!(
-				"{: >10}:   {: >5.2}  #{: <4} ░▒▓{}\n",
-				skillset.to_string(),
-				ss_rating,
-				ranks.get(skillset),
-				gen_unicode_block_bar(7, rescale(ss_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
-			);
+			match &previous_ratings {
+				Some(Some(prev)) => rating_string += &format!(
+					"{: >10}:   {: >5.2} (+{: >4.2})  #{: <4}\n",
+					skillset.to_string(),
+					details.rating.get(skillset),
+					details.rating.get(skillset) - prev.get(skillset),
+					ranks.get(skillset),
+				),
+				Some(None) | None => rating_string += &format!(
+					"{: >10}:   {: >5.2}  #{: <4}\n",
+					skillset.to_string(),
+					details.rating.get(skillset),
+					ranks.get(skillset),
+				),
+			}
 		}
 		rating_string += "```";
+
+		// TODO: could create new entry if doesn't already exist to store ratings
+		if let Some(previous_ratings) = previous_ratings {
+			*previous_ratings = Some(details.rating.clone());
+		}
 
 		msg.channel_id.send_message(&ctx.http, |m| m.embed(|embed| {
 			embed
@@ -1312,6 +1331,7 @@ your message, I will also show the wifescores with that judge.
 					eo_id: self.web_session.user_details(args)?.user_id,
 					eo_username: args.to_owned(),
 					last_known_num_scores: None,
+					last_rating: None,
 				};
 				
 				let mut data = self.lock_data();

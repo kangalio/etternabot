@@ -52,16 +52,17 @@ impl Config {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct UserRegistryEntry {
 	pub discord_id: u64,
 	pub discord_username: String,
 	pub eo_id: u32,
 	pub eo_username: String,
 	pub last_known_num_scores: Option<u32>,
+	pub last_rating: Option<etterna::Skillsets8>,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Default, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Data {
 	pub user_registry: Vec<UserRegistryEntry>,
 	rival_mapping: HashMap<u64, String>, // discord username -> eo username
