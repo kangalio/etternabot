@@ -421,9 +421,20 @@ impl State {
 			return Ok(user_entry.eo_username.to_owned());
 		}
 
-		match self.v2()?.user_details(&msg.author.name) {
-			Ok(_) => {
-				// seems like the user's EO name is the same as their Discord name :)
+		match self.web_session.user_details(&msg.author.name) {
+			Ok(user_details) => {
+				// Seems like the user's EO name is the same as their Discord name :)
+				// TODO: could replace the user_details call with scores request to get
+				// last_known_num_scores as well here
+				self.lock_data().user_registry.push(config::UserRegistryEntry {
+					discord_id: msg.author.id.0,
+					discord_username: msg.author.name.to_owned(),
+					eo_id: user_details.user_id,
+					eo_username: msg.author.name.to_owned(),
+					last_known_num_scores: None,
+					last_rating: None,
+				});
+
 				Ok(msg.author.name.to_owned())
 			},
 			Err(eo::Error::UserNotFound) => {
@@ -434,9 +445,9 @@ impl State {
 	}
 
 	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
-		match self.lock_data().user_registry.iter().find(|user| user.eo_username == eo_username) {
+		match self.lock_data().user_registry.iter_mut().find(|user| user.eo_username == eo_username) {
 			Some(user) => Ok(user.eo_id),
-			None => Ok(self.web_session.user_details(eo_username)?.user_id),
+			None => Ok(self.web_session.user_details(eo_username)?.user_id), // TODO: integrate into registry?
 		}
 	}
 
@@ -689,7 +700,6 @@ your message, I will also show the wifescores with that judge.
 		let previous_ratings = data.user_registry.iter_mut()
 			.find(|entry| entry.eo_username.eq_ignore_ascii_case(&eo_username))
 			.map(|entry| &mut entry.last_rating);
-		
 		
 		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
@@ -1917,6 +1927,8 @@ your message, I will also show the wifescores with that judge.
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
 			user_entry.discord_username = new.user.read().name.clone();
+		} else {
+			// TODO: integrate into registry?
 		}
 
 		if let Some(old) = old {
