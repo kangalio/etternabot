@@ -188,12 +188,13 @@ fn get_guild_permissions(
 	ctx: &serenity::Context,
 	msg: &serenity::Message,
 ) -> Result<Option<serenity::Permissions>, serenity::Error> {
+	println!("Getting permissions for {}", msg.author.name);
 	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx, msg)?, msg.guild_id) {
-		let permissions = /*if let Ok(permissions) = guild_member.permissions(&ctx.cache) {
+		let permissions = if let Ok(permissions) = guild_member.permissions(&ctx.cache) {
 			// try accessing permissions from cache
 			println!("(1) permissions in cache: {:?}", permissions);
 			permissions
-		} else*/ if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
+		} else if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
 			// try accessing guild data from cache and calculating permissions
 			let p = guild.read().member_permissions(msg.author.id);
 			println!("(2) permissions from guild cache: {:?}", p);
