@@ -167,8 +167,8 @@ fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 			}
 		})
 		.next()
-}
-
+	}
+		
 // Returns None if msg was sent in DMs
 fn get_guild_member(
 	ctx: &serenity::Context,
@@ -189,21 +189,33 @@ fn get_guild_permissions(
 	msg: &serenity::Message,
 ) -> Result<Option<serenity::Permissions>, serenity::Error> {
 	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx, msg)?, msg.guild_id) {
-		let permissions = if let Ok(permissions) = guild_member.permissions(&ctx.cache) {
+		let permissions = /*if let Ok(permissions) = guild_member.permissions(&ctx.cache) {
 			// try accessing permissions from cache
+			println!("(1) permissions in cache: {:?}", permissions);
 			permissions
-		} else if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
-			// try accessing guild data from cache and deriving permissions ourselves
-			let guild = guild.read();
-			guild_member.roles.iter()
-				.filter_map(|r| guild.roles.get(r))
-				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
+		} else*/ if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
+			// try accessing guild data from cache and calculating permissions
+			let p = guild.read().member_permissions(msg.author.id);
+			println!("(2) permissions from guild cache: {:?}", p);
+			p
 		} else {
 			// request guild data from http and derive permissions ourselves
-			let guild = guild_id.to_partial_guild(&ctx.http)?;
-			guild_member.roles.iter()
-				.filter_map(|r| guild.roles.get(r))
-				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
+			print!("(3) permissions from guild http: ");
+			let guild = &guild_id.to_partial_guild(&ctx.http)?;
+			if guild.owner_id == msg.author.id {
+				println!("author is owner -> all permissions");
+				serenity::Permissions::all()
+			} else {
+				let p = guild_member.roles.iter()
+					.inspect(|r| match guild.roles.get(r) {
+						Some(r) => print!("{}: {:?}, ", r.name, r.permissions),
+						None => print!("unknown role {}, ", r.0),
+					})
+					.filter_map(|r| guild.roles.get(r))
+					.fold(serenity::Permissions::empty(), |a, b| a | b.permissions);
+				println!(" -> {:?}", p);
+				p
+			}
 		};
 
 		Ok(Some(permissions))
