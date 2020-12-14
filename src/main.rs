@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Login to Discord and start bot
 	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
 		.expect("Unable to create Discord client");
-	client.threadpool.set_num_threads(3); // decrease threadpool size to provoke the deadlock stuck in order for me to debug it
+	client.threadpool.set_num_threads(10);
 	
 	let thread_pool_ptr = unsafe { &*(&client.threadpool as *const _) }; // screw the rules
 	assume_same_type(thread_pool_ptr, &client.threadpool);
@@ -146,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			// println!("Serenity thread pool: {}/{} threads active", active, max);
 			if active == max {
 				maxed_out_in_a_row += 1;
-				if maxed_out_in_a_row >= 3 {
+				if maxed_out_in_a_row >= 5 {
 					// Thread pool was maxed out for three minutes straight. This can't be right
 					// Let's spawn a new process to take over, but keep this instance running to
 					// allow debugging
