@@ -184,7 +184,6 @@ fn get_guild_member(
 }
 
 // My Fucking GODDDDDDD WHY DOES SERENITY NOT PROVIDE THIS BASIC STUFF
-#[allow(clippy::suspicious_else_formatting)]
 fn get_guild_permissions(
 	ctx: &serenity::Context,
 	msg: &serenity::Message,
@@ -195,34 +194,25 @@ fn get_guild_permissions(
 		guild_roles: &std::collections::HashMap<serenity::RoleId, serenity::Role>,
 	) -> serenity::Permissions {
 		if guild_owner_id == guild_member.user_id() {
-			println!("author is owner -> all permissions");
+			// author is owner -> all permissions
 			serenity::Permissions::all()
 		} else {
-			let p = guild_member.roles.iter()
-				.inspect(|r| match guild_roles.get(r) {
-					Some(r) => print!("{}: {:?}, ", r.name, r.permissions),
-					None => print!("unknown role {}, ", r.0),
-				})
+			guild_member.roles.iter()
 				.filter_map(|r| guild_roles.get(r))
-				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions);
-			println!(" -> {:?}", p);
-			p
+				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
 		}
 	}
 
-	println!("Getting permissions for {}", msg.author.name);
 	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx, msg)?, msg.guild_id) {
 		// `guild_member.permissions(&ctx.cache)` / `guild.member_permissions(msg.author.id)` can't
 		// be trusted - they return LITERALLY WRONG RESULTS AILUWRHDLIAUEHFISAUEHGLSIREUFHGLSIURHS
 		// See this thread on the serenity dev server: https://discord.com/channels/381880193251409931/381912587505500160/787965510124830790
 		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
 			// try get guild data from cache and calculate permissions ourselves
-			print!("(1) role permissions from cached guild: ");
 			let guild = guild.read();
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		} else {
 			// request guild data from http and calculate permissions ourselves
-			print!("(2) role permissions from guild http: ");
 			let guild = &guild_id.to_partial_guild(&ctx.http)?;
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		};
