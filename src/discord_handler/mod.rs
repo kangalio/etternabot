@@ -2065,17 +2065,17 @@ your message, I will also show the wifescores with that judge.
 
 		if let Some(score_info) = self.ocr_score_card_manager.lock().add_reaction(&ctx, &reaction)? {
 			// borrow checker headaches because this thing is monolithic
-			let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
+			// let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();
 			let eo_user_id = score_info.eo_user_id;
 			let trigger_msg = score_info.trigger_msg;
 
-			self.score_card(&ctx, self.config.score_ocr_card_channel.into(), ScoreCard {
+			self.score_card(&ctx, trigger_msg.1, ScoreCard {
 				scorekey: &scorekey,
 				user_id: Some(eo_user_id),
 				show_ssrs_and_judgements_and_modifiers: false,
 				alternative_judge: None,
-				triggerers: Some((&reactors, trigger_msg)),
+				triggerers: None,
 			})?;
 		}
 
