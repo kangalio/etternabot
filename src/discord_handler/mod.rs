@@ -455,12 +455,12 @@ impl State {
 	fn make_help_message(&self, pattern_help: bool) -> String {
 		if pattern_help {
 			r#"
-**+pattern [down/up] [NNths] [noteskin] [zoom] [keymode] PATTERN STRING**
-- `down/up` configures the scroll direction (note: you can configure your preferred scroll direction with `+scrollset`)
-- `NNths` sets the note snap. This can be placed throughout the pattern string to change the snap mid-pattern. Can even be something like 20ths or 57ths!
-- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`[.](https://pastebin.com/raw/5We1buQU) If omitted, a default will be chosen
-- `zoom` applies a certain stretch to the notes
-- `keymode` can be used to force a certain keymode when it's not obvious
+**+pattern [down/up] [NN]ths [noteskin] [zoom]x [keymode]k PATTERN STRING**
+- `down/up` configures the scroll direction (note: you can set your default with `+scrollset`)
+- `NNths` (e.g. `20ths`) sets the note snap. Can be used mid-pattern
+- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`[.](https://pastebin.com/raw/5We1buQU)
+- `zoom` (e.g. `2x`) applies a certain stretch to the notes
+- `keymode` (e.g. `5k` can be used to force a certain keymode when it's not obvious
 
 To draw a chord, enclose the notes in bracketes: `[12][34][12][34]` creates a jumptrill.
 Empty rows are written with `0` or `[]`.
