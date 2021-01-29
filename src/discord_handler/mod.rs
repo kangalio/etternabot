@@ -890,10 +890,10 @@ your message, I will also show the wifescores with that judge.
 				"dbz" | "dividebyzero" => Some(&self.noteskin_provider.dbz),
 				"wafles" | "wafles3" => Some(&self.noteskin_provider.wafles),
 				"default" | "lambda" => Some(&self.noteskin_provider.lambda),
-				"delta-note" | "delta" => Some(&self.noteskin_provider.delta_note),
+				"deltanote" | "delta" => Some(&self.noteskin_provider.delta_note),
 				"sbz" | "subtractbyzero" => Some(&self.noteskin_provider.sbz),
 				"mbz" | "multiplybyzero" => Some(&self.noteskin_provider.mbz),
-				"eo_baner" | "eobaner" => Some(&self.noteskin_provider.eo_baner),
+				"eobaner" => Some(&self.noteskin_provider.eo_baner),
 				"rustmania" => Some(&self.noteskin_provider.rustmania),
 				_ => None,
 			}
