@@ -5,7 +5,9 @@ pub struct FractionalSnap {
 
 impl FractionalSnap {
 	pub fn from_snap_number(snap_number: u32) -> Option<Self> {
-		Some(Self { snap_number: std::num::NonZeroU32::new(snap_number)? })
+		Some(Self {
+			snap_number: std::num::NonZeroU32::new(snap_number)?,
+		})
 	}
 
 	/// The snap number will always be above 0.

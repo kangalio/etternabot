@@ -1,5 +1,5 @@
-use thiserror::Error;
 use image::GenericImage;
+use thiserror::Error;
 
 mod pattern;
 pub use pattern::*;
@@ -21,13 +21,21 @@ pub enum Error {
 	#[error("{keymode}k not supported by selected noteskin")]
 	NoteskinDoesntSupportKeymode { keymode: usize },
 	#[error("Lane {human_readable_lane} is invalid in {keymode}k")]
-	InvalidLaneForKeymode { human_readable_lane: usize, keymode: usize },
+	InvalidLaneForKeymode {
+		human_readable_lane: usize,
+		keymode: usize,
+	},
 	#[error("Noteskin's texture map doesn't contain all required textures")]
 	NoteskinTextureMapTooSmall,
 	#[error("{count} sprites would need to be rendered for this pattern, which exceeds the limit of {limit}")]
 	TooManySprites { count: usize, limit: usize },
 	#[error("Rendered pattern would exceed the limit of {max_width}x{max_height}")]
-	ImageTooLarge { width: usize, height: usize, max_width: usize, max_height: usize },
+	ImageTooLarge {
+		width: usize,
+		height: usize,
+		max_width: usize,
+		max_height: usize,
+	},
 }
 
 struct Sprite<'a> {
@@ -42,13 +50,20 @@ struct SpriteMap<'a> {
 	vertical_spacing_multiplier: f32,
 }
 
-fn copy_from(this: &mut image::RgbaImage, other: &image::RgbaImage, x: u32, y: u32) -> image::ImageResult<()> {
+fn copy_from(
+	this: &mut image::RgbaImage,
+	other: &image::RgbaImage,
+	x: u32,
+	y: u32,
+) -> image::ImageResult<()> {
 	// Do bounds checking here so we can use the non-bounds-checking
 	// functions to copy pixels.
 	if this.width() < other.width() + x || this.height() < other.height() + y {
-		return Err(image::ImageError::Parameter(image::error::ParameterError::from_kind(
-			image::error::ParameterErrorKind::DimensionMismatch,
-		)));
+		return Err(image::ImageError::Parameter(
+			image::error::ParameterError::from_kind(
+				image::error::ParameterErrorKind::DimensionMismatch,
+			),
+		));
 	}
 
 	for i in 0..other.width() {
@@ -60,29 +75,49 @@ fn copy_from(this: &mut image::RgbaImage, other: &image::RgbaImage, x: u32, y: u
 	Ok(())
 }
 
-fn render_sprite_map(sprite_map: crate::SpriteMap, (max_width, max_height): (usize, usize)) -> Result<image::RgbaImage, crate::Error> {
+fn render_sprite_map(
+	sprite_map: crate::SpriteMap,
+	(max_width, max_height): (usize, usize),
+) -> Result<image::RgbaImage, crate::Error> {
 	let sprite_res = sprite_map.sprite_resolution;
 
-	let max_lane = sprite_map.sprites.iter().map(|s| s.lane).max().ok_or(crate::Error::EmptyPattern)?;
-	let max_y_pos = sprite_map.sprites.iter().map(|s| s.y_pos).max().ok_or(crate::Error::EmptyPattern)?;
+	let max_lane = sprite_map
+		.sprites
+		.iter()
+		.map(|s| s.lane)
+		.max()
+		.ok_or(crate::Error::EmptyPattern)?;
+	let max_y_pos = sprite_map
+		.sprites
+		.iter()
+		.map(|s| s.y_pos)
+		.max()
+		.ok_or(crate::Error::EmptyPattern)?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
 	let width = sprite_res * (max_lane + 1);
-	let height = ((sprite_res * max_y_pos) as f32 * sprite_map.vertical_spacing_multiplier) as usize + sprite_res;
+	let height = ((sprite_res * max_y_pos) as f32 * sprite_map.vertical_spacing_multiplier)
+		as usize + sprite_res;
 	if width > max_width || height > max_height {
-		return Err(crate::Error::ImageTooLarge { width, height, max_width, max_height });
+		return Err(crate::Error::ImageTooLarge {
+			width,
+			height,
+			max_width,
+			max_height,
+		});
 	}
 	let mut buffer = image::ImageBuffer::new(width as u32, height as u32);
 
 	for sprite in sprite_map.sprites {
 		let x = sprite.lane * sprite_res;
-		let y = ((sprite.y_pos * sprite_res) as f32 * sprite_map.vertical_spacing_multiplier) as usize;
+		let y =
+			((sprite.y_pos * sprite_res) as f32 * sprite_map.vertical_spacing_multiplier) as usize;
 		// buffer.copy_from(sprite.image, x as u32, y as u32)
 		// 	.expect("Note image is too large (shouldn't happen)");
 		copy_from(&mut buffer, sprite.image, x as u32, y as u32)
 			.expect("Note image is too large (shouldn't happen)");
 	}
-	
+
 	Ok(buffer)
 }
 
@@ -99,8 +134,15 @@ pub struct PatternRecipe<'a> {
 
 /// pattern: List of simple patterns and their snap represented as the number of 192nd-steps
 pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error> {
-	let PatternRecipe { noteskin, scroll_direction, keymode, vertical_spacing_multiplier, pattern,
-		max_image_dimensions, max_sprites } = recipe;
+	let PatternRecipe {
+		noteskin,
+		scroll_direction,
+		keymode,
+		vertical_spacing_multiplier,
+		pattern,
+		max_image_dimensions,
+		max_sprites,
+	} = recipe;
 
 	let mut rows = Vec::new();
 	let mut row_number = 0;
@@ -112,7 +154,11 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 			row_number += snap_192nd_intervals.next_interval() as usize;
 		}
 	}
-	let highest_row = rows.iter().map(|&(_, row_number)| row_number).max().unwrap_or(0);
+	let highest_row = rows
+		.iter()
+		.map(|&(_, row_number)| row_number)
+		.max()
+		.unwrap_or(0);
 
 	let mut sprites = Vec::new();
 
@@ -122,7 +168,11 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 		etterna::ScrollDirection::Downscroll => highest_row,
 	};
 	for lane in 0..keymode {
-		sprites.push(Sprite { lane, y_pos: receptor_y_pos, image: noteskin.receptor(lane, keymode)? });
+		sprites.push(Sprite {
+			lane,
+			y_pos: receptor_y_pos,
+			image: noteskin.receptor(lane, keymode)?,
+		});
 	}
 
 	for (row_data, row_number) in rows {
@@ -136,7 +186,11 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 					etterna::ScrollDirection::Downscroll => highest_row - row_number,
 				},
 				image: match note_type {
-					NoteType::Tap => noteskin.note(note_lane as usize, keymode, etterna::Snap::from_row(row_number as _))?,
+					NoteType::Tap => noteskin.note(
+						note_lane as usize,
+						keymode,
+						etterna::Snap::from_row(row_number as _),
+					)?,
 					NoteType::Mine => noteskin.mine()?,
 				},
 			});
@@ -144,16 +198,26 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 	}
 
 	if sprites.len() > max_sprites {
-		return Err(Error::TooManySprites { count: sprites.len(), limit: max_sprites });
+		return Err(Error::TooManySprites {
+			count: sprites.len(),
+			limit: max_sprites,
+		});
 	}
 
-	let highest_snap = pattern.iter().map(|&(_, snap)| snap.snap_number()).min()
+	let highest_snap = pattern
+		.iter()
+		.map(|&(_, snap)| snap.snap_number())
+		.min()
 		.ok_or(Error::EmptyPattern)?;
 	let smallest_192nd_interval = 192.0 / highest_snap as f32;
 
-	render_sprite_map(SpriteMap {
-		sprites,
-		sprite_resolution: noteskin.sprite_resolution(),
-		vertical_spacing_multiplier: (1.0 / smallest_192nd_interval) * vertical_spacing_multiplier,
-	}, max_image_dimensions)
+	render_sprite_map(
+		SpriteMap {
+			sprites,
+			sprite_resolution: noteskin.sprite_resolution(),
+			vertical_spacing_multiplier: (1.0 / smallest_192nd_interval)
+				* vertical_spacing_multiplier,
+		},
+		max_image_dimensions,
+	)
 }

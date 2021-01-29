@@ -1,7 +1,7 @@
 #![allow(clippy::match_ref_pats)]
 
-use leptess::LepTess;
 use etterna::{Difficulty, Rate, TapJudgements};
+use leptess::LepTess;
 use thiserror::Error;
 
 pub const MINIMUM_EQUALITY_SCORE_TO_BE_PROBABLY_EQUAL: i32 = 10;
@@ -16,11 +16,15 @@ pub enum Error {
 
 fn recognize_rect<T>(
 	lt: &mut LepTess,
-	rect_x: u32, rect_y: u32, rect_w: u32, rect_h: u32, // the coordinates are in 1920x1080 format
-	processor: impl FnOnce(&str) -> Option<T>
+	rect_x: u32,
+	rect_y: u32,
+	rect_w: u32,
+	rect_h: u32, // the coordinates are in 1920x1080 format
+	processor: impl FnOnce(&str) -> Option<T>,
 ) -> Option<T> {
 	// print!("a");
-	let (img_w, img_h) = lt.get_image_dimensions()
+	let (img_w, img_h) = lt
+		.get_image_dimensions()
 		.expect("hey caller, you should've set an image by now");
 	// let (actual_img_w, actual_img_h) = lt.get_image_dimensions()
 	// 	.expect("hey caller, you should've set an image by now");
@@ -63,11 +67,8 @@ fn recognize_rect<T>(
 }
 
 fn parse_slash_separated_judgement_string(s: &str) -> Option<TapJudgementsMaybe> {
-	let judgements: Vec<u32> = s
-		.split('/')
-		.filter_map(|s| s.trim().parse().ok())
-		.collect();
-	
+	let judgements: Vec<u32> = s.split('/').filter_map(|s| s.trim().parse().ok()).collect();
+
 	Some(TapJudgementsMaybe {
 		marvelouses: judgements.get(0).copied(),
 		perfects: judgements.get(1).copied(),
@@ -87,24 +88,18 @@ fn recognize_til_death(
 		rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
 			Rate::from_f32(s.parse().ok()?)
 		}),
-		pack: recognize_rect(&mut eng_lt, 241, 18, 1677, 55, |s| {
-			Some(s.to_owned())
-		}),
+		pack: recognize_rect(&mut eng_lt, 241, 18, 1677, 55, |s| Some(s.to_owned())),
 		eo_username: recognize_rect(&mut eng_lt, 461, 1004, 1111, 40, |s| {
 			let (eo_username, _rest): (String, String);
 			text_io::try_scan!(@impl or_none; s.bytes() => "Logged in as {} ({}", eo_username, _rest);
-			
+
 			// let (eo_rating, eo_rank): (String, String);
 			// text_io::try_scan!(@impl or_none; rest.bytes() => "{}: #{})", eo_rating, eo_rank);
 
 			Some(eo_username)
 		}),
-		song: recognize_rect(&mut eng_lt, 760, 322, 406, 32, |s| {
-			Some(s.to_owned())
-		}),
-		artist: recognize_rect(&mut eng_lt, 747, 350, 417, 25, |s| {
-			Some(s.to_owned())
-		}),
+		song: recognize_rect(&mut eng_lt, 760, 322, 406, 32, |s| Some(s.to_owned())),
+		artist: recognize_rect(&mut eng_lt, 747, 350, 417, 25, |s| Some(s.to_owned())),
 		wifescore: recognize_rect(&mut num_lt, 53, 339, 128, 40, |s| {
 			Some(s.trim().parse().ok()?)
 		}),
@@ -120,7 +115,14 @@ fn recognize_til_death(
 		// we're reading _some other score's judgements data here_. HOWEVER!! Due to the fact
 		// that EO doesn't save non-PBs, we wouldn't find the score _anyways_ if it's not a PB.
 		// So it's not actually a problem that we're not properly recognizing non-PBs.
-		judgements: recognize_rect(&mut num_lt, 1422, 171, 308, 21, parse_slash_separated_judgement_string),
+		judgements: recognize_rect(
+			&mut num_lt,
+			1422,
+			171,
+			308,
+			21,
+			parse_slash_separated_judgement_string,
+		),
 		difficulty: recognize_rect(&mut eng_lt, 646, 324, 100, 56, |s| {
 			Difficulty::from_short_string(s)
 		}),
@@ -133,11 +135,11 @@ fn recognize_scwh(
 	mut num_lt: &mut LepTess,
 ) -> Result<EvaluationScreenData, Error> {
 	/*
-	rate - 
-	pack - 
+	rate -
+	pack -
 	eo_username - 1567, 786, 287, 55
-	song - 
-	artist - 
+	song -
+	artist -
 	wifescore - 460, 199, 181, 57
 	msd - 85, 156, 85, 32
 	ssr - 83, 195, 143, 61
@@ -161,12 +163,8 @@ fn recognize_scwh(
 
 	Ok(EvaluationScreenData {
 		rate,
-		pack: recognize_rect(&mut eng_lt, 1268, 0, 630, 45, |s| {
-			Some(s.to_owned())
-		}),
-		eo_username: recognize_rect(&mut eng_lt, 1567, 786, 287, 55, |s| {
-			Some(s.to_owned())
-		}),
+		pack: recognize_rect(&mut eng_lt, 1268, 0, 630, 45, |s| Some(s.to_owned())),
+		eo_username: recognize_rect(&mut eng_lt, 1567, 786, 287, 55, |s| Some(s.to_owned())),
 		song,
 		artist: recognize_rect(&mut eng_lt, 163, 146, 871, 43, |s| {
 			let artist: String;
@@ -195,9 +193,7 @@ fn recognize_scwh(
 		difficulty: recognize_rect(&mut eng_lt, 233, 225, 62, 31, |s| {
 			Difficulty::from_short_string(s)
 		}),
-		date: recognize_rect(&mut eng_lt, 1399, 920, 454, 49, |s| {
-			Some(s.to_owned())
-		}),
+		date: recognize_rect(&mut eng_lt, 1399, 920, 454, 49, |s| Some(s.to_owned())),
 	})
 }
 
@@ -255,7 +251,7 @@ impl EvaluationScreenData {
 	}
 
 	pub fn recognize(
-		mut image_setter: impl FnMut(&mut LepTess) -> Option<()>
+		mut image_setter: impl FnMut(&mut LepTess) -> Option<()>,
 	) -> Result<Vec<Self>, Error> {
 		// println!("Creating english LepTess");
 		let mut eng_lt = LepTess::new(Some("ocr_data"), "eng")?;
@@ -290,15 +286,16 @@ impl EvaluationScreenData {
 					if $equality_check(a, b) {
 						// println!("{} matches! Adding {} points", stringify!($a), $weight);
 						score += $weight;
-					}
+						}
 					// let's not subtract points if mismatch
-				}
+					}
 			};
 			($a:expr, $b:expr, $weight:expr) => {
 				compare!($a, $b, $weight, |a, b| a == b);
 			};
 			($a:expr, $b:expr, $weight:expr, ~$epsilon:expr) => {
-				compare!($a, $b, $weight, |a: &f32, b: &f32| (a - b).abs() <= $epsilon);
+				compare!($a, $b, $weight, |a: &f32, b: &f32| (a - b).abs()
+					<= $epsilon);
 			};
 		}
 		compare!(self.rate, other.rate, 2);
@@ -311,7 +308,9 @@ impl EvaluationScreenData {
 		compare!(self.ssr, other.ssr, 6, ~0.01);
 		compare!(self.difficulty, other.difficulty, 2);
 		compare!(self.date, other.date, 2);
-		if let (Some(self_judgements), Some(other_judgements)) = (&self.judgements, &other.judgements) {
+		if let (Some(self_judgements), Some(other_judgements)) =
+			(&self.judgements, &other.judgements)
+		{
 			compare!(self_judgements.marvelouses, other_judgements.marvelouses, 5);
 			compare!(self_judgements.perfects, other_judgements.perfects, 5);
 			compare!(self_judgements.greats, other_judgements.greats, 5);

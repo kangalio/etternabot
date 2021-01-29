@@ -1,14 +1,15 @@
 mod config;
-mod replay_graph;
 mod draw_skill_graph;
+mod replay_graph;
 
 use crate::serenity; // use my custom serenity prelude
-use etternaonline_api as eo;
 use config::{Config, Data};
-use thiserror::Error;
+use etternaonline_api as eo;
 use rand::Rng as _;
+use thiserror::Error;
 
-const CMD_TOP_HELP: &str = "Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
+const CMD_TOP_HELP: &str =
+	"Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
 const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic";
 const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
 const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
@@ -21,21 +22,27 @@ static SCORE_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::
 	regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)").unwrap()
 });
 static LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-	regex::Regex::new(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+").unwrap()
+	regex::Regex::new(
+		r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
+	)
+	.unwrap()
 });
 static SONG_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
 	regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?").unwrap()
 });
-static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-	regex::Regex::new(r"[jJ](\d)").unwrap()
-});
+static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> =
+	once_cell::sync::Lazy::new(|| regex::Regex::new(r"[jJ](\d)").unwrap());
 
 #[derive(Error, Debug)]
 pub enum Error {
-	#[error("Attempted to send an invalid Discord message. One or more fields were probably empty")]
+	#[error(
+		"Attempted to send an invalid Discord message. One or more fields were probably empty"
+	)]
 	AttemptedToSendInvalidMessage,
-	#[error("User {discord_username} not found on EO. Please manually specify your EtternaOnline \
-		username with `+userset`")]
+	#[error(
+		"User {discord_username} not found on EO. Please manually specify your EtternaOnline \
+		username with `+userset`"
+	)]
 	CouldNotDeriveEoUsername { discord_username: String },
 	#[error("EtternaOnline error: {0}")]
 	EoApiError(#[from] eo::Error),
@@ -67,38 +74,40 @@ fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
 	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
 	country_code
 		.chars()
-		.map(|c| std::char::from_u32(c.to_ascii_lowercase() as u32 + regional_indicator_value_offset))
+		.map(|c| {
+			std::char::from_u32(c.to_ascii_lowercase() as u32 + regional_indicator_value_offset)
+		})
 		.collect()
 }
 
 /// Returns a string that may be shorter than `max_length`, but never longer
 /// (measured in chars, not in bytes!)
 fn gen_unicode_block_bar(max_length: usize, proportion: f32) -> String {
-    // index x = x 8ths of a full block
-    const BLOCK_CHARS: [char; 9] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+	// index x = x 8ths of a full block
+	const BLOCK_CHARS: [char; 9] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
 
-    let num_possible_steps = max_length * 8;
+	let num_possible_steps = max_length * 8;
 	let step = (proportion * num_possible_steps as f32) as usize;
-	
+
 	let num_full_blocks = step / 8;
 	let type_of_last_block = step % 8;
-	
-    let mut string = String::with_capacity(max_length);
-    for _ in 0..num_full_blocks {
-        string.push(BLOCK_CHARS[8]);
+
+	let mut string = String::with_capacity(max_length);
+	for _ in 0..num_full_blocks {
+		string.push(BLOCK_CHARS[8]);
 	}
 	// UNWRAP: due to the modulo the index is guaranteed to be in bounds
-    string.push(*BLOCK_CHARS.get(type_of_last_block).unwrap());
-    
-    if let Some((truncation_point, _)) = string.char_indices().nth(max_length) {
-        string.truncate(truncation_point);
-    }
-    
-    string
+	string.push(*BLOCK_CHARS.get(type_of_last_block).unwrap());
+
+	if let Some((truncation_point, _)) = string.char_indices().nth(max_length) {
+		string.truncate(truncation_point);
+	}
+
+	string
 }
 
 /// Maps a value from src_range to dest_range. The value doesn't need to be inside src_range
-/// 
+///
 /// ```rust
 /// assert_eq!(map_range(15.0, 10.0..20.0, 3.0..4.0), 3.5);
 /// assert_eq!(map_range(15.0, 10.0..20.0, -1.0, -3.0), -2.0);
@@ -142,11 +151,16 @@ fn get_random_score(
 
 	registry_entry.last_known_num_scores = Some(scores.entries_before_search_filtering);
 
-	scores.scores.into_iter().next().ok_or(Error::NoScoreEvenThoughOneWasRequested)
+	scores
+		.scores
+		.into_iter()
+		.next()
+		.ok_or(Error::NoScoreEvenThoughOneWasRequested)
 }
 
 fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
-	JUDGE_REGEX.captures_iter(string)
+	JUDGE_REGEX
+		.captures_iter(string)
 		.filter_map(|groups| {
 			// UNWRAP: the regex definition contains a group
 			let judge_num_string = groups.get(1).unwrap().as_str();
@@ -167,8 +181,8 @@ fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
 			}
 		})
 		.next()
-	}
-		
+}
+
 // Returns None if msg was sent in DMs
 fn get_guild_member(
 	ctx: &serenity::Context,
@@ -197,7 +211,9 @@ fn get_guild_permissions(
 			// author is owner -> all permissions
 			serenity::Permissions::all()
 		} else {
-			guild_member.roles.iter()
+			guild_member
+				.roles
+				.iter()
 				.filter_map(|r| guild_roles.get(r))
 				.fold(serenity::Permissions::empty(), |a, b| a | b.permissions)
 		}
@@ -229,7 +245,10 @@ struct ScoreCard<'a> {
 	show_ssrs_and_judgements_and_modifiers: bool,
 	alternative_judge: Option<&'a etterna::Judge>,
 	#[allow(clippy::type_complexity)]
-	triggerers: Option<(&'a [serenity::User], (serenity::GuildId, serenity::ChannelId, serenity::MessageId))>,
+	triggerers: Option<(
+		&'a [serenity::User],
+		(serenity::GuildId, serenity::ChannelId, serenity::MessageId),
+	)>,
 }
 
 struct NoteskinProvider {
@@ -296,7 +315,12 @@ impl State {
 		);
 
 		let config = Config::load();
-		if ctx.http.get_channel(config.promotion_gratulations_channel)?.guild().is_none() {
+		if ctx
+			.http
+			.get_channel(config.promotion_gratulations_channel)?
+			.guild()
+			.is_none()
+		{
 			panic!("Configured promotion gratulations channel is not a valid guild channel!");
 		}
 
@@ -317,29 +341,35 @@ impl State {
 			noteskin_provider: NoteskinProvider {
 				dbz: pattern_draw::Noteskin::read_ldur_with_6k(
 					64,
-					"assets/noteskin/dbz-notes.png", "assets/noteskin/dbz-receptor.png",
+					"assets/noteskin/dbz-notes.png",
+					"assets/noteskin/dbz-receptor.png",
 					"assets/noteskin/dbz-mine.png",
 				)?,
 				delta_note: pattern_draw::Noteskin::read_pump(
 					64,
-					"assets/noteskin/deltanote-center-notes.png", "assets/noteskin/deltanote-center-receptor.png",
-					"assets/noteskin/deltanote-corner-notes.png", "assets/noteskin/deltanote-corner-receptor.png",
+					"assets/noteskin/deltanote-center-notes.png",
+					"assets/noteskin/deltanote-center-receptor.png",
+					"assets/noteskin/deltanote-corner-notes.png",
+					"assets/noteskin/deltanote-corner-receptor.png",
 					"assets/noteskin/deltanote-mine.png",
 				)?,
 				sbz: pattern_draw::Noteskin::read_bar(
 					64,
-					"assets/noteskin/sbz-notes.png", "assets/noteskin/sbz-receptor.png",
+					"assets/noteskin/sbz-notes.png",
+					"assets/noteskin/sbz-receptor.png",
 					"assets/noteskin/dbz-mine.png",
 				)?,
 				mbz: pattern_draw::Noteskin::read_bar(
 					64,
-					"assets/noteskin/mbz-notes.png", "assets/noteskin/mbz-receptor.png",
+					"assets/noteskin/mbz-notes.png",
+					"assets/noteskin/mbz-receptor.png",
 					"assets/noteskin/dbz-mine.png",
 				)?,
 				lambda: {
 					let mut lambda = pattern_draw::Noteskin::read_ldur_with_6k(
 						128,
-						"assets/noteskin/lambda-notes.png", "assets/noteskin/lambda-receptor.png",
+						"assets/noteskin/lambda-notes.png",
+						"assets/noteskin/lambda-receptor.png",
 						"assets/noteskin/lambda-mine.png",
 					)?;
 					lambda.resize_sprites(64);
@@ -347,21 +377,27 @@ impl State {
 				},
 				wafles: pattern_draw::Noteskin::read_ldur_with_6k(
 					64,
-					"assets/noteskin/wafles-notes.png", "assets/noteskin/wafles-receptor.png",
+					"assets/noteskin/wafles-notes.png",
+					"assets/noteskin/wafles-receptor.png",
 					"assets/noteskin/wafles-mine.png",
 				)?,
 				eo_baner: pattern_draw::Noteskin::read_ldur(
 					120,
-					"assets/noteskin/eobaner-note-left.png", "assets/noteskin/eobaner-receptor-left.png",
-					"assets/noteskin/eobaner-note-down.png", "assets/noteskin/eobaner-receptor-down.png",
-					"assets/noteskin/eobaner-note-up.png", "assets/noteskin/eobaner-receptor-up.png",
-					"assets/noteskin/eobaner-note-right.png", "assets/noteskin/eobaner-receptor-right.png",
+					"assets/noteskin/eobaner-note-left.png",
+					"assets/noteskin/eobaner-receptor-left.png",
+					"assets/noteskin/eobaner-note-down.png",
+					"assets/noteskin/eobaner-receptor-down.png",
+					"assets/noteskin/eobaner-note-up.png",
+					"assets/noteskin/eobaner-receptor-up.png",
+					"assets/noteskin/eobaner-note-right.png",
+					"assets/noteskin/eobaner-receptor-right.png",
 					"assets/noteskin/eobaner-mine.png",
 				)?,
 				rustmania: {
 					let mut rustmania = pattern_draw::Noteskin::read_ldur_with_6k(
 						224,
-						"assets/noteskin/rustmania-notes.png", "assets/noteskin/rustmania-receptor.png",
+						"assets/noteskin/rustmania-notes.png",
+						"assets/noteskin/rustmania-receptor.png",
 						"assets/noteskin/rustmania-mine.png",
 					)?;
 					rustmania.turn_sprites_upside_down(); // I made an oopsie in gimp
@@ -402,7 +438,7 @@ impl State {
 				Ok(v2) => {
 					*v2_session = Some(v2);
 					Ok(IdkWhatImDoing { guard: v2_session })
-				},
+				}
 				Err(e) => {
 					*v2_session = None;
 					Err(Error::FailedEoLogin(e))
@@ -411,11 +447,15 @@ impl State {
 		}
 	}
 
-	fn get_eo_username(&self,
+	fn get_eo_username(
+		&self,
 		_ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<String, Error> {
-		if let Some(user_entry) = self.lock_data().user_registry.iter()
+		if let Some(user_entry) = self
+			.lock_data()
+			.user_registry
+			.iter()
 			.find(|user| user.discord_id == msg.author.id.0)
 		{
 			return Ok(user_entry.eo_username.to_owned());
@@ -426,26 +466,33 @@ impl State {
 				// Seems like the user's EO name is the same as their Discord name :)
 				// TODO: could replace the user_details call with scores request to get
 				// last_known_num_scores as well here
-				self.lock_data().user_registry.push(config::UserRegistryEntry {
-					discord_id: msg.author.id.0,
-					discord_username: msg.author.name.to_owned(),
-					eo_id: user_details.user_id,
-					eo_username: msg.author.name.to_owned(),
-					last_known_num_scores: None,
-					last_rating: None,
-				});
+				self.lock_data()
+					.user_registry
+					.push(config::UserRegistryEntry {
+						discord_id: msg.author.id.0,
+						discord_username: msg.author.name.to_owned(),
+						eo_id: user_details.user_id,
+						eo_username: msg.author.name.to_owned(),
+						last_known_num_scores: None,
+						last_rating: None,
+					});
 
 				Ok(msg.author.name.to_owned())
-			},
-			Err(eo::Error::UserNotFound) => {
-				Err(Error::CouldNotDeriveEoUsername { discord_username: msg.author.name.to_owned() })
-			},
+			}
+			Err(eo::Error::UserNotFound) => Err(Error::CouldNotDeriveEoUsername {
+				discord_username: msg.author.name.to_owned(),
+			}),
 			Err(other) => Err(other.into()),
 		}
 	}
 
 	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
-		match self.lock_data().user_registry.iter_mut().find(|user| user.eo_username == eo_username) {
+		match self
+			.lock_data()
+			.user_registry
+			.iter_mut()
+			.find(|user| user.eo_username == eo_username)
+		{
 			Some(user) => Ok(user.eo_id),
 			None => Ok(self.web_session.user_details(eo_username)?.user_id), // TODO: integrate into registry?
 		}
@@ -516,21 +563,25 @@ You can also post links to scores and I will show info about them. If you add a 
 your message, I will also show the wifescores with that judge.
 				"#,
 				// UNWRAP: as per gen_range docs the index is always below the vector length
-				&self.config.minanyms.get(
-					rand::thread_rng().gen_range(0, self.config.minanyms.len())
-				).unwrap(),
+				&self
+					.config
+					.minanyms
+					.get(rand::thread_rng().gen_range(0, self.config.minanyms.len()))
+					.unwrap(),
 			)
 		}
 	}
 
-	fn top_scores(&self,
+	fn top_scores(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
 		mut limit: u32,
 	) -> Result<(), Error> {
 		if !(1..=30).contains(&limit) {
-			msg.channel_id.say(&ctx.http, "Only limits up to 30 are supported")?;
+			msg.channel_id
+				.say(&ctx.http, "Only limits up to 30 are supported")?;
 			return Ok(());
 		}
 
@@ -542,31 +593,32 @@ your message, I will also show the wifescores with that judge.
 			[] => {
 				skillset = None;
 				eo_username = self.get_eo_username(ctx, msg)?;
-			},
+			}
 			[skillset_or_username] => {
 				match etterna::Skillset7::from_user_input(skillset_or_username) {
 					Some(parsed_skillset) => {
 						skillset = Some(parsed_skillset);
 						eo_username = self.get_eo_username(ctx, msg)?;
-					},
+					}
 					None => {
 						skillset = None;
 						eo_username = skillset_or_username.to_owned();
-					},
+					}
 				}
-			},
+			}
 			[skillset_str, username] => {
 				skillset = match etterna::Skillset7::from_user_input(skillset_str) {
 					Some(parsed_skillset) => Some(parsed_skillset),
 					None => {
 						msg.channel_id.say(
 							&ctx.http,
-							format!("Unrecognized skillset \"{}\"", skillset_str))?;
+							format!("Unrecognized skillset \"{}\"", skillset_str),
+						)?;
 						return Ok(());
 					}
 				};
 				eo_username = username.to_owned();
-			},
+			}
 			_ => {
 				msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
 				return Ok(());
@@ -576,10 +628,15 @@ your message, I will also show the wifescores with that judge.
 		// Download top scores
 		let top_scores = match skillset {
 			None => self.v2()?.user_top_10_scores(&eo_username),
-			Some(skillset) => self.v2()?.user_top_skillset_scores(&eo_username, skillset, limit),
+			Some(skillset) => self
+				.v2()?
+				.user_top_skillset_scores(&eo_username, skillset, limit),
 		};
 		if let Err(eo::Error::UserNotFound) = top_scores {
-			msg.channel_id.say(&ctx.http, format!("No such user or skillset \"{}\"", eo_username))?;
+			msg.channel_id.say(
+				&ctx.http,
+				format!("No such user or skillset \"{}\"", eo_username),
+			)?;
 			return Ok(());
 		}
 		let top_scores = top_scores?;
@@ -600,9 +657,10 @@ your message, I will also show the wifescores with that judge.
 
 		if limit != 10 && skillset == None {
 			limit = 10;
-			response += "(due to a bug in the EO v2 API, only 10 entries can be shown in Overall mode)";
+			response +=
+				"(due to a bug in the EO v2 API, only 10 entries can be shown in Overall mode)";
 		}
-		
+
 		response += "```";
 
 		let title = match skillset {
@@ -610,20 +668,29 @@ your message, I will also show the wifescores with that judge.
 			Some(skillset) => format!("{}'s Top {} {}", eo_username, limit, skillset),
 		};
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-			.color(crate::ETTERNA_COLOR)
-			.description(&response)
-			.author(|a| a
-				.name(title)
-				.url(format!("https://etternaonline.com/user/profile/{}", eo_username))
-				.icon_url(format!("https://etternaonline.com/img/flags/{}.png", country_code))
-			)
-		))?;
+		msg.channel_id.send_message(&ctx.http, |m| {
+			m.embed(|e| {
+				e.color(crate::ETTERNA_COLOR)
+					.description(&response)
+					.author(|a| {
+						a.name(title)
+							.url(format!(
+								"https://etternaonline.com/user/profile/{}",
+								eo_username
+							))
+							.icon_url(format!(
+								"https://etternaonline.com/img/flags/{}.png",
+								country_code
+							))
+					})
+			})
+		})?;
 
 		Ok(())
 	}
 
-	fn latest_scores(&self,
+	fn latest_scores(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
@@ -653,20 +720,29 @@ your message, I will also show the wifescores with that judge.
 
 		let title = format!("{}'s Last 10 Scores", eo_username);
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-			.color(crate::ETTERNA_COLOR)
-			.description(&response)
-			.author(|a| a
-				.name(title)
-				.url(format!("https://etternaonline.com/user/profile/{}", eo_username))
-				.icon_url(format!("https://etternaonline.com/img/flags/{}.png", country_code))
-			)
-		))?;
+		msg.channel_id.send_message(&ctx.http, |m| {
+			m.embed(|e| {
+				e.color(crate::ETTERNA_COLOR)
+					.description(&response)
+					.author(|a| {
+						a.name(title)
+							.url(format!(
+								"https://etternaonline.com/user/profile/{}",
+								eo_username
+							))
+							.icon_url(format!(
+								"https://etternaonline.com/img/flags/{}.png",
+								country_code
+							))
+					})
+			})
+		})?;
 
 		Ok(())
 	}
 
-	fn profile(&self,
+	fn profile(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		text: &str,
@@ -687,36 +763,46 @@ your message, I will also show the wifescores with that judge.
 		if details.is_patreon {
 			title += " (Patron)";
 		}
-		
+
 		let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
 		for ss in etterna::Skillset8::iter() {
 			let ss_rating = details.rating.get(ss);
-			if ss_rating < min_ss_rating { min_ss_rating = ss_rating; }
-			if ss_rating > max_ss_rating { max_ss_rating = ss_rating; }
+			if ss_rating < min_ss_rating {
+				min_ss_rating = ss_rating;
+			}
+			if ss_rating > max_ss_rating {
+				max_ss_rating = ss_rating;
+			}
 		}
-		
+
 		let mut data = self.lock_data();
 		// None if user is not in registry, None(None) if user is in registry but no prev rating
-		let previous_ratings = data.user_registry.iter_mut()
+		let previous_ratings = data
+			.user_registry
+			.iter_mut()
 			.find(|entry| entry.eo_username.eq_ignore_ascii_case(&eo_username))
 			.map(|entry| &mut entry.last_rating);
-		
+
 		let mut rating_string = "```prolog\n".to_owned();
 		for skillset in etterna::Skillset8::iter() {
 			match &previous_ratings {
-				Some(Some(prev)) => rating_string += &format!(
-					"{: >10}:   {: >5.2} (+{: >4.2})  #{: <4}\n",
-					skillset.to_string(),
-					details.rating.get(skillset),
-					details.rating.get(skillset) - prev.get(skillset),
-					ranks.get(skillset),
-				),
-				Some(None) | None => rating_string += &format!(
-					"{: >10}:   {: >5.2}  #{: <4}\n",
-					skillset.to_string(),
-					details.rating.get(skillset),
-					ranks.get(skillset),
-				),
+				Some(Some(prev)) => {
+					rating_string += &format!(
+						"{: >10}:   {: >5.2} (+{: >4.2})  #{: <4}\n",
+						skillset.to_string(),
+						details.rating.get(skillset),
+						details.rating.get(skillset) - prev.get(skillset),
+						ranks.get(skillset),
+					)
+				}
+				Some(None) | None => {
+					rating_string += &format!(
+						"{: >10}:   {: >5.2}  #{: <4}\n",
+						skillset.to_string(),
+						details.rating.get(skillset),
+						ranks.get(skillset),
+					)
+				}
 			}
 		}
 		rating_string += "```";
@@ -726,35 +812,46 @@ your message, I will also show the wifescores with that judge.
 			*previous_ratings = Some(details.rating.clone());
 		}
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|embed| {
-			embed
-				.description(rating_string)
-				.author(|a| a
-					.name(&title)
-					.url(format!("https://etternaonline.com/user/profile/{}", &eo_username))
-					.icon_url(format!("https://etternaonline.com/img/flags/{}.png", &details.country_code))
-				)
-				.thumbnail(format!("https://etternaonline.com/avatars/{}", &details.avatar_url))
-				.color(crate::ETTERNA_COLOR);
-			if let Some(modifiers) = &details.default_modifiers {
-				embed.field("Default modifiers:", modifiers, false);
-			}
-			if !details.about_me.is_empty() {
-				embed.field(
-					format!("About {}:", eo_username),
-					html2md::parse_html(&details.about_me),
-					false
-				);
-			}
-			
-			embed
-		}
-		))?;
+		msg.channel_id.send_message(&ctx.http, |m| {
+			m.embed(|embed| {
+				embed
+					.description(rating_string)
+					.author(|a| {
+						a.name(&title)
+							.url(format!(
+								"https://etternaonline.com/user/profile/{}",
+								&eo_username
+							))
+							.icon_url(format!(
+								"https://etternaonline.com/img/flags/{}.png",
+								&details.country_code
+							))
+					})
+					.thumbnail(format!(
+						"https://etternaonline.com/avatars/{}",
+						&details.avatar_url
+					))
+					.color(crate::ETTERNA_COLOR);
+				if let Some(modifiers) = &details.default_modifiers {
+					embed.field("Default modifiers:", modifiers, false);
+				}
+				if !details.about_me.is_empty() {
+					embed.field(
+						format!("About {}:", eo_username),
+						html2md::parse_html(&details.about_me),
+						false,
+					);
+				}
+
+				embed
+			})
+		})?;
 
 		Ok(())
 	}
-	
-	fn pattern(&self,
+
+	fn pattern(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		args: &str,
@@ -763,15 +860,23 @@ your message, I will also show the wifescores with that judge.
 		let mut keymode_override = None;
 		let mut snap = etterna::Snap::_16th.into();
 		let mut vertical_spacing_multiplier = 1.0;
-		let mut scroll_direction = self.lock_data().scroll(msg.author.id.0).unwrap_or(etterna::ScrollDirection::Upscroll);
+		let mut scroll_direction = self
+			.lock_data()
+			.scroll(msg.author.id.0)
+			.unwrap_or(etterna::ScrollDirection::Upscroll);
 		let mut segments = Vec::new();
 
 		let extract_snap = |string: &str, user_intended: &mut bool| {
 			const ENDINGS: &[&str] = &["st", "sts", "nd", "nds", "rd", "rds", "th", "ths"];
 
-			let characters_to_truncate = ENDINGS.iter().find(|&ending| string.ends_with(ending))?.len();
+			let characters_to_truncate = ENDINGS
+				.iter()
+				.find(|&ending| string.ends_with(ending))?
+				.len();
 			// UNWRAP: we're only removing up to the string length, so we can't go out-of-bounds
-			let string_without_ending = string.get(..(string.len() - characters_to_truncate)).unwrap();
+			let string_without_ending = string
+				.get(..(string.len() - characters_to_truncate))
+				.unwrap();
 			let snap: u32 = string_without_ending.parse().ok()?;
 			*user_intended = true;
 			pattern_draw::FractionalSnap::from_snap_number(snap)
@@ -794,9 +899,12 @@ your message, I will also show the wifescores with that judge.
 			}
 		};
 		let extract_vertical_spacing_multiplier = |string: &str, user_intended: &mut bool| {
-			if !string.ends_with('x') { return None };
+			if !string.ends_with('x') {
+				return None;
+			};
 			// UNWRAP: at this point the string must have 'x' at the end so we can safely strip one char
-			let vertical_spacing_multiplier: f32 = string.get(..(string.len() - 1)).unwrap().parse().ok()?;
+			let vertical_spacing_multiplier: f32 =
+				string.get(..(string.len() - 1)).unwrap().parse().ok()?;
 			*user_intended = true;
 			if vertical_spacing_multiplier > 0.0 {
 				Some(vertical_spacing_multiplier)
@@ -804,15 +912,16 @@ your message, I will also show the wifescores with that judge.
 				None
 			}
 		};
-		let extract_scroll_direction = |string: &str, _user_intended: &mut bool| {
-			match string.to_lowercase().as_str() {
+		let extract_scroll_direction =
+			|string: &str, _user_intended: &mut bool| match string.to_lowercase().as_str() {
 				"up" => Some(etterna::ScrollDirection::Upscroll),
 				"down" | "reverse" => Some(etterna::ScrollDirection::Downscroll),
 				_ => None,
-			}
-		};
+			};
 		let extract_keymode = |string: &str, user_intended: &mut bool| {
-			if !(string.ends_with('k') || string.ends_with('K')) { return None }
+			if !(string.ends_with('k') || string.ends_with('K')) {
+				return None;
+			}
 
 			// UNWRAP: at this point the string must have 'k' at the end so we can safely strip one char
 			let keymode: u32 = string.get(..(string.len() - 1)).unwrap().parse().ok()?;
@@ -836,7 +945,8 @@ your message, I will also show the wifescores with that judge.
 				continue;
 			}
 			if did_user_intend {
-				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid snap", arg))?;
+				msg.channel_id
+					.say(&ctx.http, format!("\"{}\" is not a valid snap", arg))?;
 			}
 
 			let mut did_user_intend = false;
@@ -845,36 +955,48 @@ your message, I will also show the wifescores with that judge.
 				continue;
 			}
 			if did_user_intend {
-				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid noteskin name", arg))?;
+				msg.channel_id.say(
+					&ctx.http,
+					format!("\"{}\" is not a valid noteskin name", arg),
+				)?;
 			}
-			
+
 			let mut did_user_intend = false;
-			if let Some(vertical_spacing_multiplier_override) = extract_vertical_spacing_multiplier(arg, &mut did_user_intend) {
+			if let Some(vertical_spacing_multiplier_override) =
+				extract_vertical_spacing_multiplier(arg, &mut did_user_intend)
+			{
 				vertical_spacing_multiplier = vertical_spacing_multiplier_override;
 				continue;
 			}
 			if did_user_intend {
-				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid zoom option", arg))?;
+				msg.channel_id
+					.say(&ctx.http, format!("\"{}\" is not a valid zoom option", arg))?;
 			}
-			
+
 			let mut did_user_intend = false;
-			if let Some(scroll_direction_override) = extract_scroll_direction(arg, &mut did_user_intend) {
+			if let Some(scroll_direction_override) =
+				extract_scroll_direction(arg, &mut did_user_intend)
+			{
 				scroll_direction = scroll_direction_override;
 				continue;
 			}
 			if did_user_intend {
-				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid scroll direction", arg))?;
+				msg.channel_id.say(
+					&ctx.http,
+					format!("\"{}\" is not a valid scroll direction", arg),
+				)?;
 			}
-			
+
 			let mut did_user_intend = false;
 			if let Some(keymode) = extract_keymode(arg, &mut did_user_intend) {
 				keymode_override = Some(keymode);
 				continue;
 			}
 			if did_user_intend {
-				msg.channel_id.say(&ctx.http, format!("\"{}\" is not a valid keymode", arg))?;
+				msg.channel_id
+					.say(&ctx.http, format!("\"{}\" is not a valid keymode", arg))?;
 			}
-			
+
 			// if nothing matched, this is just an ordinary part of the pattern
 			pattern_buffer += arg;
 		}
@@ -882,17 +1004,25 @@ your message, I will also show the wifescores with that judge.
 			segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, snap));
 			pattern_buffer.clear();
 		}
-		
+
 		let keymode = if let Some(keymode) = keymode_override {
 			keymode
 		} else {
-			let highest_lane = segments.iter()
+			let highest_lane = segments
+				.iter()
 				.flat_map(|(pattern, _)| &pattern.rows)
 				// if the user entered `+pattern ldr`, was the highest column 3, or 4? remember, the
 				// meaning of `r` depends on keymode, but we don't know the keymode yet. I've
 				// decided to assume 4k in the fallback case
-				.filter_map(|row| row.iter().map(|(lane, _note_type)| lane.column_number_with_keymode(4)).max())
-				.max().ok_or(Error::PatternVisualizeError(pattern_draw::Error::EmptyPattern))?;
+				.filter_map(|row| {
+					row.iter()
+						.map(|(lane, _note_type)| lane.column_number_with_keymode(4))
+						.max()
+				})
+				.max()
+				.ok_or(Error::PatternVisualizeError(
+					pattern_draw::Error::EmptyPattern,
+				))?;
 			let keymode = (highest_lane + 1) as u32;
 			keymode.max(4) // clamp keymode to a minimum of 4k. yes, 3k exists, but it's so niche that even if only three lanes are populated, the pattern is probably meant to be 4k
 		};
@@ -912,7 +1042,7 @@ your message, I will also show the wifescores with that judge.
 		let generated_pattern = pattern_draw::draw_pattern(pattern_draw::PatternRecipe {
 			noteskin,
 			scroll_direction,
-			keymode: keymode as usize /* I thought I had changedit to u32 in pattern_draw???? */,
+			keymode: keymode as usize, /* I thought I had changedit to u32 in pattern_draw???? */
 			vertical_spacing_multiplier,
 			pattern: &segments,
 			max_image_dimensions: (5000, 10000),
@@ -920,22 +1050,19 @@ your message, I will also show the wifescores with that judge.
 		})?;
 
 		let mut img_bytes = Vec::with_capacity(1_000_000); // preallocate 1 MB for the img
-		image::DynamicImage::ImageRgba8(generated_pattern).write_to(
-			&mut img_bytes,
-			image::ImageOutputFormat::Png
-		).map_err(pattern_draw::Error::ImageError)?;
+		image::DynamicImage::ImageRgba8(generated_pattern)
+			.write_to(&mut img_bytes, image::ImageOutputFormat::Png)
+			.map_err(pattern_draw::Error::ImageError)?;
 
 		// Send the image into the channel where the summoning message comes from
-		msg.channel_id.send_files(
-			&ctx.http,
-			vec![(img_bytes.as_slice(), "output.png")],
-			|m| m
-		)?;
+		msg.channel_id
+			.send_files(&ctx.http, vec![(img_bytes.as_slice(), "output.png")], |m| m)?;
 
 		Ok(())
 	}
 
-	fn profile_compare(&self,
+	fn profile_compare(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		me: &str,
@@ -956,7 +1083,7 @@ your message, I will also show the wifescores with that judge.
 				my_rating.get(skillset),
 				if (my_rating.get(skillset) - your_rating.get(skillset)).abs() < f32::EPSILON {
 					"="
-				} else if my_rating.get(skillset) > your_rating.get(skillset) { 
+				} else if my_rating.get(skillset) > your_rating.get(skillset) {
 					">"
 				} else {
 					"<"
@@ -971,10 +1098,18 @@ your message, I will also show the wifescores with that judge.
 		for ss in etterna::Skillset8::iter() {
 			let my_rating = my_rating.get(ss);
 			let your_rating = your_rating.get(ss);
-			if my_rating < min_ss_rating { min_ss_rating = my_rating; }
-			if your_rating < min_ss_rating { min_ss_rating = your_rating; }
-			if my_rating > max_ss_rating { max_ss_rating = my_rating; }
-			if your_rating > max_ss_rating { max_ss_rating = your_rating; }
+			if my_rating < min_ss_rating {
+				min_ss_rating = my_rating;
+			}
+			if your_rating < min_ss_rating {
+				min_ss_rating = your_rating;
+			}
+			if my_rating > max_ss_rating {
+				max_ss_rating = my_rating;
+			}
+			if your_rating > max_ss_rating {
+				max_ss_rating = your_rating;
+			}
 		}
 
 		let bar_graph_block = if expanded {
@@ -985,8 +1120,14 @@ your message, I will also show the wifescores with that judge.
 				bar_graph_block += &format!(
 					"{: >10}:   \"░▒▓{}\"\n              “░▒▓{}“\n\n",
 					skillset.to_string(), // to_string, or the padding won't work
-					gen_unicode_block_bar(18, rescale(my_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
-					gen_unicode_block_bar(18, rescale(your_rating, min_ss_rating..max_ss_rating, 0.0..1.0)),
+					gen_unicode_block_bar(
+						18,
+						rescale(my_rating, min_ss_rating..max_ss_rating, 0.0..1.0)
+					),
+					gen_unicode_block_bar(
+						18,
+						rescale(your_rating, min_ss_rating..max_ss_rating, 0.0..1.0)
+					),
 				)
 			}
 			bar_graph_block += "```";
@@ -995,34 +1136,37 @@ your message, I will also show the wifescores with that judge.
 			None
 		};
 
-		msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| {
-			e
-				.color(crate::ETTERNA_COLOR)
-				.title(format!(
-					"{} {} vs. {} {}",
-					country_code_to_flag_emoji(&me.country_code).unwrap_or_else(|| "❓".into()),
-					me.username,
-					you.username,
-					country_code_to_flag_emoji(&you.country_code).unwrap_or_else(|| "❓".into()),
-				))
-				.description(string);
-			
-			if let Some(bar_graph_block) = bar_graph_block {
-				e.field(
-					format!("Above is {}, below is {}", me.username, you.username),
-					bar_graph_block,
-					false
-				);
-			}
-			
-			e
-		}))?;
+		msg.channel_id.send_message(&ctx.http, |m| {
+			m.embed(|e| {
+				e.color(crate::ETTERNA_COLOR)
+					.title(format!(
+						"{} {} vs. {} {}",
+						country_code_to_flag_emoji(&me.country_code).unwrap_or_else(|| "❓".into()),
+						me.username,
+						you.username,
+						country_code_to_flag_emoji(&you.country_code)
+							.unwrap_or_else(|| "❓".into()),
+					))
+					.description(string);
+
+				if let Some(bar_graph_block) = bar_graph_block {
+					e.field(
+						format!("Above is {}, below is {}", me.username, you.username),
+						bar_graph_block,
+						false,
+					);
+				}
+
+				e
+			})
+		})?;
 
 		Ok(())
 	}
-	
+
 	// usernames slice must contain at least one element!
-	fn skillgraph(&self,
+	fn skillgraph(
+		&self,
 		ctx: &serenity::Context,
 		channel_id: serenity::ChannelId,
 		usernames: &[&str],
@@ -1030,20 +1174,26 @@ your message, I will also show the wifescores with that judge.
 		assert!(usernames.len() >= 1);
 
 		if usernames.len() > 20 {
-			channel_id.say(&ctx.http, "Relax, now. 10 simultaneous skillgraphs ought to be enough")?;
+			channel_id.say(
+				&ctx.http,
+				"Relax, now. 10 simultaneous skillgraphs ought to be enough",
+			)?;
 			return Ok(());
 		}
 
 		match usernames {
-			[username] => channel_id.say(&ctx.http, format!(
-				"Requesting data for {} (this may take a while)",
-				username,
-			))?,
-			[usernames @ .., last] => channel_id.say(&ctx.http, format!(
-				"Requesting data for {} and {} (this may take a while)",
-				usernames.join(", "),
-				last,
-			))?,
+			[username] => channel_id.say(
+				&ctx.http,
+				format!("Requesting data for {} (this may take a while)", username,),
+			)?,
+			[usernames @ .., last] => channel_id.say(
+				&ctx.http,
+				format!(
+					"Requesting data for {} and {} (this may take a while)",
+					usernames.join(", "),
+					last,
+				),
+			)?,
 			[] => unreachable!(),
 		};
 
@@ -1080,8 +1230,13 @@ your message, I will also show the wifescores with that judge.
 
 		let mut storages = (0..usernames.len()).map(|_| None).collect::<Vec<_>>();
 		let mut skill_timelines = Vec::with_capacity(usernames.len());
-		for (username_chunk, storage_chunk) in usernames.chunks(MAX_SIMULTANEOUS_DOWNLOADS).zip(storages.chunks_mut(MAX_SIMULTANEOUS_DOWNLOADS)) {
-			let join_handles = username_chunk.iter().zip(storage_chunk)
+		for (username_chunk, storage_chunk) in usernames
+			.chunks(MAX_SIMULTANEOUS_DOWNLOADS)
+			.zip(storages.chunks_mut(MAX_SIMULTANEOUS_DOWNLOADS))
+		{
+			let join_handles = username_chunk
+				.iter()
+				.zip(storage_chunk)
 				.map(|(username, storage)| {
 					// SAFETY: this is safe as long as the returned handle is not leaked, which we're not doing
 					unsafe {
@@ -1091,30 +1246,34 @@ your message, I will also show the wifescores with that judge.
 					}
 				})
 				.collect::<Vec<_>>();
-			
+
 			for join_handle in join_handles {
 				skill_timelines.push(join_handle.join()?);
 			}
 		}
 
-		draw_skill_graph::draw_skill_graph(
-			&skill_timelines,
-			&usernames,
-			"output.png"
-		).map_err(Error::SkillGraphError)?;
+		draw_skill_graph::draw_skill_graph(&skill_timelines, &usernames, "output.png")
+			.map_err(Error::SkillGraphError)?;
 
 		channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 
 		Ok(())
 	}
 
-	fn command(&self,
+	fn command(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		cmd: &str,
-		args: &str
+		args: &str,
 	) -> Result<(), Error> {
-		println!("Executing command '{}' from {} at {:?} with args '{}'", cmd, &msg.author.name, msg.timestamp.date(), args);
+		println!(
+			"Executing command '{}' from {} at {:?} with args '{}'",
+			cmd,
+			&msg.author.name,
+			msg.timestamp.date(),
+			args
+		);
 
 		if cmd.starts_with("top") {
 			// UNWRAP: we can safely strip because we checked that the string has it at the start
@@ -1134,26 +1293,28 @@ your message, I will also show the wifescores with that judge.
 				}
 				response += "!";
 				msg.channel_id.say(&ctx.http, &response)?;
-			},
+			}
 			"help" => {
-				msg.channel_id.send_message(&ctx.http, |m| m.embed(|e| e
-					.description(self.make_help_message(args.eq_ignore_ascii_case("pattern")))
-					.color(crate::ETTERNA_COLOR)
-				))?;
-			},
+				msg.channel_id.send_message(&ctx.http, |m| {
+					m.embed(|e| {
+						e.description(self.make_help_message(args.eq_ignore_ascii_case("pattern")))
+							.color(crate::ETTERNA_COLOR)
+					})
+				})?;
+			}
 			"profile" => {
 				self.profile(ctx, msg, args)?;
-			},
+			}
 			"advprof" => {
 				msg.channel_id.say(&ctx.http, "Note: +profile now does the same thing as +advprof; there's no reason to use +advprof anymore")?;
 				self.profile(ctx, msg, args)?;
 			}
 			"lastsession" | "ls" => {
 				self.latest_scores(ctx, msg, args)?;
-			},
+			}
 			"pattern" => {
 				self.pattern(ctx, msg, args)?;
-			},
+			}
 			"servers" => {
 				let guilds = ctx.http.get_current_user()?.guilds(&ctx.http)?;
 
@@ -1163,23 +1324,26 @@ your message, I will also show the wifescores with that judge.
 				}
 
 				msg.channel_id.say(&ctx.http, response)?;
-			},
+			}
 			"uptime" => {
 				let uptime = std::time::Instant::now() - self.start_time;
-				
+
 				let div_mod = |a, b| (a / b, a % b);
-				
+
 				let millis = uptime.as_millis();
 				let (seconds, millis) = div_mod(millis, 1000);
 				let (minutes, seconds) = div_mod(seconds, 60);
 				let (hours, minutes) = div_mod(minutes, 60);
 				let (days, hours) = div_mod(hours, 24);
 
-				msg.channel_id.say(&ctx.http, format!(
-					"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
-					days, hours, minutes, seconds, millis
-				))?;
-			},
+				msg.channel_id.say(
+					&ctx.http,
+					format!(
+						"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
+						days, hours, minutes, seconds, millis
+					),
+				)?;
+			}
 			"skillgraph" => {
 				let usernames = args.split_whitespace().collect::<Vec<_>>();
 				if usernames.len() == 0 {
@@ -1187,7 +1351,7 @@ your message, I will also show the wifescores with that judge.
 				} else {
 					self.skillgraph(ctx, msg.channel_id, &usernames)?;
 				}
-			},
+			}
 			"random" | "randomscore" => {
 				let username = match args.split_ascii_whitespace().next() {
 					Some(x) => x.to_owned(),
@@ -1195,12 +1359,14 @@ your message, I will also show the wifescores with that judge.
 				};
 
 				let mut data = self.lock_data();
-				let user = data.user_registry.iter_mut()
+				let user = data
+					.user_registry
+					.iter_mut()
 					.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
 					.ok_or(Error::UserNotInRegistry)?;
-				
+
 				let user_eo_id = user.eo_id;
-				
+
 				// find a random score. If it's invalid, find another one
 				let scorekey = loop {
 					let score = get_random_score(user, &self.web_session)?;
@@ -1209,14 +1375,18 @@ your message, I will also show the wifescores with that judge.
 					}
 				};
 				drop(data);
-				
-				self.score_card(ctx, msg.channel_id, ScoreCard {
-					scorekey: &scorekey,
-					triggerers: None,
-					user_id: Some(user_eo_id),
-					show_ssrs_and_judgements_and_modifiers: true,
-					alternative_judge: extract_judge_from_string(args),
-				})?;
+
+				self.score_card(
+					ctx,
+					msg.channel_id,
+					ScoreCard {
+						scorekey: &scorekey,
+						triggerers: None,
+						user_id: Some(user_eo_id),
+						show_ssrs_and_judgements_and_modifiers: true,
+						alternative_judge: extract_judge_from_string(args),
+					},
+				)?;
 			}
 			"lookup" => {
 				if args.is_empty() {
@@ -1225,17 +1395,20 @@ your message, I will also show the wifescores with that judge.
 				}
 
 				let data = self.lock_data();
-				let user = data.user_registry.iter()
+				let user = data
+					.user_registry
+					.iter()
 					.find(|user| user.discord_username.eq_ignore_ascii_case(args))
 					.ok_or(Error::UserNotInRegistry)?;
-				
-				msg.channel_id.say(&ctx.http, format!(
-					"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
-					user.discord_username,
-					user.eo_username,
-					user.eo_username,
-				))?;
-			},
+
+				msg.channel_id.say(
+					&ctx.http,
+					format!(
+						"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
+						user.discord_username, user.eo_username, user.eo_username,
+					),
+				)?;
+			}
 			"quote" => {
 				let quote_index = rand::thread_rng().gen_range(0, self.config.quotes.len());
 				// UNWRAP: index is below quotes len because we instructed the rand crate to do so
@@ -1245,7 +1418,7 @@ your message, I will also show the wifescores with that judge.
 					None => format!("> {}", quote.quote),
 				};
 				msg.channel_id.say(&ctx.http, &string)?;
-			},
+			}
 			// "scroll" => {
 			// 	msg.channel_id.say(
 			// 		&ctx.http,
@@ -1288,7 +1461,7 @@ your message, I will also show the wifescores with that judge.
 							msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
 							return Ok(());
 						}
-					},
+					}
 					_ => {
 						msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
 						return Ok(());
@@ -1305,13 +1478,17 @@ your message, I will also show the wifescores with that judge.
 				};
 
 				let user_id = self.get_eo_user_id(&eo_username)?;
-				self.score_card(ctx, msg.channel_id, ScoreCard {
-					scorekey: &latest_score.scorekey,
-					user_id: Some(user_id),
-					show_ssrs_and_judgements_and_modifiers: true,
-					alternative_judge,
-					triggerers: None,
-				})?;
+				self.score_card(
+					ctx,
+					msg.channel_id,
+					ScoreCard {
+						scorekey: &latest_score.scorekey,
+						user_id: Some(user_id),
+						show_ssrs_and_judgements_and_modifiers: true,
+						alternative_judge,
+						triggerers: None,
+					},
+				)?;
 			}
 			"scrollset" => {
 				let scroll = match &args.to_lowercase() as &str {
@@ -1320,21 +1497,23 @@ your message, I will also show the wifescores with that judge.
 					"" => {
 						msg.channel_id.say(&ctx.http, CMD_SCROLLSET_HELP)?;
 						return Ok(());
-					},
+					}
 					_ => {
-						msg.channel_id.say(&ctx.http, format!("No such scroll '{}'", args))?;
+						msg.channel_id
+							.say(&ctx.http, format!("No such scroll '{}'", args))?;
 						return Ok(());
-					},
+					}
 				};
 				self.lock_data().set_scroll(msg.author.id.0, scroll);
-				msg.channel_id.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
+				msg.channel_id
+					.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 			}
 			"userset" => {
 				if args.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
 					return Ok(());
 				}
-				
+
 				let new_user_entry = config::UserRegistryEntry {
 					discord_id: msg.author.id.0,
 					discord_username: msg.author.name.to_owned(),
@@ -1343,71 +1522,76 @@ your message, I will also show the wifescores with that judge.
 					last_known_num_scores: None,
 					last_rating: None,
 				};
-				
+
 				let mut data = self.lock_data();
-				match data.user_registry.iter_mut().find(|u| u.discord_id == msg.author.id.0) {
+				match data
+					.user_registry
+					.iter_mut()
+					.find(|u| u.discord_id == msg.author.id.0)
+				{
 					Some(existing_user_entry) => {
-						msg.channel_id.say(&ctx.http, format!(
-							"Successfully updated username from `{}` to `{}`",
-							existing_user_entry.eo_username,
-							new_user_entry.eo_username,
-						))?;
+						msg.channel_id.say(
+							&ctx.http,
+							format!(
+								"Successfully updated username from `{}` to `{}`",
+								existing_user_entry.eo_username, new_user_entry.eo_username,
+							),
+						)?;
 
 						*existing_user_entry = new_user_entry;
-					},
+					}
 					None => {
-						msg.channel_id.say(&ctx.http, format!(
-							"Successfully set username to `{}`",
-							args
-						))?;
+						msg.channel_id.say(
+							&ctx.http,
+							format!("Successfully set username to `{}`", args),
+						)?;
 
 						data.user_registry.push(new_user_entry);
-					},
+					}
 				};
-			},
+			}
 			"rivalset" => {
 				if args.is_empty() {
 					msg.channel_id.say(&ctx.http, CMD_RIVALSET_HELP)?;
 					return Ok(());
 				}
 				if let Err(eo::Error::UserNotFound) = self.v2()?.user_details(args) {
-					msg.channel_id.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
+					msg.channel_id
+						.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
 					return Ok(());
 				}
 
-				let response = match self.lock_data().set_rival(
-					msg.author.id.0,
-					args.to_owned()
-				) {
+				let response = match self.lock_data().set_rival(msg.author.id.0, args.to_owned()) {
 					Some(old_rival) => format!(
 						"Successfully updated your rival from `{}` to `{}`",
-						old_rival,
-						args,
+						old_rival, args,
 					),
 					None => format!("Successfully set your rival to `{}`", args),
 				};
 				msg.channel_id.say(&ctx.http, &response)?;
-			},
+			}
 			"rival" => {
 				let me = &self.get_eo_username(ctx, msg)?;
 				let you = match self.lock_data().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
-						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+						msg.channel_id
+							.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
 						return Ok(());
 					}
 				};
-				
+
 				let expanded = args == "expanded";
 
 				self.profile_compare(ctx, msg, me, &you, expanded)?;
-			},
+			}
 			"rivalgraph" => {
 				let me = self.get_eo_username(ctx, msg)?;
 				let you = match self.lock_data().rival(msg.author.id.0) {
 					Some(rival) => rival.to_owned(),
 					None => {
-						msg.channel_id.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+						msg.channel_id
+							.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
 						return Ok(());
 					}
 				};
@@ -1429,22 +1613,27 @@ your message, I will also show the wifescores with that judge.
 
 				self.profile_compare(ctx, msg, &me, you, expanded)?;
 			}
-			_ => {},
+			_ => {}
 		}
 		Ok(())
 	}
 
-	fn song_card(&self,
+	fn song_card(
+		&self,
 		_ctx: &serenity::Context,
 		_msg: &serenity::Message,
 		song_id: u32,
 	) -> Result<(), Error> {
-		println!("Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
-			the required functions :(", song_id);
+		println!(
+			"Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
+			the required functions :(",
+			song_id
+		);
 		Ok(())
 	}
 
-	fn score_card(&self,
+	fn score_card(
+		&self,
 		ctx: &serenity::Context,
 		channel_id: serenity::ChannelId,
 		info: ScoreCard<'_>,
@@ -1471,9 +1660,7 @@ your message, I will also show the wifescores with that judge.
 			let (server_id, channel_id, msg_id) = trigger_msg;
 			description += &format!(
 				"_[Requested](https://discord.com/channels/{}/{}/{}) by ",
-				server_id,
-				channel_id,
-				msg_id
+				server_id, channel_id, msg_id
 			);
 			for user in triggerers.iter() {
 				description += &format!("<@{}>, ", user.id);
@@ -1482,12 +1669,16 @@ your message, I will also show the wifescores with that judge.
 			description += "_\n";
 		}
 		if let Some(user_id) = info.user_id {
-			description += &format!("https://etternaonline.com/score/view/{}{}\n", info.scorekey, user_id);
+			description += &format!(
+				"https://etternaonline.com/score/view/{}{}\n",
+				info.scorekey, user_id
+			);
 		}
 		if info.show_ssrs_and_judgements_and_modifiers {
 			description += &format!("```\n{}\n```", score.modifiers);
 		}
-		description += &format!(r#"```nim
+		description += &format!(
+			r#"```nim
 {}
    Max Combo: {:<5}   ⏐        Perfect: {}
      Overall: {:<5.2}   ⏐          Great: {}
@@ -1515,18 +1706,28 @@ your message, I will also show the wifescores with that judge.
 			} else {
 				format!(
 					"        Wife: {:<5.2}%  ⏐      Marvelous: {}",
-					score.wifescore.as_percent(), score.judgements.marvelouses,
+					score.wifescore.as_percent(),
+					score.judgements.marvelouses,
 				)
 			},
-			score.max_combo, score.judgements.perfects,
-			score.ssr.overall, score.judgements.greats,
-			score.ssr.stream, score.judgements.goods,
-			score.ssr.stamina, score.judgements.bads,
-			score.ssr.jumpstream, score.judgements.misses,
-			score.ssr.handstream, score.judgements.hit_mines,
-			score.ssr.jackspeed, score.judgements.held_holds,
-			score.ssr.chordjack, score.judgements.let_go_holds,
-			score.ssr.technical, score.judgements.missed_holds,
+			score.max_combo,
+			score.judgements.perfects,
+			score.ssr.overall,
+			score.judgements.greats,
+			score.ssr.stream,
+			score.judgements.goods,
+			score.ssr.stamina,
+			score.judgements.bads,
+			score.ssr.jumpstream,
+			score.judgements.misses,
+			score.ssr.handstream,
+			score.judgements.hit_mines,
+			score.ssr.jackspeed,
+			score.judgements.held_holds,
+			score.ssr.chordjack,
+			score.judgements.let_go_holds,
+			score.ssr.technical,
+			score.judgements.missed_holds,
 		);
 
 		struct ScoringSystemComparison {
@@ -1548,129 +1749,152 @@ your message, I will also show the wifescores with that judge.
 			mean_offset: f32,
 		}
 
+		let do_replay_analysis =
+			|score: &eo::v2::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
+				use etterna::SimpleReplay;
 
-		let do_replay_analysis = |score: &eo::v2::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
-			use etterna::SimpleReplay;
+				let replay = score.replay.as_ref()?;
 
-			let replay = score.replay.as_ref()?;
-
-			let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
-			if let Err(e) = r {
-				return Some(Err(Error::ReplayGraphError(e)))
-			}
-			
-			// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
-			// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
-			// _are_ scaled though.
-
-			let lanes = replay.split_into_lanes()?;
-			let mut max_finger_nps = 0.0;
-			for lane in &lanes {
-				let this_fingers_max_nps = etterna::find_fastest_note_subset(&lane.hit_seconds, 20, 20).speed;
-
-				if this_fingers_max_nps > max_finger_nps {
-					max_finger_nps = this_fingers_max_nps;
+				let r =
+					replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
+				if let Err(e) = r {
+					return Some(Err(Error::ReplayGraphError(e)));
 				}
-			}
 
-			let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
-			let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
+				// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
+				// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
+				// _are_ scaled though.
 
-			let mut sorted_hit_seconds = unsorted_hit_seconds;
-			// UNWRAP: if one of those values is NaN... something is pretty wrong
-			sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-			let sorted_hit_seconds = sorted_hit_seconds;
+				let lanes = replay.split_into_lanes()?;
+				let mut max_finger_nps = 0.0;
+				for lane in &lanes {
+					let this_fingers_max_nps =
+						etterna::find_fastest_note_subset(&lane.hit_seconds, 20, 20).speed;
 
-			let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
+					if this_fingers_max_nps > max_finger_nps {
+						max_finger_nps = this_fingers_max_nps;
+					}
+				}
 
-			let mean_offset = replay.mean_deviation();
-			let replay_zero_mean = eo::Replay {
-				notes: replay.notes.iter()
-					.map(|note| {
-						let mut note = note.clone();
-						if let etterna::Hit::Hit { deviation } = &mut note.hit {
-							*deviation -= mean_offset;
-						}
-						note
-					})
-					.collect(),
-			};
-			
-			Some(Ok(ReplayAnalysis {
-				replay_graph_path: "replay_graph.png",
-				scoring_system_comparison_j4: ScoringSystemComparison {
-					wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
-						replay,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-					wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-						replay,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-					wife3_score_zero_mean: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-						&replay_zero_mean,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-				},
-				scoring_system_comparison_alternative: match info.alternative_judge {
-					Some(alternative_judge) => Some(ScoringSystemComparison {
+				let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
+				let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
+
+				let mut sorted_hit_seconds = unsorted_hit_seconds;
+				// UNWRAP: if one of those values is NaN... something is pretty wrong
+				sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+				let sorted_hit_seconds = sorted_hit_seconds;
+
+				let fastest_nps =
+					etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
+
+				let mean_offset = replay.mean_deviation();
+				let replay_zero_mean = eo::Replay {
+					notes: replay
+						.notes
+						.iter()
+						.map(|note| {
+							let mut note = note.clone();
+							if let etterna::Hit::Hit { deviation } = &mut note.hit {
+								*deviation -= mean_offset;
+							}
+							note
+						})
+						.collect(),
+				};
+
+				Some(Ok(ReplayAnalysis {
+					replay_graph_path: "replay_graph.png",
+					scoring_system_comparison_j4: ScoringSystemComparison {
 						wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
 							replay,
 							score.judgements.hit_mines,
 							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
+							&etterna::J4,
 						)?,
 						wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
 							replay,
 							score.judgements.hit_mines,
 							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
+							&etterna::J4,
 						)?,
 						wife3_score_zero_mean: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
 							&replay_zero_mean,
 							score.judgements.hit_mines,
 							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
+							&etterna::J4,
 						)?,
-					}),
-					None => None,
-				},
-				fastest_finger_jackspeed: max_finger_nps,
-				fastest_nps,
-				longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
-				longest_marv_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
-				longest_perf_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
-				longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
-				mean_offset,
-			}))
-		};
+					},
+					scoring_system_comparison_alternative: match info.alternative_judge {
+						Some(alternative_judge) => Some(ScoringSystemComparison {
+							wife2_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife2>(
+								replay,
+								score.judgements.hit_mines,
+								score.judgements.let_go_holds + score.judgements.missed_holds,
+								alternative_judge,
+							)?,
+							wife3_score: eo::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+								replay,
+								score.judgements.hit_mines,
+								score.judgements.let_go_holds + score.judgements.missed_holds,
+								alternative_judge,
+							)?,
+							wife3_score_zero_mean: eo::rescore::<
+								etterna::NaiveScorer,
+								etterna::Wife3,
+							>(
+								&replay_zero_mean,
+								score.judgements.hit_mines,
+								score.judgements.let_go_holds + score.judgements.missed_holds,
+								alternative_judge,
+							)?,
+						}),
+						None => None,
+					},
+					fastest_finger_jackspeed: max_finger_nps,
+					fastest_nps,
+					longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
+					longest_marv_combo: replay
+						.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
+					longest_perf_combo: replay
+						.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
+					longest_combo: replay
+						.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
+					mean_offset,
+				}))
+			};
 
 		let replay_analysis = do_replay_analysis(&score).transpose()?;
 
 		channel_id.send_message(&ctx.http, |m| {
 			m.embed(|e| {
-				e
-					.color(crate::ETTERNA_COLOR)
-					.author(|a| a
-						.name(&score.song_name)
-						.url(format!("https://etternaonline.com/song/view/{}", score.song_id))
-						.icon_url(format!("https://etternaonline.com/img/flags/{}.png", score.user.country_code))
-					)
+				e.color(crate::ETTERNA_COLOR)
+					.author(|a| {
+						a.name(&score.song_name)
+							.url(format!(
+								"https://etternaonline.com/song/view/{}",
+								score.song_id
+							))
+							.icon_url(format!(
+								"https://etternaonline.com/img/flags/{}.png",
+								score.user.country_code
+							))
+					})
 					// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 					.description(description)
-					.footer(|f| f
-						.text(format!("Played by {}", &score.user.username))
-						.icon_url(format!("https://etternaonline.com/avatars/{}", score.user.avatar))
-					);
-				
+					.footer(|f| {
+						f.text(format!("Played by {}", &score.user.username))
+							.icon_url(format!(
+								"https://etternaonline.com/avatars/{}",
+								score.user.avatar
+							))
+					});
+
 				if let Some(analysis) = &replay_analysis {
-					let wifescore_floating_point_digits = match analysis.scoring_system_comparison_j4.wife3_score.as_percent() > 99.7 {
+					let wifescore_floating_point_digits = match analysis
+						.scoring_system_comparison_j4
+						.wife3_score
+						.as_percent() > 99.7
+					{
 						true => 4,
 						false => 2,
 					};
@@ -1704,45 +1928,69 @@ your message, I will also show the wifescores with that judge.
 						alternative_text_4 = "".to_owned();
 					}
 
-					e
-						.attachment(analysis.replay_graph_path)
-						.field("Score comparisons", format!(
-							concat!(
-								"{}",
-								"**Wife2**: {:.digits$}%{}\n",
-								"**Wife3**: {:.digits$}%{}\n",
-								"**Wife3**: {:.digits$}%{} (mean of {:.1}ms corrected)",
+					e.attachment(analysis.replay_graph_path)
+						.field(
+							"Score comparisons",
+							format!(
+								concat!(
+									"{}",
+									"**Wife2**: {:.digits$}%{}\n",
+									"**Wife3**: {:.digits$}%{}\n",
+									"**Wife3**: {:.digits$}%{} (mean of {:.1}ms corrected)",
+								),
+								if (analysis
+									.scoring_system_comparison_j4
+									.wife3_score
+									.as_percent() - score.wifescore.as_percent())
+								.abs() > 0.01
+								{
+									"_Note: these calculated scores are slightly inaccurate_\n"
+								} else {
+									""
+								},
+								analysis
+									.scoring_system_comparison_j4
+									.wife2_score
+									.as_percent(),
+								alternative_text_1,
+								analysis
+									.scoring_system_comparison_j4
+									.wife3_score
+									.as_percent(),
+								alternative_text_2,
+								analysis
+									.scoring_system_comparison_j4
+									.wife3_score_zero_mean
+									.as_percent(),
+								alternative_text_4,
+								analysis.mean_offset * 1000.0,
+								digits = wifescore_floating_point_digits,
 							),
-							if (analysis.scoring_system_comparison_j4.wife3_score.as_percent() - score.wifescore.as_percent()).abs() > 0.01 {
-								"_Note: these calculated scores are slightly inaccurate_\n"
-							} else {
-								""
-							},
-							analysis.scoring_system_comparison_j4.wife2_score.as_percent(),
-							alternative_text_1,
-							analysis.scoring_system_comparison_j4.wife3_score.as_percent(),
-							alternative_text_2,
-							analysis.scoring_system_comparison_j4.wife3_score_zero_mean.as_percent(),
-							alternative_text_4,
-							analysis.mean_offset * 1000.0,
-							digits = wifescore_floating_point_digits,
-						), false)
-						.field("Tap speeds", format!(
-							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
+							false,
+						)
+						.field(
+							"Tap speeds",
+							format!(
+								"Fastest jack over a course of 20 notes: {:.2} NPS\n\
 								Fastest total NPS over a course of 100 notes: {:.2} NPS",
-							analysis.fastest_finger_jackspeed,
-							analysis.fastest_nps,
-						), false)
-						.field("Combos", format!(
-							"Longest combo: {}\n\
+								analysis.fastest_finger_jackspeed, analysis.fastest_nps,
+							),
+							false,
+						)
+						.field(
+							"Combos",
+							format!(
+								"Longest combo: {}\n\
 								Longest perfect combo: {}\n\
 								Longest marvelous combo: {}\n\
 								Longest 100% combo: {}\n",
-							analysis.longest_combo,
-							analysis.longest_perf_combo,
-							analysis.longest_marv_combo,
-							analysis.longest_100_combo,
-						), false);
+								analysis.longest_combo,
+								analysis.longest_perf_combo,
+								analysis.longest_marv_combo,
+								analysis.longest_100_combo,
+							),
+							false,
+						);
 				}
 
 				e
@@ -1756,7 +2004,8 @@ your message, I will also show the wifescores with that judge.
 		Ok(())
 	}
 
-	pub fn message(&self,
+	pub fn message(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 		was_explicitly_invoked: &mut bool,
@@ -1769,12 +2018,14 @@ your message, I will also show the wifescores with that judge.
 
 		let guild_member = get_guild_member(ctx, msg)?;
 		// true if sent in DMs
-		let manages_messages = get_guild_permissions(ctx, msg)?.map_or(true, |p| p.manage_messages());
+		let manages_messages =
+			get_guild_permissions(ctx, msg)?.map_or(true, |p| p.manage_messages());
 
 		// If the message is in etternaonline server, and not in an allowed channel, and not sent
 		// by a person with the permission to manage the guild, don't process the command
 		let user_is_allowed_bot_interaction = {
-			if let Some(guild_member) = &guild_member { // if msg is in server (opposed to DMs)
+			if let Some(guild_member) = &guild_member {
+				// if msg is in server (opposed to DMs)
 				if guild_member.guild_id.0 == self.config.etterna_online_guild_id
 					&& !self.config.allowed_channels.contains(&msg.channel_id.0)
 					&& !manages_messages
@@ -1794,7 +2045,9 @@ your message, I will also show the wifescores with that judge.
 			let num_links = LINK_REGEX.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
-				let notice_msg = msg.channel_id.say(&ctx.http, format!(
+				let notice_msg = msg.channel_id.say(
+					&ctx.http,
+					format!(
 					"Only links and attachments are allowed in this channel. For discussions use <#{}>",
 					self.config.work_in_progress_discussion_channel),
 				)?;
@@ -1808,7 +2061,10 @@ your message, I will also show the wifescores with that judge.
 			let num_links = LINK_REGEX.find_iter(&msg.content).count();
 			if num_links == 0 && msg.attachments.is_empty() {
 				msg.delete(&ctx.http)?;
-				let notice_msg = msg.channel_id.say(&ctx.http, "Only links and attachments are allowed in this channel.")?;
+				let notice_msg = msg.channel_id.say(
+					&ctx.http,
+					"Only links and attachments are allowed in this channel.",
+				)?;
 				std::thread::sleep(std::time::Duration::from_millis(5000));
 				notice_msg.delete(&ctx.http)?;
 				return Ok(());
@@ -1819,10 +2075,11 @@ your message, I will also show the wifescores with that judge.
 			let alternative_judge = extract_judge_from_string(&msg.content);
 			for groups in SCORE_LINK_REGEX.captures_iter(&msg.content) {
 				// UNWRAP: regex has this group
-				let scorekey = match etterna::Scorekey::new(groups.get(1).unwrap().as_str().to_owned()) {
-					Some(valid_scorekey) => valid_scorekey,
-					None => continue,
-				};
+				let scorekey =
+					match etterna::Scorekey::new(groups.get(1).unwrap().as_str().to_owned()) {
+						Some(valid_scorekey) => valid_scorekey,
+						None => continue,
+					};
 
 				// UNWRAP: regex has this group
 				let user_id_group = groups.get(2).unwrap().as_str();
@@ -1830,23 +2087,33 @@ your message, I will also show the wifescores with that judge.
 					Ok(x) => x,
 					Err(e) => {
 						// UNWRAP: regex has this group
-						println!("Error while parsing '{}' (\\d+) as u32: {}", user_id_group, e);
+						println!(
+							"Error while parsing '{}' (\\d+) as u32: {}",
+							user_id_group, e
+						);
 						continue;
 					}
 				};
-				
-				println!("Trying to show score card for scorekey {} user id {}", scorekey, user_id);
-				if let Err(e) = self.score_card(&ctx, msg.channel_id, ScoreCard {
-					scorekey: &scorekey,
-					user_id: None,
-					show_ssrs_and_judgements_and_modifiers: true,
-					alternative_judge,
-					triggerers: None,
-				}) {
+
+				println!(
+					"Trying to show score card for scorekey {} user id {}",
+					scorekey, user_id
+				);
+				if let Err(e) = self.score_card(
+					&ctx,
+					msg.channel_id,
+					ScoreCard {
+						scorekey: &scorekey,
+						user_id: None,
+						show_ssrs_and_judgements_and_modifiers: true,
+						alternative_judge,
+						triggerers: None,
+					},
+				) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
 				}
 			}
-	
+
 			for groups in SONG_LINK_REGEX.captures_iter(&msg.content) {
 				println!("{:?}", groups);
 				// UNWRAP: regex has this group
@@ -1873,7 +2140,7 @@ your message, I will also show the wifescores with that judge.
 			// UNWRAP: msg.content can't be empty, hence the token iterator has at least one elem
 			let command_name = a.next().unwrap().trim();
 			let parameters = a.next().unwrap_or("").trim();
-	
+
 			// only the pattern command is allowed everywhere
 			// this implementation is bad because this function shouldn't know about the specific
 			// commands that exist...
@@ -1885,45 +2152,61 @@ your message, I will also show the wifescores with that judge.
 		Ok(())
 	}
 
-	pub fn check_member_update_for_max_300(&self,
+	pub fn check_member_update_for_max_300(
+		&self,
 		ctx: serenity::Context,
 		old: serenity::Member,
-		new: serenity::Member
+		new: serenity::Member,
 	) -> Result<(), Error> {
 		let guild = new.guild_id.to_partial_guild(&ctx.http)?;
-		
+
 		let get_guild_role = |guild_id| {
 			if let Some(guild) = guild.roles.get(guild_id) {
 				Some(guild.name.as_str())
 			} else {
-				println!("Couldn't find role {:?} in guild roles ({:?})... weird", guild_id, guild.roles);
+				println!(
+					"Couldn't find role {:?} in guild roles ({:?})... weird",
+					guild_id, guild.roles
+				);
 				None
 			}
 		};
 
-		let has_max_300_now = new.roles.iter().any(|r| get_guild_role(r) == Some("MAX 300"));
-		let had_max_300_previously = old.roles.iter().any(|r| get_guild_role(r) == Some("MAX 300"));
-		
+		let has_max_300_now = new
+			.roles
+			.iter()
+			.any(|r| get_guild_role(r) == Some("MAX 300"));
+		let had_max_300_previously = old
+			.roles
+			.iter()
+			.any(|r| get_guild_role(r) == Some("MAX 300"));
+
 		if has_max_300_now && !had_max_300_previously {
-			ctx.http.get_channel(self.config.promotion_gratulations_channel)?
+			ctx.http
+				.get_channel(self.config.promotion_gratulations_channel)?
 				// UNWRAP: we verified in Self::load()
-				.guild().unwrap().read()
+				.guild()
+				.unwrap()
+				.read()
 				.say(
 					&ctx.http,
-					format!("Congrats on the promotion, <@{}>!", old.user_id()
-				)
-			)?;
+					format!("Congrats on the promotion, <@{}>!", old.user_id()),
+				)?;
 		}
 
 		Ok(())
 	}
 
-	pub fn guild_member_update(&self,
+	pub fn guild_member_update(
+		&self,
 		ctx: serenity::Context,
 		old: Option<serenity::Member>,
-		new: serenity::Member
+		new: serenity::Member,
 	) -> Result<(), Error> {
-		if let Some(user_entry) = self.lock_data().user_registry.iter_mut()
+		if let Some(user_entry) = self
+			.lock_data()
+			.user_registry
+			.iter_mut()
 			.find(|user| user.discord_id == new.user.read().id.0)
 		{
 			user_entry.discord_username = new.user.read().name.clone();
@@ -1938,7 +2221,8 @@ your message, I will also show the wifescores with that judge.
 		Ok(())
 	}
 
-	pub fn check_potential_score_screenshot(&self,
+	pub fn check_potential_score_screenshot(
+		&self,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
 	) -> Result<(), Error> {
@@ -1959,11 +2243,15 @@ your message, I will also show the wifescores with that judge.
 		// sigh, I wish serenity had nice things, like methods built-in for this
 		let member = get_guild_member(&ctx, &msg)?;
 
-		if let Some(member) = member { // if was sent in a guild (as opposed to DMs)
+		if let Some(member) = member {
+			// if was sent in a guild (as opposed to DMs)
 			// If message was sent in EO and user doesn't have the appropriate role for the
 			// score OCR feature, ignore this image
 			if member.guild_id.0 == self.config.etterna_online_guild_id {
-				let has_required_role = member.roles.iter().any(|r| r.0 == self.config.score_ocr_allowed_eo_role);
+				let has_required_role = member
+					.roles
+					.iter()
+					.any(|r| r.0 == self.config.score_ocr_allowed_eo_role);
 				if !has_required_role {
 					return Ok(());
 				}
@@ -1975,8 +2263,11 @@ your message, I will also show the wifescores with that judge.
 		let recognized = score_ocr::EvaluationScreenData::recognize_from_image_bytes(&bytes)?;
 		println!("Recognized {:?}", recognized);
 
-		let recognized_eo_username = recognized.iter().filter_map(|r| r.eo_username.as_ref()).next();
-		
+		let recognized_eo_username = recognized
+			.iter()
+			.filter_map(|r| r.eo_username.as_ref())
+			.next();
+
 		// If a username was recognized, try retrieve its user id. If the recognized username doesn't
 		// exist, or no username was recognized in the first place, fall back to poster's saved
 		// username
@@ -1984,7 +2275,9 @@ your message, I will also show the wifescores with that judge.
 		let user_id = match recognized_eo_username {
 			Some(eo_username) => match self.web_session.user_details(&eo_username) {
 				Ok(user_details) => user_details.user_id,
-				Err(eo::Error::UserNotFound) => self.web_session.user_details(&poster_eo_username)?.user_id,
+				Err(eo::Error::UserNotFound) => {
+					self.web_session.user_details(&poster_eo_username)?.user_id
+				}
 				Err(other) => return Err(other.into()),
 			},
 			None => self.web_session.user_details(&poster_eo_username)?.user_id,
@@ -2024,7 +2317,8 @@ your message, I will also show the wifescores with that judge.
 
 			let mut best_equality_score = 0;
 			let mut best_theme_i = 999;
-			for (theme_i, recognized) in recognized.iter().enumerate() { // check results for all themes
+			for (theme_i, recognized) in recognized.iter().enumerate() {
+				// check results for all themes
 				let equality_score = recognized.equality_score(&score_as_eval);
 				if equality_score > best_equality_score {
 					best_equality_score = equality_score;
@@ -2050,12 +2344,20 @@ your message, I will also show the wifescores with that judge.
 		};
 
 		msg.react(&ctx.http, '🔍')?;
-		self.ocr_score_card_manager.lock().add_candidate(guild_id, msg.channel_id, msg.id, msg.author.id, scorekey, user_id);
+		self.ocr_score_card_manager.lock().add_candidate(
+			guild_id,
+			msg.channel_id,
+			msg.id,
+			msg.author.id,
+			scorekey,
+			user_id,
+		);
 
 		Ok(())
 	}
 
-	pub fn reaction_add(&self,
+	pub fn reaction_add(
+		&self,
 		ctx: serenity::Context,
 		reaction: serenity::Reaction,
 	) -> Result<(), Error> {
@@ -2063,20 +2365,28 @@ your message, I will also show the wifescores with that judge.
 			return Ok(());
 		}
 
-		if let Some(score_info) = self.ocr_score_card_manager.lock().add_reaction(&ctx, &reaction)? {
+		if let Some(score_info) = self
+			.ocr_score_card_manager
+			.lock()
+			.add_reaction(&ctx, &reaction)?
+		{
 			// borrow checker headaches because this thing is monolithic
 			// let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();
 			let eo_user_id = score_info.eo_user_id;
 			let trigger_msg = score_info.trigger_msg;
 
-			self.score_card(&ctx, trigger_msg.1, ScoreCard {
-				scorekey: &scorekey,
-				user_id: Some(eo_user_id),
-				show_ssrs_and_judgements_and_modifiers: false,
-				alternative_judge: None,
-				triggerers: None,
-			})?;
+			self.score_card(
+				&ctx,
+				trigger_msg.1,
+				ScoreCard {
+					scorekey: &scorekey,
+					user_id: Some(eo_user_id),
+					show_ssrs_and_judgements_and_modifiers: false,
+					alternative_judge: None,
+					triggerers: None,
+				},
+			)?;
 		}
 
 		Ok(())
@@ -2113,7 +2423,8 @@ impl OcrScoreCardManager {
 		Self { candidates: vec![] }
 	}
 
-	pub fn add_candidate(&mut self,
+	pub fn add_candidate(
+		&mut self,
 		guild_id: serenity::GuildId,
 		channel_id: serenity::ChannelId,
 		message_id: serenity::MessageId,
@@ -2121,17 +2432,26 @@ impl OcrScoreCardManager {
 		scorekey: etterna::Scorekey,
 		user_id: u32,
 	) {
-		println!("Added new candidate {}, author id {}", &scorekey, author_id.0);
+		println!(
+			"Added new candidate {}, author id {}",
+			&scorekey, author_id.0
+		);
 		self.candidates.push(Candidate {
-			guild_id, channel_id, message_id, author_id, scorekey, user_id,
-			
+			guild_id,
+			channel_id,
+			message_id,
+			author_id,
+			scorekey,
+			user_id,
+
 			reactors: std::collections::HashSet::new(),
 			score_card_has_been_printed: false,
 		});
 	}
 
 	/// Returns the score scorekey and user id if this reaction triggers the score card
-	pub fn add_reaction(&mut self,
+	pub fn add_reaction(
+		&mut self,
 		ctx: &serenity::Context,
 		reaction: &serenity::Reaction,
 	) -> Result<Option<ScoreCardTrigger>, Error> {
@@ -2144,7 +2464,9 @@ impl OcrScoreCardManager {
 
 		// Find the Candidate that this reaction was made on, or return if the user made the
 		// reaction on some unrelated message, i.e. a non-candidate
-		let mut candidate = match self.candidates.iter_mut()
+		let mut candidate = match self
+			.candidates
+			.iter_mut()
 			.find(|c| c.message_id == reaction.message_id)
 		{
 			Some(candidate) => candidate,
@@ -2171,7 +2493,11 @@ impl OcrScoreCardManager {
 				scorekey: &candidate.scorekey,
 				eo_user_id: candidate.user_id,
 				reactors: &candidate.reactors,
-				trigger_msg: (candidate.guild_id, candidate.channel_id, candidate.message_id),
+				trigger_msg: (
+					candidate.guild_id,
+					candidate.channel_id,
+					candidate.message_id,
+				),
 			})
 		} else {
 			None

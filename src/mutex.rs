@@ -18,11 +18,11 @@ impl<T> Mutex<T> {
 
 	/// This will panic if the current thread is already holding a lock. This is done in order to
 	/// prevent a deadlock, like it would happen with std's or parking_lot's Mutexes
-	/// 
+	///
 	/// If the mutex was poisened, the panic will be propagated
 	pub fn lock(&self) -> MutexGuard<'_, T> {
 		// UNSAFE: ThreadId is just a wrapper around u64, so it can be transmuted to u64
-		let current_thread_id: u64 = unsafe { std::mem::transmute(std::thread::current().id())};
+		let current_thread_id: u64 = unsafe { std::mem::transmute(std::thread::current().id()) };
 
 		if self.current_holder.load(Ordering::Relaxed) == current_thread_id {
 			// This mutex is already being held by this thread. Locking it again would cause a
@@ -33,8 +33,9 @@ impl<T> Mutex<T> {
 		// UNWRAP: propagate panics
 		let guard = self.inner.lock().unwrap();
 
-		self.current_holder.store(current_thread_id, Ordering::Relaxed);
-		
+		self.current_holder
+			.store(current_thread_id, Ordering::Relaxed);
+
 		MutexGuard {
 			inner: guard,
 			current_holder: &self.current_holder,
@@ -66,4 +67,3 @@ impl<T> Drop for MutexGuard<'_, T> {
 		self.current_holder.store(0, Ordering::Relaxed);
 	}
 }
-

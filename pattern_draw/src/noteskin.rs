@@ -1,5 +1,5 @@
-use std::convert::TryInto;
 use image::GenericImageView;
+use std::convert::TryInto;
 
 fn iterate_center_column_of_texture_map(
 	texture_map: &image::RgbaImage,
@@ -8,18 +8,22 @@ fn iterate_center_column_of_texture_map(
 	let num_columns = texture_map.width() as usize / sprite_resolution;
 	let center_column = (num_columns - 1) / 2;
 
-	(0..(texture_map.height() as usize / sprite_resolution))
-		.map(move |row| texture_map.view(
-			(center_column * sprite_resolution) as u32, // x
-			(row * sprite_resolution) as u32, // y
-			sprite_resolution as u32, // width
-			sprite_resolution as u32, // height
-		).to_image())
+	(0..(texture_map.height() as usize / sprite_resolution)).map(move |row| {
+		texture_map
+			.view(
+				(center_column * sprite_resolution) as u32, // x
+				(row * sprite_resolution) as u32,           // y
+				sprite_resolution as u32,                   // width
+				sprite_resolution as u32,                   // height
+			)
+			.to_image()
+	})
 }
 
 /// Parameter must be a row of sprites next to each other
 fn middle_texture(texture_map: &image::RgbaImage) -> Result<image::RgbaImage, crate::Error> {
-	iterate_center_column_of_texture_map(texture_map, texture_map.height() as usize).next()
+	iterate_center_column_of_texture_map(texture_map, texture_map.height() as usize)
+		.next()
 		.ok_or(crate::Error::NoteskinTextureMapTooSmall)
 }
 
@@ -68,7 +72,7 @@ enum Textures {
 		receptor: image::RgbaImage,
 		notes: [image::RgbaImage; 8],
 		mine: image::RgbaImage,
-	}
+	},
 }
 
 pub struct Noteskin {
@@ -107,19 +111,23 @@ impl Noteskin {
 						iterate_center_column_of_texture_map(&center_notes, sprite_resolution),
 						iterate_center_column_of_texture_map(&corner_notes, sprite_resolution),
 					)
-						.map(|(center_note, corner_note)| [
+					.map(|(center_note, corner_note)| {
+						[
 							corner_note.clone(),
 							image::imageops::rotate90(&corner_note),
 							center_note,
 							image::imageops::rotate180(&corner_note),
 							image::imageops::rotate270(&corner_note),
-						])
-						.collect::<Vec<_>>().into_boxed_slice().try_into()
-						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+						]
+					})
+					.collect::<Vec<_>>()
+					.into_boxed_slice()
+					.try_into()
+					.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
-			}
+			},
 		})
 	}
 
@@ -146,17 +154,22 @@ impl Noteskin {
 					rotate_clockwise_by(&receptor, 225), // rotate down -> up-right
 				],
 				notes: {
-					let boxed: Box<_> = iterate_center_column_of_texture_map(&notes, sprite_resolution)
-						.map(|note| [
-							image::imageops::rotate90(&note),
-							note.clone(),
-							image::imageops::rotate180(&note),
-							image::imageops::rotate270(&note),
-							rotate_clockwise_by(&note, 135), // rotate down -> up-left
-							rotate_clockwise_by(&note, 225), // rotate down -> up-right
-						])
-						.collect::<Vec<_>>().into_boxed_slice().try_into()
-						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+					let boxed: Box<_> =
+						iterate_center_column_of_texture_map(&notes, sprite_resolution)
+							.map(|note| {
+								[
+									image::imageops::rotate90(&note),
+									note.clone(),
+									image::imageops::rotate180(&note),
+									image::imageops::rotate270(&note),
+									rotate_clockwise_by(&note, 135), // rotate down -> up-left
+									rotate_clockwise_by(&note, 225), // rotate down -> up-right
+								]
+							})
+							.collect::<Vec<_>>()
+							.into_boxed_slice()
+							.try_into()
+							.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
@@ -193,7 +206,7 @@ impl Noteskin {
 					image::open(right_receptor_path)?.into_rgba(),
 				],
 				mine: image::open(mine_path)?.into_rgba(),
-			}
+			},
 		})
 	}
 
@@ -213,19 +226,25 @@ impl Noteskin {
 			textures: Textures::Bar {
 				receptor,
 				notes: {
-					let boxed: Box<_> = iterate_center_column_of_texture_map(&notes, sprite_resolution)
-						.collect::<Vec<_>>().into_boxed_slice().try_into()
-						.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+					let boxed: Box<_> =
+						iterate_center_column_of_texture_map(&notes, sprite_resolution)
+							.collect::<Vec<_>>()
+							.into_boxed_slice()
+							.try_into()
+							.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
-			}
+			},
 		})
 	}
 
 	fn check_keymode(&self, lane: usize, keymode: usize) -> Result<(), crate::Error> {
 		if lane >= keymode {
-			return Err(crate::Error::InvalidLaneForKeymode { human_readable_lane: lane + 1, keymode });
+			return Err(crate::Error::InvalidLaneForKeymode {
+				human_readable_lane: lane + 1,
+				keymode,
+			});
 		}
 
 		let keymode_is_supported = match self.textures {
@@ -256,20 +275,31 @@ impl Noteskin {
 			Textures::MonoSnapLdur { .. } => match keymode {
 				3 => [0, 1, 3][lane],
 				_ => lane % 4,
-			}
+			},
 			Textures::Pump { .. } => lane % 5,
 			Textures::Bar { .. } => 0, // not applicable, but let's return something anyway
 		})
 	}
 
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
-	pub fn note(&self, lane: usize, keymode: usize, snap: etterna::Snap) -> Result<&image::RgbaImage, crate::Error> {
+	pub fn note(
+		&self,
+		lane: usize,
+		keymode: usize,
+		snap: etterna::Snap,
+	) -> Result<&image::RgbaImage, crate::Error> {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
-			Textures::LdurWith6k { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
-			Textures::MonoSnapLdur { notes, .. } => &notes[self.lane_to_note_array_index(lane, keymode)?],
-			Textures::Pump { notes, .. } => &notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?],
+			Textures::LdurWith6k { notes, .. } => {
+				&notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?]
+			}
+			Textures::MonoSnapLdur { notes, .. } => {
+				&notes[self.lane_to_note_array_index(lane, keymode)?]
+			}
+			Textures::Pump { notes, .. } => {
+				&notes[snap_to_texture_index(snap)][self.lane_to_note_array_index(lane, keymode)?]
+			}
 			Textures::Bar { notes, .. } => &notes[snap_to_texture_index(snap)],
 		})
 	}
@@ -279,13 +309,19 @@ impl Noteskin {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
-			Textures::LdurWith6k { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
-			Textures::MonoSnapLdur { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
-			Textures::Pump { receptors, .. } => &receptors[self.lane_to_note_array_index(lane, keymode)?],
+			Textures::LdurWith6k { receptors, .. } => {
+				&receptors[self.lane_to_note_array_index(lane, keymode)?]
+			}
+			Textures::MonoSnapLdur { receptors, .. } => {
+				&receptors[self.lane_to_note_array_index(lane, keymode)?]
+			}
+			Textures::Pump { receptors, .. } => {
+				&receptors[self.lane_to_note_array_index(lane, keymode)?]
+			}
 			Textures::Bar { receptor, .. } => &receptor,
 		})
 	}
-	
+
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
 	pub fn mine(&self) -> Result<&image::RgbaImage, crate::Error> {
 		Ok(match &self.textures {
@@ -302,7 +338,11 @@ impl Noteskin {
 
 	fn for_each_texture(&mut self, mut f: impl FnMut(&mut image::RgbaImage)) {
 		match &mut self.textures {
-			Textures::LdurWith6k { mine, notes, receptors } => {
+			Textures::LdurWith6k {
+				mine,
+				notes,
+				receptors,
+			} => {
 				f(mine);
 				for row in notes {
 					for note in row {
@@ -312,8 +352,12 @@ impl Noteskin {
 				for receptor in receptors {
 					f(receptor);
 				}
-			},
-			Textures::MonoSnapLdur { mine, notes, receptors } => {
+			}
+			Textures::MonoSnapLdur {
+				mine,
+				notes,
+				receptors,
+			} => {
 				f(mine);
 				for note in notes {
 					f(note);
@@ -322,7 +366,11 @@ impl Noteskin {
 					f(receptor);
 				}
 			}
-			Textures::Pump { mine, notes, receptors } => {
+			Textures::Pump {
+				mine,
+				notes,
+				receptors,
+			} => {
 				f(mine);
 				for row in notes {
 					for note in row {
@@ -332,8 +380,12 @@ impl Noteskin {
 				for receptor in receptors {
 					f(receptor);
 				}
-			},
-			Textures::Bar { mine, notes, receptor } => {
+			}
+			Textures::Bar {
+				mine,
+				notes,
+				receptor,
+			} => {
 				f(mine);
 				for note in notes {
 					f(note);
@@ -346,7 +398,12 @@ impl Noteskin {
 	pub fn resize_sprites(&mut self, sprite_resolution: u32) {
 		self.for_each_texture(|texture| {
 			// Triangle (aka bilinear) is the fastest resize algorithm that doesn't look garbage
-			*texture = image::imageops::resize(texture, sprite_resolution, sprite_resolution, image::imageops::FilterType::Triangle);
+			*texture = image::imageops::resize(
+				texture,
+				sprite_resolution,
+				sprite_resolution,
+				image::imageops::FilterType::Triangle,
+			);
 		});
 		self.sprite_resolution = sprite_resolution as usize;
 	}

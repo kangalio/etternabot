@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use serde::{Serialize, Deserialize};
 
 static CONFIG_PATH: &str = "config.json";
 static DATA_PATH: &str = "data.json";
@@ -38,16 +38,16 @@ pub struct Config {
 impl Config {
 	pub fn load() -> Self {
 		let config_path = Path::new(CONFIG_PATH);
-		let config_contents = std::fs::read_to_string(config_path)
-			.expect("Couldn't read config JSON file");
-			
-		let config: Self = serde_json::from_str(&config_contents)
-			.expect("Config JSON had invalid format");
+		let config_contents =
+			std::fs::read_to_string(config_path).expect("Couldn't read config JSON file");
+
+		let config: Self =
+			serde_json::from_str(&config_contents).expect("Config JSON had invalid format");
 
 		if config.minanyms.is_empty() {
 			panic!("Empty minanyms!");
 		}
-		
+
 		config
 	}
 }
@@ -73,24 +73,23 @@ impl Data {
 	pub fn load() -> Self {
 		let data_path = Path::new(DATA_PATH);
 		let data: Self = if data_path.exists() {
-			let config_contents = std::fs::read_to_string(data_path)
-				.expect("Couldn't read data JSON file");
-			
-			serde_json::from_str(&config_contents)
-				.expect("Data JSON had invalid format")
+			let config_contents =
+				std::fs::read_to_string(data_path).expect("Couldn't read data JSON file");
+
+			serde_json::from_str(&config_contents).expect("Data JSON had invalid format")
 		} else {
 			Default::default()
 		};
-		
+
 		data
 	}
 
 	pub fn save(&self) {
 		serde_json::to_writer_pretty(
-			std::fs::File::create(DATA_PATH)
-				.expect("Couldn't write to data json file"),
-			self
-		).expect("Couldn't deserialize data into a json");
+			std::fs::File::create(DATA_PATH).expect("Couldn't write to data json file"),
+			self,
+		)
+		.expect("Couldn't deserialize data into a json");
 	}
 
 	pub fn set_scroll(&mut self, discord_user: u64, scroll: etterna::ScrollDirection) {

@@ -1,23 +1,28 @@
-#![allow(clippy::len_zero, clippy::tabs_in_doc_comments, clippy::collapsible_if, clippy::needless_bool)]
+#![allow(
+	clippy::len_zero,
+	clippy::tabs_in_doc_comments,
+	clippy::collapsible_if,
+	clippy::needless_bool
+)]
 #![warn(clippy::indexing_slicing)]
 
-mod discord_handler;
 mod auth;
+mod discord_handler;
 mod mutex;
 
 // This is my custom serenity prelude module
 mod serenity {
 	pub use serenity::{
-		prelude::*,
+		http::error::{DiscordJsonError, Error as HttpError, ErrorResponse},
 		model::{
-			user::User,
-			gateway::Ready,
 			channel::{Message, Reaction, ReactionType},
-			id::{UserId, ChannelId, MessageId, GuildId, RoleId},
+			gateway::Ready,
 			guild::{Member, Role},
+			id::{ChannelId, GuildId, MessageId, RoleId, UserId},
 			permissions::Permissions,
+			user::User,
 		},
-		http::error::{ErrorResponse, Error as HttpError, DiscordJsonError},
+		prelude::*,
 		utils::Colour as Color,
 		Error,
 	};
@@ -41,17 +46,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 					println!("RwLock locking failed! TERMINATING THE PROGRAM!");
 					std::process::exit(1);
 				});
-	
+
 				match &*guard {
 					Some(state) => break state,
 					None => {
 						drop(guard); // important! or the login attempt can't finish
-						// if the bot is not ready yet, wait a bit and check again
+					 // if the bot is not ready yet, wait a bit and check again
 						std::thread::sleep(std::time::Duration::from_millis(100));
-					}
+						}
+					};
 				};
-			};
-		}
+		};
 	}
 
 	struct Handler {
@@ -62,17 +67,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		fn ready(&self, ctx: serenity::Context, ready: serenity::Ready) {
 			println!("Connected to Discord as {}", ready.user.name);
 			// UNWRAP: propagate poison
-			*self.state.write().unwrap() = Some(discord_handler::State::load(&ctx, ready.user.id)
-				.expect("Failed to initialize"));
+			*self.state.write().unwrap() = Some(
+				discord_handler::State::load(&ctx, ready.user.id).expect("Failed to initialize"),
+			);
 			println!("Logged into EO");
-
 		}
-	
+
 		fn message(&self, ctx: serenity::Context, msg: serenity::Message) {
 			// hehe no, we don't want endless message chains
 			// (originally I wanted to just ignore own messages, but that's awkward to implement so
 			// let's just ignore all bot messages)
-			if msg.author.bot { return }
+			if msg.author.bot {
+				return;
+			}
 
 			lock!(self, state);
 
@@ -98,16 +105,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 				if was_explicitly_invoked {
 					// Print the error message into the chat
 					if let Err(inner_e) = msg.channel_id.say(&ctx.http, &error_msg) {
-						println!("Failed with '{:?}' while sending error message '{}'", inner_e, &error_msg);
+						println!(
+							"Failed with '{:?}' while sending error message '{}'",
+							inner_e, &error_msg
+						);
 					}
 				}
 			}
 		}
 
-		fn guild_member_update(&self,
+		fn guild_member_update(
+			&self,
 			ctx: serenity::Context,
 			old: Option<serenity::Member>,
-			new: serenity::Member
+			new: serenity::Member,
 		) {
 			lock!(self, state);
 			if let Err(e) = state.guild_member_update(ctx, old, new) {
@@ -115,10 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			}
 		}
 
-		fn reaction_add(&self,
-			ctx: serenity::Context,
-			reaction: serenity::Reaction,
-		) {
+		fn reaction_add(&self, ctx: serenity::Context, reaction: serenity::Reaction) {
 			lock!(self, state);
 			if let Err(e) = state.reaction_add(ctx, reaction) {
 				println!("Error in reaction add: {:?}", e);
@@ -126,51 +134,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	}
 
-	let handler = Handler { state: std::sync::RwLock::new(None) };
-	
+	let handler = Handler {
+		state: std::sync::RwLock::new(None),
+	};
+
 	// Login to Discord and start bot
 	let mut client = serenity::Client::new(auth::DISCORD_BOT_TOKEN, handler)
 		.expect("Unable to create Discord client");
 	client.threadpool.set_num_threads(10);
-	
+
 	let thread_pool_ptr = unsafe { &*(&client.threadpool as *const _) }; // screw the rules
 	assume_same_type(thread_pool_ptr, &client.threadpool);
 	let thread_pool_ptr = FuckThis(thread_pool_ptr);
 
-	std::thread::Builder::new().name("stupid checker thread".to_owned()).spawn(move || {
-		let thread_pool = thread_pool_ptr.0;
+	std::thread::Builder::new()
+		.name("stupid checker thread".to_owned())
+		.spawn(move || {
+			let thread_pool = thread_pool_ptr.0;
 
-		let mut maxed_out_in_a_row = 0;
-		loop {
-			let (active, max) = (thread_pool.active_count(), thread_pool.max_count());
-			// println!("Serenity thread pool: {}/{} threads active", active, max);
-			if active == max {
-				maxed_out_in_a_row += 1;
-				if maxed_out_in_a_row >= 5 {
-					// Thread pool was maxed out for three minutes straight. This can't be right
-					// Let's spawn a new process to take over, but keep this instance running to
-					// allow debugging
-					println!("THIS INSTANCE IS STUCK STUCK STUCK!!!!");
+			let mut maxed_out_in_a_row = 0;
+			loop {
+				let (active, max) = (thread_pool.active_count(), thread_pool.max_count());
+				// println!("Serenity thread pool: {}/{} threads active", active, max);
+				if active == max {
+					maxed_out_in_a_row += 1;
+					if maxed_out_in_a_row >= 5 {
+						// Thread pool was maxed out for three minutes straight. This can't be right
+						// Let's spawn a new process to take over, but keep this instance running to
+						// allow debugging
+						println!("THIS INSTANCE IS STUCK STUCK STUCK!!!!");
 
-					let current_exe = std::env::current_exe()
-						.expect("Can't get current exe path :(");
-					std::process::Command::new(current_exe).spawn()
-						.expect("Failed to start bot clone");
-					
-					println!("Started bot process to take over, stalling current instance's \
-						watchdog thread...");
-					loop {
-						std::thread::park();
+						let current_exe =
+							std::env::current_exe().expect("Can't get current exe path :(");
+						std::process::Command::new(current_exe)
+							.spawn()
+							.expect("Failed to start bot clone");
+
+						println!(
+							"Started bot process to take over, stalling current instance's \
+						watchdog thread..."
+						);
+						loop {
+							std::thread::park();
+						}
 					}
+				} else {
+					maxed_out_in_a_row = 0;
 				}
-			} else {
-				maxed_out_in_a_row = 0;
-			}
 
-			std::thread::sleep(std::time::Duration::from_secs(60));
-		}
-	}).unwrap();
-	
+				std::thread::sleep(std::time::Duration::from_secs(60));
+			}
+		})
+		.unwrap();
+
 	client.start()?;
 
 	Ok(())
