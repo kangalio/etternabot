@@ -4,6 +4,8 @@ pub use pattern_draw::{Error as PatternError, Noteskin};
 use super::State;
 use crate::{serenity, Error};
 
+const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
+
 pub struct NoteskinProvider {
 	dbz: pattern_draw::Noteskin,
 	lambda: pattern_draw::Noteskin,
@@ -290,6 +292,32 @@ pub fn pattern(
 	// Send the image into the channel where the summoning message comes from
 	msg.channel_id
 		.send_files(&ctx.http, vec![(img_bytes.as_slice(), "output.png")], |m| m)?;
+
+	Ok(())
+}
+
+pub fn scrollset(
+	state: &State,
+	ctx: &serenity::Context,
+	msg: &serenity::Message,
+	args: &str,
+) -> Result<(), Error> {
+	let scroll = match &args.to_lowercase() as &str {
+		"down" | "downscroll" => etterna::ScrollDirection::Downscroll,
+		"up" | "upscroll" => etterna::ScrollDirection::Upscroll,
+		"" => {
+			msg.channel_id.say(&ctx.http, CMD_SCROLLSET_HELP)?;
+			return Ok(());
+		}
+		_ => {
+			msg.channel_id
+				.say(&ctx.http, format!("No such scroll '{}'", args))?;
+			return Ok(());
+		}
+	};
+	state.lock_data().set_scroll(msg.author.id.0, scroll);
+	msg.channel_id
+		.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
 
 	Ok(())
 }

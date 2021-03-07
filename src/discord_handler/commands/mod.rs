@@ -1,8 +1,8 @@
 mod scores_list;
 pub use scores_list::*;
 
-mod profile_compare;
-pub use profile_compare::*;
+mod profile;
+pub use profile::*;
 
 mod pattern;
 pub use pattern::*;
