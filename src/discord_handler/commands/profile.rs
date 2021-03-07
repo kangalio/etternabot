@@ -289,10 +289,10 @@ pub fn profile(
 	msg: &serenity::Message,
 	text: &str,
 ) -> Result<(), Error> {
-	let eo_username = if text.is_empty() {
-		state.get_eo_username(ctx, msg)?
+	let (eo_username, overwrite_prev_ratings) = if text.is_empty() {
+		(state.get_eo_username(ctx, msg)?, true)
 	} else {
-		text.to_owned()
+		(text.to_owned(), false)
 	};
 
 	let details = state.v2()?.user_details(&eo_username)?;
@@ -349,9 +349,11 @@ pub fn profile(
 	}
 	rating_string += "```";
 
-	// TODO: could create new entry if doesn't already exist to store ratings
-	if let Some(previous_ratings) = previous_ratings {
-		*previous_ratings = Some(details.rating.clone());
+	if overwrite_prev_ratings {
+		// TODO: could create new entry if doesn't already exist to store ratings
+		if let Some(previous_ratings) = previous_ratings {
+			*previous_ratings = Some(details.rating.clone());
+		}
 	}
 
 	msg.channel_id.send_message(&ctx.http, |m| {
