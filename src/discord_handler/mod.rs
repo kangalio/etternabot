@@ -27,9 +27,6 @@ static LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::
 	)
 	.unwrap()
 });
-static SONG_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-	regex::Regex::new(r"https://etternaonline.com/song/view/(\d+)(#(\d+))?").unwrap()
-});
 static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> =
 	once_cell::sync::Lazy::new(|| regex::Regex::new(r"[jJ](\d)").unwrap());
 
@@ -1215,7 +1212,7 @@ your message, I will also show the wifescores with that judge.
 			*storage = Some(scores);
 			let scores = storage.as_ref().expect("impossible");
 
-			Ok(etterna::skill_timeline(
+			Ok(etterna::SkillTimeline::calculate(
 				scores.scores.iter().filter_map(|score| {
 					Some((
 						score.date.as_str(),
@@ -1615,20 +1612,6 @@ your message, I will also show the wifescores with that judge.
 			}
 			_ => {}
 		}
-		Ok(())
-	}
-
-	fn song_card(
-		&self,
-		_ctx: &serenity::Context,
-		_msg: &serenity::Message,
-		song_id: u32,
-	) -> Result<(), Error> {
-		println!(
-			"Argh I really _want_ to show song info for {}, but the EO v2 API doesn't expose \
-			the required functions :(",
-			song_id
-		);
 		Ok(())
 	}
 
@@ -2111,20 +2094,6 @@ your message, I will also show the wifescores with that judge.
 					},
 				) {
 					println!("Error while showing score card for {}: {}", scorekey, e);
-				}
-			}
-
-			for groups in SONG_LINK_REGEX.captures_iter(&msg.content) {
-				println!("{:?}", groups);
-				// UNWRAP: regex has this group
-				let song_id = match groups.get(1).unwrap().as_str().parse() {
-					Ok(song_id) => song_id,
-					Err(_) => continue, // this wasn't a valid song view url after all
-				};
-
-				println!("Trying to show score card for song id {}", song_id);
-				if let Err(e) = self.song_card(&ctx, &msg, song_id) {
-					println!("Error while showing song card for {}: {}", song_id, e);
 				}
 			}
 		}
