@@ -132,6 +132,7 @@ impl Drop for AutoSaveGuard<'_> {
 }
 
 pub struct State {
+	auth: crate::Auth,
 	bot_start_time: std::time::Instant,
 	config: Config,
 	_data: crate::AntiDeadlockMutex<Data>,
@@ -143,7 +144,11 @@ pub struct State {
 }
 
 impl State {
-	pub fn load(ctx: &serenity::Context, bot_user_id: serenity::UserId) -> Result<Self, Error> {
+	pub fn load(
+		ctx: &serenity::Context,
+		auth: crate::Auth,
+		bot_user_id: serenity::UserId,
+	) -> Result<Self, Error> {
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
@@ -161,13 +166,14 @@ impl State {
 
 		Ok(Self {
 			bot_start_time: std::time::Instant::now(),
-			v2_session: crate::AntiDeadlockMutex::new(match Self::attempt_v2_login() {
+			v2_session: crate::AntiDeadlockMutex::new(match Self::attempt_v2_login(&auth) {
 				Ok(v2) => Some(v2),
 				Err(e) => {
 					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
 					None
 				}
 			}),
+			auth,
 			web_session,
 			config,
 			_data: crate::AntiDeadlockMutex::new(Data::load()),
@@ -179,11 +185,11 @@ impl State {
 		})
 	}
 
-	fn attempt_v2_login() -> Result<eo::v2::Session, eo::Error> {
+	fn attempt_v2_login(auth: &crate::Auth) -> Result<eo::v2::Session, eo::Error> {
 		eo::v2::Session::new_from_login(
-			crate::auth::EO_USERNAME.to_owned(),
-			crate::auth::EO_PASSWORD.to_owned(),
-			crate::auth::EO_CLIENT_DATA.to_owned(),
+			auth.eo_username.to_owned(),
+			auth.eo_password.to_owned(),
+			auth.eo_client_data.to_owned(),
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(30000)),
 		)
@@ -206,7 +212,7 @@ impl State {
 		if v2_session.is_some() {
 			Ok(IdkWhatImDoing { guard: v2_session })
 		} else {
-			match Self::attempt_v2_login() {
+			match Self::attempt_v2_login(&self.auth) {
 				Ok(v2) => {
 					*v2_session = Some(v2);
 					Ok(IdkWhatImDoing { guard: v2_session })

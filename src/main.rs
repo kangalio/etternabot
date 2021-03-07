@@ -6,7 +6,6 @@
 )]
 
 mod anti_deadlock_mutex;
-mod auth;
 mod discord_handler;
 mod initialization;
 
@@ -54,6 +53,14 @@ pub enum Error {
 	NoScoreEvenThoughOneWasRequested,
 	#[error("User not found in registry (`+userset` must have been called at least once)")]
 	UserNotInRegistry,
+}
+
+#[derive(Clone)]
+pub struct Auth {
+	discord_bot_token: String,
+	eo_username: String,
+	eo_password: String,
+	eo_client_data: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
