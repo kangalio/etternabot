@@ -54,37 +54,30 @@ fn recognize_rect<T>(
 		(rect_h * img_h / 1080) as i32,
 	)?; // sometimes this messes up idk
 
-	// println!("{:?}", bounding_box.get_val());
-
 	// print!("c");
 	lt.set_rectangle(bounding_box);
 	// print!("d");
 	let text = lt.get_utf8_text().ok()?;
 	let text = text.trim();
-	// println!("Recognized string {:?}", text);
 	// print!("E - ");
 	processor(text)
 }
 
-fn parse_slash_separated_judgement_string(s: &str) -> Option<TapJudgementsMaybe> {
+fn parse_slash_separated_judgement_string(s: &str) -> TapJudgementsMaybe {
 	let judgements: Vec<u32> = s.split('/').filter_map(|s| s.trim().parse().ok()).collect();
 
-	Some(TapJudgementsMaybe {
+	TapJudgementsMaybe {
 		marvelouses: judgements.get(0).copied(),
 		perfects: judgements.get(1).copied(),
 		greats: judgements.get(2).copied(),
 		goods: judgements.get(3).copied(),
 		bads: judgements.get(4).copied(),
 		misses: judgements.get(5).copied(),
-	})
+	}
 }
 
-fn recognize_til_death(
-	mut eng_lt: &mut LepTess,
-	mut num_lt: &mut LepTess,
-) -> Result<EvaluationScreenData, Error> {
-	// println!("Alrighty we're in recognize_til_death");
-	Ok(EvaluationScreenData {
+fn recognize_til_death(mut eng_lt: &mut LepTess, mut num_lt: &mut LepTess) -> EvaluationScreenData {
+	EvaluationScreenData {
 		rate: recognize_rect(&mut num_lt, 914, 371, 98, 19, |s| {
 			Rate::from_f32(s.parse().ok()?)
 		}),
@@ -115,25 +108,17 @@ fn recognize_til_death(
 		// we're reading _some other score's judgements data here_. HOWEVER!! Due to the fact
 		// that EO doesn't save non-PBs, we wouldn't find the score _anyways_ if it's not a PB.
 		// So it's not actually a problem that we're not properly recognizing non-PBs.
-		judgements: recognize_rect(
-			&mut num_lt,
-			1422,
-			171,
-			308,
-			21,
-			parse_slash_separated_judgement_string,
-		),
+		judgements: recognize_rect(&mut num_lt, 1422, 171, 308, 21, |s| {
+			Some(parse_slash_separated_judgement_string(s))
+		}),
 		difficulty: recognize_rect(&mut eng_lt, 646, 324, 100, 56, |s| {
 			Difficulty::from_short_string(s)
 		}),
 		date: None, // Til Death doesn't show score date, only current date
-	})
+	}
 }
 
-fn recognize_scwh(
-	mut eng_lt: &mut LepTess,
-	mut num_lt: &mut LepTess,
-) -> Result<EvaluationScreenData, Error> {
+fn recognize_scwh(mut eng_lt: &mut LepTess, mut num_lt: &mut LepTess) -> EvaluationScreenData {
 	/*
 	rate -
 	pack -
@@ -161,7 +146,7 @@ fn recognize_scwh(
 		None => (None, None),
 	};
 
-	Ok(EvaluationScreenData {
+	EvaluationScreenData {
 		rate,
 		pack: recognize_rect(&mut eng_lt, 1268, 0, 630, 45, |s| Some(s.to_owned())),
 		eo_username: recognize_rect(&mut eng_lt, 1567, 786, 287, 55, |s| Some(s.to_owned())),
@@ -194,7 +179,7 @@ fn recognize_scwh(
 			Difficulty::from_short_string(s)
 		}),
 		date: recognize_rect(&mut eng_lt, 1399, 920, 454, 49, |s| Some(s.to_owned())),
-	})
+	}
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
@@ -242,37 +227,26 @@ impl EvaluationScreenData {
 	}
 
 	pub fn recognize_from_image_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
-		Self::recognize(|lt| {
-			// println!("before set_image_from_mem");
-			let img = lt.set_image_from_mem(bytes);
-			// println!("after set_image_from_mem");
-			img
-		})
+		Self::recognize(|lt| lt.set_image_from_mem(bytes))
 	}
 
 	pub fn recognize(
 		mut image_setter: impl FnMut(&mut LepTess) -> Option<()>,
 	) -> Result<Vec<Self>, Error> {
-		// println!("Creating english LepTess");
 		let mut eng_lt = LepTess::new(Some("ocr_data"), "eng")?;
-		// println!("Creating digits LepTess");
 		let mut num_lt = LepTess::new(Some("ocr_data"), "digitsall_layer")?;
 
 		// that's apparently the full screen dpi and our images are fullscreen so let's use this value
 		let dpi = 96;
 
-		// println!("Setting eng image and fallback res");
 		(image_setter)(&mut eng_lt).ok_or(Error::CouldNotReadImage)?;
 		eng_lt.set_fallback_source_resolution(dpi);
-		// println!("Setting digits image");
 		(image_setter)(&mut num_lt).ok_or(Error::CouldNotReadImage)?;
-		// println!("Setting fallback res");
 		num_lt.set_fallback_source_resolution(dpi);
 
-		// println!("Got everything set up, now recognizing...");
 		Ok(vec![
-			recognize_til_death(&mut eng_lt, &mut num_lt)?,
-			recognize_scwh(&mut eng_lt, &mut num_lt)?,
+			recognize_til_death(&mut eng_lt, &mut num_lt),
+			recognize_scwh(&mut eng_lt, &mut num_lt),
 		])
 	}
 
@@ -282,13 +256,11 @@ impl EvaluationScreenData {
 		macro_rules! compare {
 			($a:expr, $b:expr, $weight:expr, $equality_check:expr) => {
 				if let (Some(a), Some(b)) = (&$a, &$b) {
-					// println!("{:?} == {:?} ?", a, b);
 					if $equality_check(a, b) {
-						// println!("{} matches! Adding {} points", stringify!($a), $weight);
 						score += $weight;
-						}
-					// let's not subtract points if mismatch
 					}
+					// let's not subtract points if mismatch
+				}
 			};
 			($a:expr, $b:expr, $weight:expr) => {
 				compare!($a, $b, $weight, |a, b| a == b);
@@ -318,9 +290,6 @@ impl EvaluationScreenData {
 			compare!(self_judgements.bads, other_judgements.bads, 2);
 			compare!(self_judgements.misses, other_judgements.misses, 3);
 		}
-
-		// println!("Got total {} points", score);
-		// println!();
 
 		score
 	}
