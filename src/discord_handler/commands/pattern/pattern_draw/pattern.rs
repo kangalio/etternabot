@@ -1,17 +1,7 @@
-use thiserror::Error;
+use super::Error;
 
 fn is_equal_no_order_no_duplicates<T: PartialEq>(a: &[T], b: &[T]) -> bool {
 	a.iter().all(|a_elem| b.contains(a_elem)) && b.iter().all(|b_elem| a.contains(b_elem))
-}
-
-#[derive(Debug, Error)]
-pub enum PatternParseError {
-	#[error("Missing closing bracket")]
-	UnclosedBracket,
-	#[error("Missing closing paranthesis")]
-	UnclosedParanthesis,
-	#[error("Unrecognized note \"{0}\". Only numbers and L/D/U/R can be used as lanes")]
-	UnrecognizedNote(String),
 }
 
 /// Represents a simple note pattern without any holds or mines or snap changes.
@@ -90,55 +80,44 @@ struct State {
 	selected_note_type: NoteType,
 }
 
-fn parse_note_identifier(
-	note: &str,
-	state: &mut State,
-) -> Result<NoteIdentifier, PatternParseError> {
+fn parse_note_identifier(note: &str, state: &mut State) -> NoteIdentifier {
 	if let Ok(lane) = note.parse::<u32>() {
 		if lane == 0 {
-			Ok(NoteIdentifier::Empty)
+			NoteIdentifier::Empty
 		} else {
 			// Must have checked that lane isn't zero! to prevent underflow
-			Ok(NoteIdentifier::Note(
-				Lane::Index(lane - 1),
-				state.selected_note_type,
-			))
+			NoteIdentifier::Note(Lane::Index(lane - 1), state.selected_note_type)
 		}
 	} else {
 		match note.to_lowercase().as_str() {
-			"l" => Ok(NoteIdentifier::Note(Lane::Left, state.selected_note_type)),
-			"d" => Ok(NoteIdentifier::Note(Lane::Down, state.selected_note_type)),
-			"u" => Ok(NoteIdentifier::Note(Lane::Up, state.selected_note_type)),
-			"r" => Ok(NoteIdentifier::Note(Lane::Right, state.selected_note_type)),
-			"" => Ok(NoteIdentifier::Empty),
+			"l" => NoteIdentifier::Note(Lane::Left, state.selected_note_type),
+			"d" => NoteIdentifier::Note(Lane::Down, state.selected_note_type),
+			"u" => NoteIdentifier::Note(Lane::Up, state.selected_note_type),
+			"r" => NoteIdentifier::Note(Lane::Right, state.selected_note_type),
+			"" => NoteIdentifier::Empty,
 			"m" => {
 				state.selected_note_type = NoteType::Mine;
-				Ok(NoteIdentifier::ControlCharacter)
+				NoteIdentifier::ControlCharacter
 			}
-			// other => Err(PatternParseError::UnrecognizedNote(other.to_owned())),
-			_other => Ok(NoteIdentifier::Invalid),
+			// other => Err(Error::UnrecognizedNote(other.to_owned())),
+			_other => NoteIdentifier::Invalid,
 		}
 	}
 }
 
 /// Will panic if string is too short
-fn parse_single_note(
-	pattern: &mut &str,
-	state: &mut State,
-) -> Result<NoteIdentifier, PatternParseError> {
+fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdentifier, Error> {
 	let note;
 
 	if pattern.starts_with('(') {
-		let closing_paran = pattern
-			.find(')')
-			.ok_or(PatternParseError::UnclosedParanthesis)?;
+		let closing_paran = pattern.find(')').ok_or(Error::UnclosedParanthesis)?;
 
-		note = parse_note_identifier(&pattern[1..closing_paran], state)?;
+		note = parse_note_identifier(&pattern[1..closing_paran], state);
 
 		*pattern = &pattern[closing_paran + 1..];
 	} else {
 		// UNWRAP: documented panic behavior
-		note = parse_note_identifier(pop_first_char(pattern).unwrap(), state)?;
+		note = parse_note_identifier(pop_first_char(pattern).unwrap(), state);
 	}
 
 	Ok(note)
@@ -149,11 +128,9 @@ fn parse_single_note(
 fn parse_row(
 	pattern: &mut &str,
 	state: &mut State,
-) -> Result<Option<Vec<(Lane, NoteType)>>, PatternParseError> {
+) -> Result<Option<Vec<(Lane, NoteType)>>, Error> {
 	let row = if pattern.starts_with('[') {
-		let closing_bracket = pattern
-			.find(']')
-			.ok_or(PatternParseError::UnclosedBracket)?;
+		let closing_bracket = pattern.find(']').ok_or(Error::UnclosedBracket)?;
 
 		let mut bracket_contents = &pattern[1..closing_bracket];
 		let mut row = Vec::new();
@@ -181,7 +158,7 @@ fn parse_row(
 	Ok(row)
 }
 
-pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, PatternParseError> {
+pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, Error> {
 	// remove all whitespace
 	let pattern = pattern.split_whitespace().collect::<String>();
 	let mut pattern = pattern.as_str();

@@ -21,10 +21,10 @@ fn iterate_center_column_of_texture_map(
 }
 
 /// Parameter must be a row of sprites next to each other
-fn middle_texture(texture_map: &image::RgbaImage) -> Result<image::RgbaImage, crate::Error> {
+fn middle_texture(texture_map: &image::RgbaImage) -> Result<image::RgbaImage, super::Error> {
 	iterate_center_column_of_texture_map(texture_map, texture_map.height() as usize)
 		.next()
-		.ok_or(crate::Error::NoteskinTextureMapTooSmall)
+		.ok_or(super::Error::NoteskinTextureMapTooSmall)
 }
 
 // Rotate a texture of a down-facing arrow to face down-left
@@ -88,7 +88,7 @@ impl Noteskin {
 		corner_notes_path: &str,
 		corner_receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, crate::Error> {
+	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
 		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let center_receptor = middle_texture(&image::open(center_receptor_path)?.into_rgba())?;
@@ -123,7 +123,7 @@ impl Noteskin {
 					.collect::<Vec<_>>()
 					.into_boxed_slice()
 					.try_into()
-					.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+					.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
@@ -136,7 +136,7 @@ impl Noteskin {
 		notes_path: &str,
 		receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, crate::Error> {
+	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
 		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
@@ -169,7 +169,7 @@ impl Noteskin {
 							.collect::<Vec<_>>()
 							.into_boxed_slice()
 							.try_into()
-							.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+							.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
@@ -189,7 +189,7 @@ impl Noteskin {
 		right_note_path: &str,
 		right_receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, crate::Error> {
+	) -> Result<Self, super::Error> {
 		Ok(Self {
 			sprite_resolution,
 			textures: Textures::MonoSnapLdur {
@@ -215,7 +215,7 @@ impl Noteskin {
 		notes_path: &str,
 		receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, crate::Error> {
+	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
 		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
 		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
@@ -231,7 +231,7 @@ impl Noteskin {
 							.collect::<Vec<_>>()
 							.into_boxed_slice()
 							.try_into()
-							.map_err(|_| crate::Error::NoteskinTextureMapTooSmall)?;
+							.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
 					*boxed
 				},
 				mine,
@@ -239,9 +239,9 @@ impl Noteskin {
 		})
 	}
 
-	fn check_keymode(&self, lane: usize, keymode: usize) -> Result<(), crate::Error> {
+	fn check_keymode(&self, lane: usize, keymode: usize) -> Result<(), super::Error> {
 		if lane >= keymode {
-			return Err(crate::Error::InvalidLaneForKeymode {
+			return Err(super::Error::InvalidLaneForKeymode {
 				human_readable_lane: lane + 1,
 				keymode,
 			});
@@ -259,11 +259,11 @@ impl Noteskin {
 		if keymode_is_supported {
 			Ok(())
 		} else {
-			Err(crate::Error::NoteskinDoesntSupportKeymode { keymode })
+			Err(super::Error::NoteskinDoesntSupportKeymode { keymode })
 		}
 	}
 
-	fn lane_to_note_array_index(&self, lane: usize, keymode: usize) -> Result<usize, crate::Error> {
+	fn lane_to_note_array_index(&self, lane: usize, keymode: usize) -> Result<usize, super::Error> {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match self.textures {
@@ -287,7 +287,7 @@ impl Noteskin {
 		lane: usize,
 		keymode: usize,
 		snap: etterna::Snap,
-	) -> Result<&image::RgbaImage, crate::Error> {
+	) -> Result<&image::RgbaImage, super::Error> {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
@@ -305,7 +305,7 @@ impl Noteskin {
 	}
 
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
-	pub fn receptor(&self, lane: usize, keymode: usize) -> Result<&image::RgbaImage, crate::Error> {
+	pub fn receptor(&self, lane: usize, keymode: usize) -> Result<&image::RgbaImage, super::Error> {
 		self.check_keymode(lane, keymode)?;
 
 		Ok(match &self.textures {
@@ -323,7 +323,7 @@ impl Noteskin {
 	}
 
 	/// The returned image has the resolution NxN, where N can be obtained with `sprite_resolution()`
-	pub fn mine(&self) -> Result<&image::RgbaImage, crate::Error> {
+	pub fn mine(&self) -> Result<&image::RgbaImage, super::Error> {
 		Ok(match &self.textures {
 			Textures::LdurWith6k { mine, .. } => &mine,
 			Textures::MonoSnapLdur { mine, .. } => &mine,

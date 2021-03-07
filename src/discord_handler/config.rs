@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::serenity;
+
 static CONFIG_PATH: &str = "config.json";
 static DATA_PATH: &str = "data.json";
 
@@ -11,28 +13,28 @@ pub struct Quote {
 	pub source: Option<String>,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Config {
 	pub minanyms: Vec<String>,
 	pub quotes: Vec<Quote>,
 
 	/// Channel where the MAX 300 role acquisition gratulations are posted
-	pub promotion_gratulations_channel: u64,
+	pub promotion_gratulations_channel: serenity::ChannelId,
 	/// Channel where bot watches and deletes messages without any links
-	pub pack_releases_channel: u64,
+	pub pack_releases_channel: serenity::ChannelId,
 	/// Channel where bot watches and deletes messages without any files or links
-	pub work_in_progress_channel: u64,
+	pub work_in_progress_channel: serenity::ChannelId,
 	/// Channel that the bot redirects to in the above circumstances
-	pub work_in_progress_discussion_channel: u64,
+	pub work_in_progress_discussion_channel: serenity::ChannelId,
 	/// Channels in which bot commands can be used
-	pub allowed_channels: Vec<u64>,
+	pub allowed_channels: Vec<serenity::ChannelId>,
 	/// Channel to scan for score screenshots in
-	pub score_channel: u64,
+	pub score_channel: serenity::ChannelId,
 	/// Channel to post the requested score cards into
-	pub score_ocr_card_channel: u64,
-	pub etterna_online_guild_id: u64,
+	pub score_ocr_card_channel: serenity::ChannelId,
+	pub etterna_online_guild_id: serenity::GuildId,
 	// Only these people's images in `score_channel` will be used
-	pub score_ocr_allowed_eo_role: u64,
+	pub score_ocr_allowed_eo_role: serenity::RoleId,
 }
 
 impl Config {

@@ -222,10 +222,6 @@ pub struct EvaluationScreenData {
 }
 
 impl EvaluationScreenData {
-	pub fn recognize_from_image_path(path: &str) -> Result<Vec<Self>, Error> {
-		Self::recognize(|lt| lt.set_image(path))
-	}
-
 	pub fn recognize_from_image_bytes(bytes: &[u8]) -> Result<Vec<Self>, Error> {
 		Self::recognize(|lt| lt.set_image_from_mem(bytes))
 	}

@@ -1,5 +1,4 @@
-use image::GenericImage;
-use thiserror::Error;
+use image::GenericImage as _;
 
 mod pattern;
 pub use pattern::*;
@@ -10,7 +9,7 @@ pub use noteskin::*;
 mod fractional_snap;
 pub use fractional_snap::*;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("Given pattern is empty")]
 	EmptyPattern,
@@ -36,6 +35,12 @@ pub enum Error {
 		max_width: usize,
 		max_height: usize,
 	},
+	#[error("Missing closing bracket")]
+	UnclosedBracket,
+	#[error("Missing closing paranthesis")]
+	UnclosedParanthesis,
+	#[error("Unrecognized note \"{0}\". Only numbers and L/D/U/R can be used as lanes")]
+	UnrecognizedNote(String),
 }
 
 struct Sprite<'a> {
@@ -76,9 +81,9 @@ fn copy_from(
 }
 
 fn render_sprite_map(
-	sprite_map: crate::SpriteMap,
+	sprite_map: SpriteMap,
 	(max_width, max_height): (usize, usize),
-) -> Result<image::RgbaImage, crate::Error> {
+) -> Result<image::RgbaImage, Error> {
 	let sprite_res = sprite_map.sprite_resolution;
 
 	let max_lane = sprite_map
@@ -86,20 +91,20 @@ fn render_sprite_map(
 		.iter()
 		.map(|s| s.lane)
 		.max()
-		.ok_or(crate::Error::EmptyPattern)?;
+		.ok_or(Error::EmptyPattern)?;
 	let max_y_pos = sprite_map
 		.sprites
 		.iter()
 		.map(|s| s.y_pos)
 		.max()
-		.ok_or(crate::Error::EmptyPattern)?;
+		.ok_or(Error::EmptyPattern)?;
 
 	// Create an empty image buffer, big enough to fit all the lanes and arrows
 	let width = sprite_res * (max_lane + 1);
 	let height = ((sprite_res * max_y_pos) as f32 * sprite_map.vertical_spacing_multiplier)
 		as usize + sprite_res;
 	if width > max_width || height > max_height {
-		return Err(crate::Error::ImageTooLarge {
+		return Err(Error::ImageTooLarge {
 			width,
 			height,
 			max_width,
