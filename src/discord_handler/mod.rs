@@ -2340,7 +2340,6 @@ your message, I will also show the wifescores with that judge.
 			.add_reaction(&ctx, &reaction)?
 		{
 			// borrow checker headaches because this thing is monolithic
-			// let reactors: Vec<serenity::User> = score_info.reactors.iter().cloned().collect();
 			let scorekey = score_info.scorekey.clone();
 			let eo_user_id = score_info.eo_user_id;
 			let trigger_msg = score_info.trigger_msg;
@@ -2379,7 +2378,6 @@ struct Candidate {
 struct ScoreCardTrigger<'a> {
 	scorekey: &'a etterna::Scorekey,
 	eo_user_id: u32,
-	reactors: &'a std::collections::HashSet<serenity::User>,
 	trigger_msg: (serenity::GuildId, serenity::ChannelId, serenity::MessageId),
 }
 
@@ -2461,7 +2459,6 @@ impl OcrScoreCardManager {
 			Some(ScoreCardTrigger {
 				scorekey: &candidate.scorekey,
 				eo_user_id: candidate.user_id,
-				reactors: &candidate.reactors,
 				trigger_msg: (
 					candidate.guild_id,
 					candidate.channel_id,
