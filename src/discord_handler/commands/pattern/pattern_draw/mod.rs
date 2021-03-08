@@ -15,8 +15,6 @@ pub enum Error {
 	EmptyPattern,
 	#[error("Error in the image library")]
 	ImageError(#[from] image::ImageError),
-	#[error("Can't display a note on lane {lane} using the selected noteskin")]
-	NoteskinDoesntSupportLane { lane: usize },
 	#[error("{keymode}k not supported by selected noteskin")]
 	NoteskinDoesntSupportKeymode { keymode: usize },
 	#[error("Lane {human_readable_lane} is invalid in {keymode}k")]
@@ -39,8 +37,6 @@ pub enum Error {
 	UnclosedBracket,
 	#[error("Missing closing paranthesis")]
 	UnclosedParanthesis,
-	#[error("Unrecognized note \"{0}\". Only numbers and L/D/U/R can be used as lanes")]
-	UnrecognizedNote(String),
 }
 
 struct Sprite<'a> {

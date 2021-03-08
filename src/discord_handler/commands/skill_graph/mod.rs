@@ -48,14 +48,14 @@ fn skillgraph_inner(
 	state: &State,
 	ctx: &serenity::Context,
 	channel_id: serenity::ChannelId,
-	usernames: &[&str], // TODO: Refactor to take one &str and one &[&str]
+	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
 ) -> Result<(), Error> {
 	assert!(usernames.len() >= 1);
 
 	if usernames.len() > 20 {
 		channel_id.say(
 			&ctx.http,
-			"Relax, now. 10 simultaneous skillgraphs ought to be enough",
+			"Relax, now. 20 simultaneous skillgraphs ought to be enough",
 		)?;
 		return Ok(());
 	}
@@ -131,7 +131,7 @@ fn skillgraph_inner(
 		}
 	}
 
-	draw_skill_graph(&skill_timelines, &usernames, "output.png").map_err(Error::SkillGraphError)?;
+	draw_skill_graph(&skill_timelines, &usernames, "output.png")?;
 
 	channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 

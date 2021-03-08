@@ -99,7 +99,7 @@ fn get_random_score(
 		.scores
 		.into_iter()
 		.next()
-		.ok_or(Error::NoScoreEvenThoughOneWasRequested)
+		.ok_or_else(|| "A score was requested from EO but none was sent".into())
 }
 
 pub fn random_score(
@@ -118,7 +118,7 @@ pub fn random_score(
 		.user_registry
 		.iter_mut()
 		.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
-		.ok_or(Error::UserNotInRegistry)?;
+		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
 
 	let user_eo_id = user.eo_id;
 

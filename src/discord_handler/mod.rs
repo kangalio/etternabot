@@ -219,7 +219,12 @@ impl State {
 				}
 				Err(e) => {
 					*v2_session = None;
-					Err(Error::FailedEoLogin(e))
+
+					let e = format!(
+						"Can't complete this request because EO login failed ({})",
+						e
+					);
+					Err(e.into())
 				}
 			}
 		}
@@ -257,9 +262,11 @@ impl State {
 
 				Ok(msg.author.name.to_owned())
 			}
-			Err(eo::Error::UserNotFound) => Err(Error::CouldNotDeriveEoUsername {
-				discord_username: msg.author.name.to_owned(),
-			}),
+			Err(eo::Error::UserNotFound) => Err(format!(
+				"User {} not found on EO. Please manually specify your EtternaOnline username with `+userset`",
+				msg.author.name.to_owned()
+			)
+			.into()),
 			Err(other) => Err(other.into()),
 		}
 	}

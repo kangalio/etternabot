@@ -82,7 +82,7 @@ pub fn lookup(
 		.user_registry
 		.iter()
 		.find(|user| user.discord_username.eq_ignore_ascii_case(args))
-		.ok_or(Error::UserNotInRegistry)?;
+		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
 
 	msg.channel_id.say(
 		&ctx.http,

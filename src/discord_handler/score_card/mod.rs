@@ -125,7 +125,7 @@ pub fn send_score_card(
 
 			let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
 			if let Err(e) = r {
-				return Some(Err(Error::ReplayGraphError(e)));
+				return Some(Err(e.into()));
 			}
 
 			// in the following, DONT scale find_fastest_note_subset results by rate - I only needed

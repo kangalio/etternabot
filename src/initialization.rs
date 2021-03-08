@@ -63,10 +63,10 @@ impl serenity::EventHandler for Handler {
 			// this looks complicated, but all it does is map serenity's confusing
 			// "[Serenity] No correct json was received!" error to one of my more descriptive
 			// error types
-			if let crate::Error::SerenityError(serenity::Error::Http(e)) = &error {
+			if let Some(serenity::Error::Http(e)) = error.downcast_ref() {
 				if let serenity::HttpError::UnsuccessfulRequest(e) = &**e {
 					if e.error.code == -1 {
-						error = crate::Error::AttemptedToSendInvalidMessage;
+						error = "Attempted to send an invalid Discord message. One or more fields were probably empty".into();
 					}
 				}
 			}
