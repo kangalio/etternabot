@@ -1,47 +1,7 @@
-mod draw_skill_graph;
-use draw_skill_graph::draw_skill_graph;
+mod render;
 
 use super::State;
 use crate::{serenity, Error};
-
-pub fn skillgraph(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	let usernames = args.split_whitespace().collect::<Vec<_>>();
-	if usernames.len() == 0 {
-		skillgraph_inner(
-			state,
-			ctx,
-			msg.channel_id,
-			&[&state.get_eo_username(ctx, msg)?],
-		)
-	} else {
-		skillgraph_inner(state, ctx, msg.channel_id, &usernames)
-	}
-}
-
-pub fn rivalgraph(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	_args: &str,
-) -> Result<(), Error> {
-	let me = state.get_eo_username(ctx, msg)?;
-	let you = match state.lock_data().rival(msg.author.id.0) {
-		Some(rival) => rival.to_owned(),
-		None => {
-			msg.channel_id
-				.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
-			return Ok(());
-		}
-	};
-	skillgraph_inner(state, ctx, msg.channel_id, &[&me, &you])?;
-
-	Ok(())
-}
 
 // usernames slice must contain at least one element!
 fn skillgraph_inner(
@@ -131,9 +91,114 @@ fn skillgraph_inner(
 		}
 	}
 
-	draw_skill_graph(&skill_timelines, &usernames, "output.png")?;
+	if skill_timelines.len() == 1 {
+		render::draw_skillsets_graph(&skill_timelines[0], "output.png")
+			.map_err(|e| e.to_string())?;
+	} else {
+		render::draw_user_overalls_graph(&skill_timelines, &usernames, "output.png")
+			.map_err(|e| e.to_string())?;
+	}
 
 	channel_id.send_files(&ctx.http, vec!["output.png"], |m| m)?;
+
+	Ok(())
+}
+
+pub fn skillgraph(
+	state: &State,
+	ctx: &serenity::Context,
+	msg: &serenity::Message,
+	args: &str,
+) -> Result<(), Error> {
+	let usernames = args.split_whitespace().collect::<Vec<_>>();
+	if usernames.len() == 0 {
+		skillgraph_inner(
+			state,
+			ctx,
+			msg.channel_id,
+			&[&state.get_eo_username(ctx, msg)?],
+		)
+	} else {
+		skillgraph_inner(state, ctx, msg.channel_id, &usernames)
+	}
+}
+
+pub fn rivalgraph(
+	state: &State,
+	ctx: &serenity::Context,
+	msg: &serenity::Message,
+	_args: &str,
+) -> Result<(), Error> {
+	let me = state.get_eo_username(ctx, msg)?;
+	let you = match state.lock_data().rival(msg.author.id.0) {
+		Some(rival) => rival.to_owned(),
+		None => {
+			msg.channel_id
+				.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+			return Ok(());
+		}
+	};
+	skillgraph_inner(state, ctx, msg.channel_id, &[&me, &you])?;
+
+	Ok(())
+}
+
+// TODO: integrate into skillgraph_inner to not duplicate logic
+pub fn accuracygraph(
+	state: &State,
+	ctx: &serenity::Context,
+	msg: &serenity::Message,
+	args: &str,
+) -> Result<(), Error> {
+	let username = if args.is_empty() {
+		state.get_eo_username(ctx, msg)?
+	} else {
+		args.to_owned()
+	};
+
+	msg.channel_id.say(
+		&ctx.http,
+		format!("Requesting data for {} (this may take a while)", username),
+	)?;
+
+	let scores = state.web_session.user_scores(
+		state.web_session.user_details(&username)?.user_id,
+		..,
+		None,
+		etternaonline_api::web::UserScoresSortBy::Date,
+		etternaonline_api::web::SortDirection::Ascending,
+		false, // exclude invalid
+	)?;
+
+	fn calculate_skill_timeline(
+		scores: &etternaonline_api::web::UserScores,
+		threshold: Option<etterna::Wifescore>,
+	) -> etterna::SkillTimeline<&str> {
+		etterna::SkillTimeline::calculate(
+			scores.scores.iter().filter_map(|score| {
+				if let Some(threshold) = threshold {
+					if score.wifescore < threshold {
+						return None;
+					}
+				}
+				Some((
+					score.date.as_str(),
+					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
+				))
+			}),
+			false,
+		)
+	}
+
+	let full_timeline = calculate_skill_timeline(&scores, None);
+	let aaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAA_THRESHOLD));
+	let aaaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAAA_THRESHOLD));
+
+	render::draw_accuracy_graph(&full_timeline, &aaa_timeline, &aaaa_timeline, "output.png")
+		.map_err(|e| e.to_string())?;
+
+	msg.channel_id
+		.send_files(&ctx.http, vec!["output.png"], |m| m)?;
 
 	Ok(())
 }
