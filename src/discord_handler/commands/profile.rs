@@ -330,7 +330,7 @@ pub fn profile(
 		match &previous_ratings {
 			Some(Some(prev)) => {
 				rating_string += &format!(
-					"{: >10}:   {: >5.2} (+{: >4.2})  #{: <4}\n",
+					"{: >10}:   {: >5.2} ({: >+4.2})  #{: <4}\n",
 					skillset.to_string(),
 					details.rating.get(skillset),
 					details.rating.get(skillset) - prev.get(skillset),
