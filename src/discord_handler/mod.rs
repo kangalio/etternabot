@@ -331,6 +331,7 @@ impl State {
 			"compare" => commands::compare(self, ctx, msg, args)?,
 			"skillgraph" => commands::skillgraph(self, ctx, msg, args)?,
 			"rivalgraph" => commands::rivalgraph(self, ctx, msg, args)?,
+			"accuracygraph" | "accgraph" => commands::accuracygraph(self, ctx, msg, args)?,
 			_ => {}
 		}
 		Ok(())
