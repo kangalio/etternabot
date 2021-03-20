@@ -151,7 +151,7 @@ impl State {
 	) -> Result<Self, Error> {
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
+			Some(std::time::Duration::from_millis(300_000)), // EO takes a while for user scores
 		);
 
 		let config = Config::load();
