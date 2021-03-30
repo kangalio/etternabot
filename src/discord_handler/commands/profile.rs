@@ -1,9 +1,5 @@
-use super::State;
-use crate::{serenity, Error};
-
-const CMD_COMPARE_HELP: &str = "Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic";
-const CMD_USERSET_HELP: &str = "Call this command with `+userset YOUR_EO_USERNAME`";
-const CMD_RIVALSET_HELP: &str = "Call this command with `+rivalset YOUR_EO_USERNAME`";
+use super::Context;
+use crate::Error;
 
 fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
 	if country_code.chars().any(|c| !c.is_alphabetic()) {
@@ -57,16 +53,9 @@ fn rescale(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Ra
 	dest_range.start + proportion * (dest_range.end - dest_range.start)
 }
 
-fn profile_compare(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	me: &str,
-	you: &str,
-	expanded: bool,
-) -> Result<(), Error> {
-	let me = state.v2()?.user_details(me)?;
-	let you = state.v2()?.user_details(you)?;
+fn profile_compare(ctx: Context<'_>, me: &str, you: &str, expanded: bool) -> Result<(), Error> {
+	let me = ctx.data.v2()?.user_details(me)?;
+	let you = ctx.data.v2()?.user_details(you)?;
 
 	let my_rating = &me.rating;
 	let your_rating = &you.rating;
@@ -132,7 +121,7 @@ fn profile_compare(
 		None
 	};
 
-	msg.channel_id.send_message(&ctx.http, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|e| {
 			e.color(crate::ETTERNA_COLOR)
 				.title(format!(
@@ -159,78 +148,71 @@ fn profile_compare(
 	Ok(())
 }
 
-pub fn rival(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	let me = &state.get_eo_username(ctx, msg)?;
-	let you = match state.lock_data().rival(msg.author.id.0) {
+/// Case-insensitively matches the literal "expanded"
+struct Expanded;
+impl<'a> poise::ParseConsuming<'a> for Expanded {
+	type Err = ();
+	fn pop_from(args: &poise::Arguments<'a>) -> Result<(poise::Arguments<'a>, Self), ()> {
+		let (args, word) = args.pop::<String>().map_err(|_| ())?;
+		if word.eq_ignore_ascii_case("expanded") {
+			Ok((args, Self))
+		} else {
+			Err(())
+		}
+	}
+}
+
+pub fn rival(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let expanded = poise::parse_args!(args => (Option<Expanded>))?;
+
+	let me = &ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?;
+	let you = match ctx.data.lock_data().rival(ctx.msg.author.id.0) {
 		Some(rival) => rival.to_owned(),
 		None => {
-			msg.channel_id
-				.say(&ctx.http, "Set your rival first with `+rivalset USERNAME`")?;
+			ctx.msg.channel_id.say(
+				&ctx.discord.http,
+				"Set your rival first with `+rivalset USERNAME`",
+			)?;
 			return Ok(());
 		}
 	};
 
-	let expanded = args == "expanded";
-
-	profile_compare(state, ctx, msg, me, &you, expanded)
+	profile_compare(ctx, me, &you, expanded.is_some())
 }
 
-pub fn compare(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	let args: Vec<&str> = args.split_whitespace().collect();
+pub fn compare(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let (me, you, expanded) =
+		poise::parse_args!(args => #[lazy] (Option<String>), (String), (Option<Expanded>))?;
 
-	let (me, you, expanded) = match *args.as_slice() {
-		[you] => (state.get_eo_username(ctx, msg)?, you, false),
-		[you, "expanded"] => (state.get_eo_username(ctx, msg)?, you, true),
-		[me, you] => (me.to_owned(), you, false),
-		[me, you, "expanded"] => (me.to_owned(), you, true),
-		_ => {
-			msg.channel_id.say(&ctx.http, CMD_COMPARE_HELP)?;
-			return Ok(());
-		}
+	let me = match me {
+		Some(x) => x,
+		None => ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?,
 	};
 
-	profile_compare(state, ctx, msg, &me, you, expanded)
+	profile_compare(ctx, &me, &you, expanded.is_some())
 }
 
-pub fn userset(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	if args.is_empty() {
-		msg.channel_id.say(&ctx.http, CMD_USERSET_HELP)?;
-		return Ok(());
-	}
+pub fn userset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let username = poise::parse_args!(args => (String))?;
 
 	let new_user_entry = super::config::UserRegistryEntry {
-		discord_id: msg.author.id.0,
-		discord_username: msg.author.name.to_owned(),
-		eo_id: state.web_session.user_details(args)?.user_id,
-		eo_username: args.to_owned(),
+		discord_id: ctx.msg.author.id.0,
+		discord_username: ctx.msg.author.name.to_owned(),
+		eo_id: ctx.data.web_session.user_details(&username)?.user_id,
+		eo_username: username.to_owned(),
 		last_known_num_scores: None,
 		last_rating: None,
 	};
 
-	let mut data = state.lock_data();
+	let mut data = ctx.data.lock_data();
 	match data
 		.user_registry
 		.iter_mut()
-		.find(|u| u.discord_id == msg.author.id.0)
+		.find(|u| u.discord_id == ctx.msg.author.id.0)
 	{
 		Some(existing_user_entry) => {
-			msg.channel_id.say(
-				&ctx.http,
+			poise::say_reply(
+				ctx,
 				format!(
 					"Successfully updated username from `{}` to `{}`",
 					existing_user_entry.eo_username, new_user_entry.eo_username,
@@ -240,10 +222,7 @@ pub fn userset(
 			*existing_user_entry = new_user_entry;
 		}
 		None => {
-			msg.channel_id.say(
-				&ctx.http,
-				format!("Successfully set username to `{}`", args),
-			)?;
+			poise::say_reply(ctx, format!("Successfully set username to `{}`", username))?;
 
 			data.user_registry.push(new_user_entry);
 		}
@@ -252,51 +231,41 @@ pub fn userset(
 	Ok(())
 }
 
-pub fn rivalset(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	if args.is_empty() {
-		msg.channel_id.say(&ctx.http, CMD_RIVALSET_HELP)?;
-		return Ok(());
-	}
-	if let Err(etternaonline_api::Error::UserNotFound) = state.v2()?.user_details(args) {
-		msg.channel_id
-			.say(&ctx.http, &format!("User `{}` doesn't exist", args))?;
+pub fn rivalset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let username = poise::parse_args!(args => (String))?;
+
+	if let Err(etternaonline_api::Error::UserNotFound) = ctx.data.v2()?.user_details(&username) {
+		ctx.msg
+			.channel_id
+			.say(&ctx.discord.http, &format!("User `{}` doesn't exist", args))?;
 		return Ok(());
 	}
 
-	let response = match state
+	let response = match ctx
+		.data
 		.lock_data()
-		.set_rival(msg.author.id.0, args.to_owned())
+		.set_rival(ctx.msg.author.id.0, username.to_owned())
 	{
 		Some(old_rival) => format!(
 			"Successfully updated your rival from `{}` to `{}`",
-			old_rival, args,
+			old_rival, username,
 		),
-		None => format!("Successfully set your rival to `{}`", args),
+		None => format!("Successfully set your rival to `{}`", username),
 	};
-	msg.channel_id.say(&ctx.http, &response)?;
+	poise::say_reply(ctx, response)?;
 
 	Ok(())
 }
 
-pub fn profile(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	text: &str,
-) -> Result<(), Error> {
-	let (eo_username, overwrite_prev_ratings) = if text.is_empty() {
-		(state.get_eo_username(ctx, msg)?, true)
-	} else {
-		(text.to_owned(), false)
+pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let eo_username = poise::parse_args!(args => (Option<String>))?;
+	let (eo_username, overwrite_prev_ratings) = match eo_username {
+		Some(eo_username) => (eo_username, false),
+		None => (ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?, true),
 	};
 
-	let details = state.v2()?.user_details(&eo_username)?;
-	let ranks = state.v2()?.user_ranks_per_skillset(&eo_username)?;
+	let details = ctx.data.v2()?.user_details(&eo_username)?;
+	let ranks = ctx.data.v2()?.user_ranks_per_skillset(&eo_username)?;
 
 	let mut title = eo_username.to_owned();
 	if details.is_moderator {
@@ -317,7 +286,7 @@ pub fn profile(
 		}
 	}
 
-	let mut data = state.lock_data();
+	let mut data = ctx.data.lock_data();
 	// None if user is not in registry, None(None) if user is in registry but no prev rating
 	let previous_ratings = data
 		.user_registry
@@ -356,7 +325,7 @@ pub fn profile(
 		}
 	}
 
-	msg.channel_id.send_message(&ctx.http, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|embed| {
 			embed
 				.description(rating_string)

@@ -67,7 +67,7 @@ impl OcrScoreCardManager {
 		&mut self,
 		ctx: &serenity::Context,
 		reaction: &serenity::Reaction,
-	) -> Result<Option<ScoreCardTrigger>, crate::Error> {
+	) -> Result<Option<ScoreCardTrigger<'_>>, crate::Error> {
 		// println!("Got reaction in score ocr card manager");
 
 		// Let's check that the user even clicked the correct emoji type

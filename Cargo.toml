@@ -26,6 +26,7 @@ thread-scoped = "1.0.2"
 leptess = { git = "https://github.com/kangalioo/leptess" }
 text_io = { git = "https://github.com/kangalioo/rust-si" }
 imageproc = "0.21.0"
+poise = { path = "../poise" }
 
 [profile.release]
 debug = 2 # full debug info, to allow me to use gdb the next time the bot mysteriously fails out of the blue

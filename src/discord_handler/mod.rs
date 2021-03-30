@@ -13,7 +13,9 @@ use crate::{serenity, Error};
 use config::{Config, Data};
 use etternaonline_api as eo;
 
-fn extract_judge_from_string(string: &str) -> Option<&etterna::Judge> {
+type Context<'a> = poise::Context<'a, State, Error>;
+
+fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 	static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> =
 		once_cell::sync::Lazy::new(|| regex::Regex::new(r"[jJ](\d)").unwrap());
 
@@ -131,6 +133,247 @@ impl Drop for AutoSaveGuard<'_> {
 	}
 }
 
+/// true if sent in DMs
+fn user_has_manage_messages_permission(ctx: Context<'_>) -> Result<bool, Error> {
+	Ok(get_guild_permissions(ctx.discord, ctx.msg)?.map_or(true, |p| p.manage_messages()))
+}
+
+/// If the message is in etternaonline server, and not in an allowed channel, and not sent
+/// with elevated privileges, return false
+fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error> {
+	Ok(
+		if let Some(guild_member) = &get_guild_member(ctx.discord, ctx.msg)? {
+			user_has_manage_messages_permission(ctx)?
+				|| ctx
+					.data
+					.config
+					.allowed_channels
+					.contains(&ctx.msg.channel_id)
+				|| guild_member.guild_id != ctx.data.config.etterna_online_guild_id
+		} else {
+			true
+		},
+	)
+}
+
+pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
+	poise::FrameworkOptions {
+		command_check: user_is_allowed_bot_interaction,
+		listener: |ctx, event, framework, state| match event {
+			poise::Event::Message { new_message } => {
+				let ctx = poise::Context {
+					data: state,
+					discord: ctx,
+					msg: new_message,
+					framework,
+				};
+				listeners::listen_message(
+					ctx,
+					user_has_manage_messages_permission(ctx)?,
+					user_is_allowed_bot_interaction(ctx)?,
+				)
+			}
+			poise::Event::GuildMemberUpdate {
+				old_if_available,
+				new,
+			} => listeners::guild_member_update(state, ctx, old_if_available.as_ref(), &new),
+			poise::Event::ReactionAdd { add_reaction } => {
+				listeners::reaction_add(state, &ctx, &add_reaction)
+			}
+			_ => Ok(()),
+		},
+		on_error: |e, ctx| match ctx {
+			poise::ErrorContext::Command(ctx) => {
+				let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
+					// If we caught an argument parse error, give a helpful error message with the
+					// command explanation if available
+					if let Some(explanation) = &ctx.command.options.explanation {
+						format!("{}\n{}", e, explanation)
+					} else {
+						format!("You entered the command wrong, please check the help menu\n`{}`", e)
+					}
+				} else {
+					e.to_string()
+				};
+				if let Err(e) = ctx.ctx.msg.channel_id.say(ctx.ctx.discord, user_error_msg) {
+					println!("Error while posting argument parse error: {}", e);
+				}
+			}
+			_ => println!("Something... happened?"),
+		},
+		broadcast_typing: true,
+		edit_tracker: Some(poise::EditTracker::for_timespan(std::time::Duration::from_secs(3600))),
+		commands: vec![
+			poise::Command {
+				name: "help",
+				action: commands::help,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "profile",
+				action: commands::profile,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "advprof",
+				action: commands::profile,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "lastsession",
+				action: commands::latest_scores,
+				options: poise::CommandOptions {
+					aliases: &["ls"],
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "pattern",
+				action: |ctx, args| commands::pattern(ctx.data, ctx.discord, ctx.msg, args),
+				options: poise::CommandOptions {
+					check: Some(|_| Ok(true)), // allow pattern command everywhere
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "ping",
+				action: commands::ping,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "servers",
+				action: commands::servers,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "uptime",
+				action: commands::uptime,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "randomscore",
+				action: commands::random_score,
+				options: poise::CommandOptions {
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "lookup",
+				action: commands::lookup,
+				options: poise::CommandOptions {
+					explanation: Some("Call this command with `+lookup DISCORDUSERNAME`".into()),
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "quote",
+				action: commands::quote,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "scrollset",
+				action: commands::scrollset,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					explanation: Some("Call this command with `+scrollset [down/up]`".into()),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "userset",
+				action: commands::userset,
+				options: poise::CommandOptions {
+					explanation: Some("Call this command with `+userset YOUR_EO_USERNAME`".into()),
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "rivalset",
+				action: commands::rivalset,
+				options: poise::CommandOptions {
+					explanation: Some("Call this command with `+rivalset YOUR_EO_USERNAME`".into()),
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "rs",
+				action: commands::rs,
+				options: poise::CommandOptions {
+					explanation: Some("Call this command with `+rs [username] [judge]`".into()),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "rival",
+				action: commands::rival,
+				options: poise::CommandOptions {
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "compare",
+				action: commands::compare,
+				options: poise::CommandOptions {
+					explanation: Some("Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic".into()),
+					track_edits: Some(true),
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "skillgraph",
+				action: |ctx, args| commands::skillgraph(ctx.data, ctx.discord, ctx.msg, args),
+				options: poise::CommandOptions {
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "rivalgraph",
+				action: |ctx, args| commands::rivalgraph(ctx.data, ctx.discord, ctx.msg, args),
+				options: poise::CommandOptions {
+					..Default::default()
+				},
+			},
+			poise::Command {
+				name: "accuracygraph",
+				action: |ctx, args| commands::accuracygraph(ctx.data, ctx.discord, ctx.msg, args),
+				options: poise::CommandOptions {
+					aliases: &["accgraph"],
+					..Default::default()
+				},
+			},
+		],
+		..Default::default()
+	}
+
+	// TODO: add topNN command
+}
+
 pub struct State {
 	auth: crate::Auth,
 	bot_start_time: std::time::Instant,
@@ -196,7 +439,7 @@ impl State {
 	}
 
 	// Automatically saves when the returned guard goes out of scope
-	fn lock_data(&self) -> AutoSaveGuard {
+	fn lock_data(&self) -> AutoSaveGuard<'_> {
 		AutoSaveGuard {
 			guard: self._data.lock(),
 		}
@@ -206,7 +449,7 @@ impl State {
 	/// retry login just to make sure that EO is _really_ done
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
 	/// holds the result from its call to v2(), thread 1 will block.
-	fn v2(&self) -> Result<IdkWhatImDoing, Error> {
+	fn v2(&self) -> Result<IdkWhatImDoing<'_>, Error> {
 		let mut v2_session = self.v2_session.lock();
 
 		if v2_session.is_some() {
@@ -281,142 +524,5 @@ impl State {
 			Some(user) => Ok(user.eo_id),
 			None => Ok(self.web_session.user_details(eo_username)?.user_id), // TODO: integrate into registry?
 		}
-	}
-
-	fn command(
-		&self,
-		ctx: &serenity::Context,
-		msg: &serenity::Message,
-		cmd: &str,
-		args: &str,
-	) -> Result<(), Error> {
-		println!(
-			"Executing command '{}' from {} at {:?} with args '{}'",
-			cmd,
-			&msg.author.name,
-			msg.timestamp.date(),
-			args
-		);
-
-		if let Some(limit) = cmd.strip_prefix("top") {
-			if let Ok(limit) = limit.parse() {
-				commands::top_scores(self, ctx, msg, args, limit)?;
-			} else {
-				msg.channel_id.say(&ctx.http, commands::CMD_TOP_HELP)?;
-			}
-			return Ok(());
-		}
-
-		match cmd {
-			"help" => commands::help(self, ctx, msg, args)?,
-			"profile" => commands::profile(self, ctx, msg, args)?,
-			"advprof" => {
-				msg.channel_id.say(&ctx.http, "Note: +profile now does the same thing as +advprof; there's no reason to use +advprof anymore")?;
-				commands::profile(self, ctx, msg, args)?;
-			}
-			"lastsession" | "ls" => commands::latest_scores(self, ctx, msg, args)?,
-			"pattern" => commands::pattern(self, ctx, msg, args)?,
-			"ping" => commands::ping(self, ctx, msg, args)?,
-			"servers" => commands::servers(self, ctx, msg, args)?,
-			"uptime" => commands::uptime(self, ctx, msg, args)?,
-			"random_score" => commands::random_score(self, ctx, msg, args)?,
-			"lookup" => commands::lookup(self, ctx, msg, args)?,
-			"quote" => commands::quote(self, ctx, msg, args)?,
-			"scrollset" => commands::scrollset(self, ctx, msg, args)?,
-			"userset" => commands::userset(self, ctx, msg, args)?,
-			"rivalset" => commands::rivalset(self, ctx, msg, args)?,
-			"rs" => commands::rs(self, ctx, msg, args)?,
-			"latest_scores" => commands::latest_scores(self, ctx, msg, args)?,
-			"rival" => commands::rival(self, ctx, msg, args)?,
-			"compare" => commands::compare(self, ctx, msg, args)?,
-			"skillgraph" => commands::skillgraph(self, ctx, msg, args)?,
-			"rivalgraph" => commands::rivalgraph(self, ctx, msg, args)?,
-			"accuracygraph" | "accgraph" => commands::accuracygraph(self, ctx, msg, args)?,
-			_ => {}
-		}
-		Ok(())
-	}
-
-	pub fn message(
-		&self,
-		ctx: &serenity::Context,
-		msg: &serenity::Message,
-		was_explicitly_invoked: &mut bool,
-	) -> Result<(), Error> {
-		// Let's not do this, because if a non existant command is called (e.g. `+asdfg`) there'll
-		// be typing broadcasted, but no actual response, which is stupid
-		// if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http) {
-		// 	println!("Couldn't broadcast typing: {}", e);
-		// }
-
-		let guild_member = get_guild_member(ctx, msg)?;
-		// true if sent in DMs
-		let manages_messages =
-			get_guild_permissions(ctx, msg)?.map_or(true, |p| p.manage_messages());
-
-		// If the message is in etternaonline server, and not in an allowed channel, and not sent
-		// with elevated privileges, then don't process the command
-		let user_is_allowed_bot_interaction = {
-			// if msg is in server (opposed to DMs)
-			if let Some(guild_member) = &guild_member {
-				if guild_member.guild_id == self.config.etterna_online_guild_id
-					&& !self.config.allowed_channels.contains(&msg.channel_id)
-					&& !manages_messages
-				{
-					false
-				} else {
-					true
-				}
-			} else {
-				true
-			}
-		};
-
-		listeners::listen_message(
-			self,
-			ctx,
-			msg,
-			manages_messages,
-			user_is_allowed_bot_interaction,
-		)?;
-
-		if msg.content.starts_with('+') {
-			*was_explicitly_invoked = true;
-
-			// UNWRAP: we just checked it has a string at the beginning that we can chop away
-			let text = &msg.content.get(1..).unwrap();
-
-			// Split message into command part and parameter part
-			let mut a = text.splitn(2, ' ');
-			// UNWRAP: msg.content can't be empty, hence the token iterator has at least one elem
-			let command_name = a.next().unwrap().trim();
-			let parameters = a.next().unwrap_or("").trim();
-
-			// only the pattern command is allowed everywhere
-			// this implementation is bad because this function shouldn't know about the specific
-			// commands that exist...
-			if user_is_allowed_bot_interaction || command_name == "pattern" {
-				self.command(&ctx, &msg, command_name, parameters)?;
-			}
-		}
-
-		Ok(())
-	}
-
-	pub fn guild_member_update(
-		&self,
-		ctx: serenity::Context,
-		old: Option<serenity::Member>,
-		new: serenity::Member,
-	) -> Result<(), Error> {
-		listeners::guild_member_update(self, ctx, old, new)
-	}
-
-	pub fn reaction_add(
-		&self,
-		ctx: serenity::Context,
-		reaction: serenity::Reaction,
-	) -> Result<(), Error> {
-		listeners::reaction_add(self, &ctx, &reaction)
 	}
 }

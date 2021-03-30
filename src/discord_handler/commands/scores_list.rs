@@ -1,4 +1,4 @@
-use super::State;
+use super::{Context, State};
 use crate::{serenity, Error};
 
 pub const CMD_TOP_HELP: &str =
@@ -118,21 +118,16 @@ pub fn top_scores(
 	Ok(())
 }
 
-pub fn latest_scores(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	text: &str,
-) -> Result<(), Error> {
-	let eo_username = if text.is_empty() {
-		state.get_eo_username(ctx, msg)?
-	} else {
-		text.to_owned()
+pub fn latest_scores(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let eo_username = poise::parse_args!(args => (Option<String>))?;
+	let eo_username = match eo_username {
+		Some(x) => x,
+		None => ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?,
 	};
 
-	let latest_scores = state.v2()?.user_latest_scores(&eo_username)?;
+	let latest_scores = ctx.data.v2()?.user_latest_scores(&eo_username)?;
 
-	let country_code = state.v2()?.user_details(&eo_username)?.country_code;
+	let country_code = ctx.data.v2()?.user_details(&eo_username)?.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in latest_scores.iter().enumerate() {
@@ -149,7 +144,7 @@ pub fn latest_scores(
 
 	let title = format!("{}'s Last 10 Scores", eo_username);
 
-	msg.channel_id.send_message(&ctx.http, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|e| {
 			e.color(crate::ETTERNA_COLOR)
 				.description(&response)

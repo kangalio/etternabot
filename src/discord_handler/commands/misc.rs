@@ -1,51 +1,34 @@
 //! Miscellaneous "fun-fact" commands
 
-use super::State;
-use crate::{serenity, Error};
+use super::Context;
+use crate::Error;
 
-const CMD_LOOKUP_HELP: &str = "Call this command with `+lookup DISCORDUSERNAME`";
-
-pub fn ping(
-	_state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
+pub fn ping(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	let mut response = String::from("Pong");
 	for _ in 0..args.matches("ping").count() {
 		response += " pong";
 	}
 	response += "!";
-	msg.channel_id.say(&ctx.http, &response)?;
+	poise::say_reply(ctx, response)?;
 
 	Ok(())
 }
 
-pub fn servers(
-	_state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	_args: &str,
-) -> Result<(), Error> {
-	let guilds = ctx.http.get_current_user()?.guilds(&ctx.http)?;
+pub fn servers(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
+	let guilds = ctx.discord.http.get_current_user()?.guilds(ctx.discord)?;
 
 	let mut response = format!("I am currently in {} servers!\n", guilds.len());
 	for guild in guilds {
 		response += &format!("- {}\n", guild.name);
 	}
 
-	msg.channel_id.say(&ctx.http, response)?;
+	poise::say_reply(ctx, response)?;
 
 	Ok(())
 }
 
-pub fn uptime(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	_args: &str,
-) -> Result<(), Error> {
-	let uptime = std::time::Instant::now() - state.bot_start_time;
+pub fn uptime(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
+	let uptime = std::time::Instant::now() - ctx.data.bot_start_time;
 
 	let div_mod = |a, b| (a / b, a % b);
 
@@ -55,8 +38,8 @@ pub fn uptime(
 	let (hours, minutes) = div_mod(minutes, 60);
 	let (days, hours) = div_mod(hours, 24);
 
-	msg.channel_id.say(
-		&ctx.http,
+	poise::say_reply(
+		ctx,
 		format!(
 			"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
 			days, hours, minutes, seconds, millis
@@ -66,26 +49,21 @@ pub fn uptime(
 	Ok(())
 }
 
-pub fn lookup(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	if args.is_empty() {
-		msg.channel_id.say(&ctx.http, CMD_LOOKUP_HELP)?;
-		return Ok(());
-	}
+pub fn lookup(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let discord_username = poise::parse_args!(args => (String))?;
 
-	let data = state.lock_data();
+	let data = ctx.data.lock_data();
 	let user = data
 		.user_registry
 		.iter()
-		.find(|user| user.discord_username.eq_ignore_ascii_case(args))
+		.find(|user| {
+			user.discord_username
+				.eq_ignore_ascii_case(&discord_username)
+		})
 		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
 
-	msg.channel_id.say(
-		&ctx.http,
+	poise::say_reply(
+		ctx,
 		format!(
 			"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
 			user.discord_username, user.eo_username, user.eo_username,
@@ -95,22 +73,17 @@ pub fn lookup(
 	Ok(())
 }
 
-pub fn quote(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	_args: &str,
-) -> Result<(), Error> {
+pub fn quote(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
 	use rand::Rng as _;
 
-	let quote_index = rand::thread_rng().gen_range(0, state.config.quotes.len());
+	let quote_index = rand::thread_rng().gen_range(0, ctx.data.config.quotes.len());
 	// UNWRAP: index is below quotes len because we instructed the rand crate to do so
-	let quote = state.config.quotes.get(quote_index).unwrap();
+	let quote = ctx.data.config.quotes.get(quote_index).unwrap();
 	let string = match &quote.source {
 		Some(source) => format!("> {}\n~ {}", quote.quote, source),
 		None => format!("> {}", quote.quote),
 	};
-	msg.channel_id.say(&ctx.http, &string)?;
+	poise::say_reply(ctx, string)?;
 
 	Ok(())
 }

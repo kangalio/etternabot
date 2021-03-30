@@ -1,14 +1,7 @@
-use super::State;
-use crate::{serenity, Error};
+use super::Context;
+use crate::Error;
 
-pub fn help(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	use rand::Rng as _;
-
+pub fn help(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	let embed_contents = if args.eq_ignore_ascii_case("pattern") {
 		r#"
 **+pattern [down/up] [NN]ths [noteskin] [zoom]x [keymode]k PATTERN STRING**
@@ -31,10 +24,13 @@ Examples:
 `+pattern 6k [34]52[34]25` draws a pattern in 6k mode, even though the notes span across just 5 lanes
 			"#.to_owned()
 	} else {
-		let minanym = &state
+		use rand::seq::SliceRandom as _;
+
+		let minanym = &ctx
+			.data
 			.config
 			.minanyms
-			.get(rand::thread_rng().gen_range(0, state.config.minanyms.len()))
+			.choose(&mut rand::thread_rng())
 			.unwrap();
 		format!(
 			r#"
@@ -46,9 +42,9 @@ Here are my commands: (Descriptions by Fission)
 *For when top9 isn't enough*
 **+top[nn] [username] [skillset]**
 *Sometimes we take things too far*
-**+compare [user1] [user2]**
+**+compare [user1] [user2] ["expanded"]**
 *One person is an objectively better person than the other, find out which one!*
-**+rival**/**+rival expanded**
+**+rival ["expanded"]**
 *But are you an objectively better person than gary oak?*
 **+rivalgraph**
 
@@ -78,7 +74,7 @@ your message, I will also show the wifescores with that judge.
 		)
 	};
 
-	msg.channel_id.send_message(&ctx.http, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|e| e.description(embed_contents).color(crate::ETTERNA_COLOR))
 	})?;
 	Ok(())

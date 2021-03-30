@@ -15,9 +15,21 @@ pub struct ScoreCard<'a> {
 pub fn send_score_card(
 	state: &State,
 	ctx: &serenity::Context,
-	channel_id: serenity::ChannelId,
+	channel: serenity::ChannelId,
 	info: ScoreCard<'_>,
 ) -> Result<(), Error> {
+	let message = score_card_inner(state, info)?;
+	channel.send_message(ctx, |m| {
+		*m = message;
+		m
+	})?;
+	Ok(())
+}
+
+fn score_card_inner(
+	state: &State,
+	info: ScoreCard<'_>,
+) -> Result<serenity::CreateMessage<'static>, Error> {
 	let score = state.v2()?.score_data(info.scorekey)?;
 
 	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
@@ -241,141 +253,144 @@ pub fn send_score_card(
 
 	let replay_analysis = do_replay_analysis(&score).transpose()?;
 
-	channel_id.send_message(&ctx.http, |m| {
-		m.embed(|e| {
-			e.color(crate::ETTERNA_COLOR)
-				.author(|a| {
-					a.name(&score.song_name)
-						.url(format!(
-							"https://etternaonline.com/song/view/{}",
-							score.song_id
-						))
-						.icon_url(format!(
-							"https://etternaonline.com/img/flags/{}.png",
-							score.user.country_code
-						))
-				})
-				// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
-				.description(description)
-				.footer(|f| {
-					f.text(format!("Played by {}", &score.user.username))
-						.icon_url(format!(
-							"https://etternaonline.com/avatars/{}",
-							score.user.avatar
-						))
-				});
+	let mut embed = serenity::CreateEmbed::default();
+	embed
+		.color(crate::ETTERNA_COLOR)
+		.author(|a| {
+			a.name(&score.song_name)
+				.url(format!(
+					"https://etternaonline.com/song/view/{}",
+					score.song_id
+				))
+				.icon_url(format!(
+					"https://etternaonline.com/img/flags/{}.png",
+					score.user.country_code
+				))
+		})
+		// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
+		.description(description)
+		.footer(|f| {
+			f.text(format!("Played by {}", &score.user.username))
+				.icon_url(format!(
+					"https://etternaonline.com/avatars/{}",
+					score.user.avatar
+				))
+		});
 
-			if let Some(analysis) = &replay_analysis {
-				let wifescore_floating_point_digits = match analysis
-					.scoring_system_comparison_j4
-					.wife3_score
-					.as_percent() > 99.7
-				{
-					true => 4,
-					false => 2,
-				};
+	if let Some(analysis) = &replay_analysis {
+		let wifescore_floating_point_digits = match analysis
+			.scoring_system_comparison_j4
+			.wife3_score
+			.as_percent()
+			> 99.7
+		{
+			true => 4,
+			false => 2,
+		};
 
-				let alternative_text_1;
-				let alternative_text_2;
-				let alternative_text_4;
-				if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
-					// UNWRAP: if we're in this branch, info.alternative_judge is Some
-					alternative_text_1 = format!(
-						", {:.digits$} on {}",
-						comparison.wife2_score,
-						info.alternative_judge.unwrap().name,
-						digits = wifescore_floating_point_digits,
-					);
-					alternative_text_2 = format!(
-						", {:.digits$} on {}",
-						comparison.wife3_score,
-						info.alternative_judge.unwrap().name,
-						digits = wifescore_floating_point_digits,
-					);
-					alternative_text_4 = format!(
-						", {:.digits$} on {}",
-						comparison.wife3_score_zero_mean,
-						info.alternative_judge.unwrap().name,
-						digits = wifescore_floating_point_digits,
-					);
-				} else {
-					alternative_text_1 = "".to_owned();
-					alternative_text_2 = "".to_owned();
-					alternative_text_4 = "".to_owned();
-				}
+		let alternative_text_1;
+		let alternative_text_2;
+		let alternative_text_4;
+		if let Some(comparison) = &analysis.scoring_system_comparison_alternative {
+			// UNWRAP: if we're in this branch, info.alternative_judge is Some
+			alternative_text_1 = format!(
+				", {:.digits$} on {}",
+				comparison.wife2_score,
+				info.alternative_judge.unwrap().name,
+				digits = wifescore_floating_point_digits,
+			);
+			alternative_text_2 = format!(
+				", {:.digits$} on {}",
+				comparison.wife3_score,
+				info.alternative_judge.unwrap().name,
+				digits = wifescore_floating_point_digits,
+			);
+			alternative_text_4 = format!(
+				", {:.digits$} on {}",
+				comparison.wife3_score_zero_mean,
+				info.alternative_judge.unwrap().name,
+				digits = wifescore_floating_point_digits,
+			);
+		} else {
+			alternative_text_1 = "".to_owned();
+			alternative_text_2 = "".to_owned();
+			alternative_text_4 = "".to_owned();
+		}
 
-				e.attachment(analysis.replay_graph_path)
-					.field(
-						"Score comparisons",
-						format!(
-							concat!(
-								"{}",
-								"**Wife2**: {:.digits$}%{}\n",
-								"**Wife3**: {:.digits$}%{}\n",
-								"**Wife3**: {:.digits$}%{} (mean of {:.1}ms corrected)",
-							),
-							if (analysis
-								.scoring_system_comparison_j4
-								.wife3_score
-								.as_percent() - score.wifescore.as_percent())
-							.abs() > 0.01
-							{
-								"_Note: these calculated scores are slightly inaccurate_\n"
-							} else {
-								""
-							},
-							analysis
-								.scoring_system_comparison_j4
-								.wife2_score
-								.as_percent(),
-							alternative_text_1,
-							analysis
-								.scoring_system_comparison_j4
-								.wife3_score
-								.as_percent(),
-							alternative_text_2,
-							analysis
-								.scoring_system_comparison_j4
-								.wife3_score_zero_mean
-								.as_percent(),
-							alternative_text_4,
-							analysis.mean_offset * 1000.0,
-							digits = wifescore_floating_point_digits,
-						),
-						false,
-					)
-					.field(
-						"Tap speeds",
-						format!(
-							"Fastest jack over a course of 20 notes: {:.2} NPS\n\
+		embed
+			.attachment(analysis.replay_graph_path)
+			.field(
+				"Score comparisons",
+				format!(
+					concat!(
+						"{}",
+						"**Wife2**: {:.digits$}%{}\n",
+						"**Wife3**: {:.digits$}%{}\n",
+						"**Wife3**: {:.digits$}%{} (mean of {:.1}ms corrected)",
+					),
+					if (analysis
+						.scoring_system_comparison_j4
+						.wife3_score
+						.as_percent() - score.wifescore.as_percent())
+					.abs() > 0.01
+					{
+						"_Note: these calculated scores are slightly inaccurate_\n"
+					} else {
+						""
+					},
+					analysis
+						.scoring_system_comparison_j4
+						.wife2_score
+						.as_percent(),
+					alternative_text_1,
+					analysis
+						.scoring_system_comparison_j4
+						.wife3_score
+						.as_percent(),
+					alternative_text_2,
+					analysis
+						.scoring_system_comparison_j4
+						.wife3_score_zero_mean
+						.as_percent(),
+					alternative_text_4,
+					analysis.mean_offset * 1000.0,
+					digits = wifescore_floating_point_digits,
+				),
+				false,
+			)
+			.field(
+				"Tap speeds",
+				format!(
+					"Fastest jack over a course of 20 notes: {:.2} NPS\n\
 							Fastest total NPS over a course of 100 notes: {:.2} NPS",
-							analysis.fastest_finger_jackspeed, analysis.fastest_nps,
-						),
-						false,
-					)
-					.field(
-						"Combos",
-						format!(
-							"Longest combo: {}\n\
+					analysis.fastest_finger_jackspeed, analysis.fastest_nps,
+				),
+				false,
+			)
+			.field(
+				"Combos",
+				format!(
+					"Longest combo: {}\n\
 							Longest perfect combo: {}\n\
 							Longest marvelous combo: {}\n\
 							Longest 100% combo: {}\n",
-							analysis.longest_combo,
-							analysis.longest_perf_combo,
-							analysis.longest_marv_combo,
-							analysis.longest_100_combo,
-						),
-						false,
-					);
-			}
+					analysis.longest_combo,
+					analysis.longest_perf_combo,
+					analysis.longest_marv_combo,
+					analysis.longest_100_combo,
+				),
+				false,
+			);
+	}
 
-			e
-		});
-		if let Some(analysis) = &replay_analysis {
-			m.add_file(analysis.replay_graph_path);
-		}
-		m
-	})?;
+	let mut message = serenity::CreateMessage::default();
+	message.embed(|e| {
+		*e = embed;
+		e
+	});
+	if let Some(analysis) = &replay_analysis {
+		message.add_file(analysis.replay_graph_path);
+	}
 
-	Ok(())
+	Ok(message)
 }

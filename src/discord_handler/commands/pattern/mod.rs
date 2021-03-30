@@ -1,10 +1,8 @@
 mod pattern_draw;
 pub use pattern_draw::{Error as PatternError, Noteskin};
 
-use super::State;
+use super::{Context, State};
 use crate::{serenity, Error};
-
-const CMD_SCROLLSET_HELP: &str = "Call this command with `+scrollset [down/up]`";
 
 pub struct NoteskinProvider {
 	dbz: pattern_draw::Noteskin,
@@ -296,28 +294,16 @@ pub fn pattern(
 	Ok(())
 }
 
-pub fn scrollset(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	let scroll = match &args.to_lowercase() as &str {
-		"down" | "downscroll" => etterna::ScrollDirection::Downscroll,
+pub fn scrollset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let scroll = poise::parse_args!(args => (String))?;
+	let scroll = match scroll.to_lowercase().as_str() {
+		"down" | "downscroll" | "reverse" => etterna::ScrollDirection::Downscroll,
 		"up" | "upscroll" => etterna::ScrollDirection::Upscroll,
-		"" => {
-			msg.channel_id.say(&ctx.http, CMD_SCROLLSET_HELP)?;
-			return Ok(());
-		}
-		_ => {
-			msg.channel_id
-				.say(&ctx.http, format!("No such scroll '{}'", args))?;
-			return Ok(());
-		}
+		_ => return Err(format!("No such scroll '{}'", scroll).into()),
 	};
-	state.lock_data().set_scroll(msg.author.id.0, scroll);
-	msg.channel_id
-		.say(&ctx.http, &format!("Your scroll type is now {:?}", scroll))?;
+
+	ctx.data.lock_data().set_scroll(ctx.msg.author.id.0, scroll);
+	poise::say_reply(ctx, format!("Your scroll type is now {:?}", scroll))?;
 
 	Ok(())
 }

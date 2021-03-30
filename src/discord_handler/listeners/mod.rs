@@ -44,21 +44,17 @@ fn extract_score_links_from_string(
 	})
 }
 
-fn show_score_links_inside_message(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-) {
-	let alternative_judge = super::extract_judge_from_string(&msg.content);
-	for (scorekey, user_id) in extract_score_links_from_string(&msg.content) {
+fn show_score_links_inside_message(ctx: Context<'_>) {
+	let alternative_judge = super::extract_judge_from_string(&ctx.msg.content);
+	for (scorekey, user_id) in extract_score_links_from_string(&ctx.msg.content) {
 		println!(
 			"Trying to show score card for scorekey {} user id {}",
 			scorekey, user_id
 		);
 		if let Err(e) = super::send_score_card(
-			state,
-			&ctx,
-			msg.channel_id,
+			ctx.data,
+			ctx.discord,
+			ctx.msg.channel_id,
 			super::ScoreCard {
 				scorekey: &scorekey,
 				user_id: None,
@@ -72,44 +68,46 @@ fn show_score_links_inside_message(
 }
 
 pub fn listen_message(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
+	ctx: Context<'_>,
 	has_manage_messages_permission: bool,
 	user_is_allowed_bot_interaction: bool,
 ) -> Result<(), Error> {
-	score_ocr::check_potential_score_screenshot(state, ctx, msg)?;
+	score_ocr::check_potential_score_screenshot(ctx.data, ctx.discord, ctx.msg)?;
 
-	if msg.channel_id == state.config.work_in_progress_channel && !has_manage_messages_permission {
-		if !contains_link(&msg.content) && msg.attachments.is_empty() {
-			msg.delete(&ctx.http)?;
-			let notice_msg = msg.channel_id.say(
-				&ctx.http,
+	if ctx.msg.channel_id == ctx.data.config.work_in_progress_channel
+		&& !has_manage_messages_permission
+	{
+		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
+			ctx.msg.delete(ctx.discord)?;
+			let notice_msg = ctx.msg.channel_id.say(
+				ctx.discord,
 				format!(
 					"Only links and attachments are allowed in this channel. For discussions use <#{}>",
-					state.config.work_in_progress_discussion_channel),
+					ctx.data.config.work_in_progress_discussion_channel),
 			)?;
 			std::thread::sleep(std::time::Duration::from_millis(5000));
-			notice_msg.delete(&ctx.http)?;
+			notice_msg.delete(ctx.discord)?;
 			return Ok(());
 		}
 	}
 
-	if msg.channel_id == state.config.pack_releases_channel && !has_manage_messages_permission {
-		if !contains_link(&msg.content) && msg.attachments.is_empty() {
-			msg.delete(&ctx.http)?;
-			let notice_msg = msg.channel_id.say(
-				&ctx.http,
+	if ctx.msg.channel_id == ctx.data.config.pack_releases_channel
+		&& !has_manage_messages_permission
+	{
+		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
+			ctx.msg.delete(ctx.discord)?;
+			let notice_msg = ctx.msg.channel_id.say(
+				ctx.discord,
 				"Only links and attachments are allowed in this channel.",
 			)?;
 			std::thread::sleep(std::time::Duration::from_millis(5000));
-			notice_msg.delete(&ctx.http)?;
+			notice_msg.delete(ctx.discord)?;
 			return Ok(());
 		}
 	}
 
 	if user_is_allowed_bot_interaction {
-		show_score_links_inside_message(state, ctx, msg);
+		show_score_links_inside_message(ctx);
 	}
 
 	Ok(())
@@ -117,9 +115,9 @@ pub fn listen_message(
 
 pub fn check_member_update_for_max_300(
 	state: &State,
-	ctx: serenity::Context,
-	old: serenity::Member,
-	new: serenity::Member,
+	ctx: &serenity::Context,
+	old: &serenity::Member,
+	new: &serenity::Member,
 ) -> Result<(), Error> {
 	let guild = new.guild_id.to_partial_guild(&ctx.http)?;
 
@@ -148,7 +146,7 @@ pub fn check_member_update_for_max_300(
 		state
 			.config
 			.promotion_gratulations_channel
-			.to_channel(&ctx)?
+			.to_channel(ctx)?
 			// UNWRAP: we verified in State::load()
 			.guild()
 			.unwrap()
@@ -164,9 +162,9 @@ pub fn check_member_update_for_max_300(
 
 pub fn guild_member_update(
 	state: &State,
-	ctx: serenity::Context,
-	old: Option<serenity::Member>,
-	new: serenity::Member,
+	ctx: &serenity::Context,
+	old: Option<&serenity::Member>,
+	new: &serenity::Member,
 ) -> Result<(), Error> {
 	if let Some(user_entry) = state
 		.lock_data()

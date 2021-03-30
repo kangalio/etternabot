@@ -77,7 +77,7 @@ fn copy_from(
 }
 
 fn render_sprite_map(
-	sprite_map: SpriteMap,
+	sprite_map: SpriteMap<'_>,
 	(max_width, max_height): (usize, usize),
 ) -> Result<image::RgbaImage, Error> {
 	let sprite_res = sprite_map.sprite_resolution;

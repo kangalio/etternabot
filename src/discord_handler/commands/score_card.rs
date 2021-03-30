@@ -1,54 +1,39 @@
 //! All commands that spawn a score card
 
-use super::State;
-use crate::{serenity, Error};
+use super::Context;
+use crate::Error;
 
-const CMD_RS_HELP: &str = "Call this command with `+rs [username] [judge]`";
+struct Judge(&'static etterna::Judge);
+impl std::str::FromStr for Judge {
+	type Err = ();
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		super::extract_judge_from_string(s).map(Self).ok_or(())
+	}
+}
 
-pub fn rs(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
-	let args: Vec<_> = args.split_whitespace().collect();
-	let (eo_username, alternative_judge) = match *args.as_slice() {
-		[] => (state.get_eo_username(ctx, msg)?, None),
-		[username_or_judge_string] => {
-			if let Some(judge) = super::extract_judge_from_string(username_or_judge_string) {
-				(state.get_eo_username(ctx, msg)?, Some(judge))
-			} else {
-				(username_or_judge_string.to_owned(), None)
-			}
-		}
-		[username, judge_string] => {
-			if let Some(judge) = super::extract_judge_from_string(judge_string) {
-				(username.to_owned(), Some(judge))
-			} else {
-				msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
-				return Ok(());
-			}
-		}
-		_ => {
-			msg.channel_id.say(&ctx.http, CMD_RS_HELP)?;
-			return Ok(());
-		}
+pub fn rs(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+	let (eo_username, alternative_judge) =
+		poise::parse_args!(args => #[lazy] (Option<String>), (Option<poise::Wrapper<Judge>>))?;
+	let eo_username = match eo_username {
+		Some(x) => x,
+		None => ctx.data.get_eo_username(ctx.discord, ctx.msg)?,
 	};
+	let alternative_judge = alternative_judge.map(|j| j.0 .0);
 
-	let latest_scores = state.v2()?.user_latest_scores(&eo_username)?;
+	let latest_scores = ctx.data.v2()?.user_latest_scores(&eo_username)?;
 	let latest_score = match latest_scores.first() {
 		Some(x) => x,
 		None => {
-			msg.channel_id.say(&ctx.http, "User has no scores")?;
+			poise::say_reply(ctx, "User has no scores".into())?;
 			return Ok(());
 		}
 	};
 
-	let user_id = state.get_eo_user_id(&eo_username)?;
+	let user_id = ctx.data.get_eo_user_id(&eo_username)?;
 	super::send_score_card(
-		state,
-		ctx,
-		msg.channel_id,
+		ctx.data,
+		ctx.discord,
+		ctx.msg.channel_id,
 		super::ScoreCard {
 			scorekey: &latest_score.scorekey,
 			user_id: Some(user_id),
@@ -102,18 +87,13 @@ fn get_random_score(
 		.ok_or_else(|| "A score was requested from EO but none was sent".into())
 }
 
-pub fn random_score(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
+pub fn random_score(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	let username = match args.split_ascii_whitespace().next() {
 		Some(x) => x.to_owned(),
-		None => state.get_eo_username(ctx, msg)?,
+		None => ctx.data.get_eo_username(ctx.discord, ctx.msg)?,
 	};
 
-	let mut data = state.lock_data();
+	let mut data = ctx.data.lock_data();
 	let user = data
 		.user_registry
 		.iter_mut()
@@ -124,7 +104,7 @@ pub fn random_score(
 
 	// find a random score. If it's invalid, find another one
 	let scorekey = loop {
-		let score = get_random_score(user, &state.web_session)?;
+		let score = get_random_score(user, &ctx.data.web_session)?;
 		if let Some(validity_dependant) = score.validity_dependant {
 			break validity_dependant.scorekey;
 		}
@@ -132,9 +112,9 @@ pub fn random_score(
 	drop(data);
 
 	super::send_score_card(
-		state,
-		ctx,
-		msg.channel_id,
+		ctx.data,
+		ctx.discord,
+		ctx.msg.channel_id,
 		super::ScoreCard {
 			scorekey: &scorekey,
 			user_id: Some(user_eo_id),

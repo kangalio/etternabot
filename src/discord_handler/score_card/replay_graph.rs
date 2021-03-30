@@ -141,7 +141,7 @@ fn gen_replay_stats(replay: &eo::Replay) -> Option<ReplayStats> {
 
 fn draw_mines(
 	canvas: &DrawingArea<
-		BitMapBackend<plotters_bitmap::bitmap_pixel::RGBPixel>,
+		BitMapBackend<'_, plotters_bitmap::bitmap_pixel::RGBPixel>,
 		plotters::coord::Shift,
 	>,
 	mine_hit_locations: &[f32],
