@@ -7,7 +7,6 @@ mod score_card;
 pub use score_card::*;
 
 mod listeners;
-pub use listeners::OcrError;
 
 use crate::{serenity, Error};
 use config::{Config, Data};
@@ -139,8 +138,7 @@ pub struct State {
 	v2_session: crate::AntiDeadlockMutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
-	bot_user_id: serenity::UserId,
-	ocr_score_card_manager: crate::AntiDeadlockMutex<listeners::OcrScoreCardManager>,
+	_bot_user_id: serenity::UserId,
 }
 
 impl State {
@@ -151,7 +149,7 @@ impl State {
 	) -> Result<Self, Error> {
 		let web_session = eo::web::Session::new(
 			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(300_000)), // yes five whole fucking minutes
+			Some(std::time::Duration::from_millis(300_000)), // EO takes a while for user scores
 		);
 
 		let config = Config::load();
@@ -177,10 +175,7 @@ impl State {
 			web_session,
 			config,
 			_data: crate::AntiDeadlockMutex::new(Data::load()),
-			bot_user_id,
-			ocr_score_card_manager: crate::AntiDeadlockMutex::new(
-				listeners::OcrScoreCardManager::new(),
-			),
+			_bot_user_id: bot_user_id,
 			noteskin_provider: commands::NoteskinProvider::load()?,
 		})
 	}
@@ -331,6 +326,7 @@ impl State {
 			"compare" => commands::compare(self, ctx, msg, args)?,
 			"skillgraph" => commands::skillgraph(self, ctx, msg, args)?,
 			"rivalgraph" => commands::rivalgraph(self, ctx, msg, args)?,
+			"accuracygraph" | "accgraph" => commands::accuracygraph(self, ctx, msg, args)?,
 			_ => {}
 		}
 		Ok(())
@@ -409,13 +405,5 @@ impl State {
 		new: serenity::Member,
 	) -> Result<(), Error> {
 		listeners::guild_member_update(self, ctx, old, new)
-	}
-
-	pub fn reaction_add(
-		&self,
-		ctx: serenity::Context,
-		reaction: serenity::Reaction,
-	) -> Result<(), Error> {
-		listeners::reaction_add(self, &ctx, &reaction)
 	}
 }

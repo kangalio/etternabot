@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::State;
 use crate::{serenity, Error};
 
@@ -283,6 +285,25 @@ pub fn rivalset(
 	Ok(())
 }
 
+fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
+	let truncation_msg = "...";
+
+	// check the char limit first, because otherwise we could produce a too large message
+	if text_body.len() + truncation_msg.len() > max_length {
+		// This is how long the text body may be at max to conform to Discord's limit
+		let available_space = max_length - truncation_msg.len();
+
+		let mut cut_off_point = available_space;
+		while !text_body.is_char_boundary(cut_off_point) {
+			cut_off_point -= 1;
+		}
+
+		Cow::Owned(format!("{}{}", &text_body[..cut_off_point], truncation_msg))
+	} else {
+		Cow::Borrowed(text_body)
+	}
+}
+
 pub fn profile(
 	state: &State,
 	ctx: &serenity::Context,
@@ -382,7 +403,7 @@ pub fn profile(
 			if !details.about_me.is_empty() {
 				embed.field(
 					format!("About {}:", eo_username),
-					html2md::parse_html(&details.about_me),
+					truncate_text_maybe(&html2md::parse_html(&details.about_me), 1024),
 					false,
 				);
 			}
