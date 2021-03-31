@@ -30,11 +30,7 @@ pub struct Config {
 	pub allowed_channels: Vec<serenity::ChannelId>,
 	/// Channel to scan for score screenshots in
 	pub score_channel: serenity::ChannelId,
-	/// Channel to post the requested score cards into
-	pub score_ocr_card_channel: serenity::ChannelId,
 	pub etterna_online_guild_id: serenity::GuildId,
-	// Only these people's images in `score_channel` will be used
-	pub score_ocr_allowed_eo_role: serenity::RoleId,
 }
 
 impl Config {

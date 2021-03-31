@@ -1,5 +1,6 @@
 use super::Context;
 use crate::Error;
+use std::borrow::Cow;
 
 fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
 	if country_code.chars().any(|c| !c.is_alphabetic()) {
@@ -257,6 +258,25 @@ pub fn rivalset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	Ok(())
 }
 
+fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
+	let truncation_msg = "...";
+
+	// check the char limit first, because otherwise we could produce a too large message
+	if text_body.len() + truncation_msg.len() > max_length {
+		// This is how long the text body may be at max to conform to Discord's limit
+		let available_space = max_length - truncation_msg.len();
+
+		let mut cut_off_point = available_space;
+		while !text_body.is_char_boundary(cut_off_point) {
+			cut_off_point -= 1;
+		}
+
+		Cow::Owned(format!("{}{}", &text_body[..cut_off_point], truncation_msg))
+	} else {
+		Cow::Borrowed(text_body)
+	}
+}
+
 pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	let eo_username = poise::parse_args!(args => (Option<String>))?;
 	let (eo_username, overwrite_prev_ratings) = match eo_username {
@@ -351,7 +371,7 @@ pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 			if !details.about_me.is_empty() {
 				embed.field(
 					format!("About {}:", eo_username),
-					html2md::parse_html(&details.about_me),
+					truncate_text_maybe(&html2md::parse_html(&details.about_me), 1024),
 					false,
 				);
 			}

@@ -1,8 +1,5 @@
 //! All code that listens for certain discord events and reacts somehow
 
-mod score_ocr;
-pub use score_ocr::{reaction_add, OcrError, OcrScoreCardManager};
-
 use super::*;
 use crate::{serenity, Error};
 
@@ -72,8 +69,6 @@ pub fn listen_message(
 	has_manage_messages_permission: bool,
 	user_is_allowed_bot_interaction: bool,
 ) -> Result<(), Error> {
-	score_ocr::check_potential_score_screenshot(ctx.data, ctx.discord, ctx.msg)?;
-
 	if ctx.msg.channel_id == ctx.data.config.work_in_progress_channel
 		&& !has_manage_messages_permission
 	{

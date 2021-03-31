@@ -9,10 +9,10 @@ image = { version = "0.23", default-features = false }
 serenity = { version = "0.8", default-features = false, features = ["cache", "http", "threadpool", "utils", "rustls_backend", "model", "client"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-regex = { version = "1.3", default-features = false }
-html2md = "0.2.9"
-thiserror = "1.0.20"
-rand = "0.7.3"
+regex = { version = "1.3", default-features = false } # extract EO links or judges from a message
+html2md = "0.2.9" # for making profile descriptions (html) viewable
+thiserror = "1.0.20" # pattern draw Error type
+rand = "0.7.3" # for selecting random minanyms
 # etternaonline_api = { path = "../etternaonline-api" }
 etternaonline_api = "0.2.0"
 plotters = "0.3.0"
@@ -20,11 +20,9 @@ plotters-backend = "0.3.0"
 plotters-bitmap = "0.3.0" # sjkhebrgkjhsdrfg why is plotters so segmentated
 # etterna = { path = "../etterna-base", features = ["parallel", "serde"] }
 etterna = { version = "0.1.0", features = ["parallel", "serde"] }
-chrono = "0.4.13"
-once_cell = "1.4.1"
-thread-scoped = "1.0.2"
-leptess = { git = "https://github.com/kangalioo/leptess" }
-text_io = { git = "https://github.com/kangalioo/rust-si" }
+chrono = "0.4.13" # to handle skillgraph x axis datetimes
+once_cell = "1.4.1" # to store Regex's in static variables
+thread-scoped = "1.0.2" # run skillgraph requests in parallel
 imageproc = "0.21.0"
 poise = { path = "../poise" }
 

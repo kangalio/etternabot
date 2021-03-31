@@ -7,7 +7,6 @@ mod score_card;
 pub use score_card::*;
 
 mod listeners;
-pub use listeners::OcrError;
 
 use crate::{serenity, Error};
 use config::{Config, Data};
@@ -177,9 +176,6 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 				old_if_available,
 				new,
 			} => listeners::guild_member_update(state, ctx, old_if_available.as_ref(), &new),
-			poise::Event::ReactionAdd { add_reaction } => {
-				listeners::reaction_add(state, &ctx, &add_reaction)
-			}
 			_ => Ok(()),
 		},
 		on_error: |e, ctx| match ctx {
@@ -382,8 +378,7 @@ pub struct State {
 	v2_session: crate::AntiDeadlockMutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
 	web_session: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
-	bot_user_id: serenity::UserId,
-	ocr_score_card_manager: crate::AntiDeadlockMutex<listeners::OcrScoreCardManager>,
+	_bot_user_id: serenity::UserId,
 }
 
 impl State {
@@ -420,10 +415,7 @@ impl State {
 			web_session,
 			config,
 			_data: crate::AntiDeadlockMutex::new(Data::load()),
-			bot_user_id,
-			ocr_score_card_manager: crate::AntiDeadlockMutex::new(
-				listeners::OcrScoreCardManager::new(),
-			),
+			_bot_user_id: bot_user_id,
 			noteskin_provider: commands::NoteskinProvider::load()?,
 		})
 	}
