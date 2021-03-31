@@ -97,13 +97,6 @@ impl serenity::EventHandler for Handler {
 			println!("Error in guild member update: {:?}", e);
 		}
 	}
-
-	fn reaction_add(&self, ctx: serenity::Context, reaction: serenity::Reaction) {
-		lock!(self, state);
-		if let Err(e) = state.reaction_add(ctx, reaction) {
-			println!("Error in reaction add: {:?}", e);
-		}
-	}
 }
 
 pub fn start_bot() -> Result<(), Box<dyn std::error::Error>> {
