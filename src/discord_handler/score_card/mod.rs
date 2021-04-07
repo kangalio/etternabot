@@ -12,43 +12,187 @@ pub struct ScoreCard<'a> {
 	pub alternative_judge: Option<&'a etterna::Judge>,
 }
 
-pub fn send_score_card(
-	state: &State,
-	ctx: &serenity::Context,
-	channel_id: serenity::ChannelId,
-	info: ScoreCard<'_>,
-) -> Result<(), Error> {
-	let score = state.v2()?.score_data(info.scorekey)?;
+struct ScoringSystemComparison {
+	wife2_score: etterna::Wifescore,
+	wife3_score: etterna::Wifescore,
+	wife3_score_zero_mean: etterna::Wifescore,
+}
 
-	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
-		if let Some(replay) = &score.replay {
-			etterna::rescore_from_note_hits::<etterna::Wife3, _>(
-				replay.notes.iter().map(|note| note.hit),
-				score.judgements.hit_mines,
-				score.judgements.let_go_holds + score.judgements.missed_holds,
-				alternative_judge,
-			)
-		} else {
-			None
+struct ReplayAnalysis {
+	replay_graph_path: &'static str,
+	scoring_system_comparison_j4: ScoringSystemComparison,
+	scoring_system_comparison_alternative: Option<ScoringSystemComparison>,
+	fastest_finger_jackspeed: f32, // NPS, single finger
+	fastest_nps: f32,
+	longest_100_combo: u32,
+	longest_marv_combo: u32,
+	longest_perf_combo: u32,
+	longest_combo: u32,
+	mean_offset: f32,
+}
+
+fn max_finger_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
+	// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
+	// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
+	// _are_ scaled though.
+
+	let mut lanes = replay.split_into_lanes()?;
+	let mut max_finger_nps = 0.0;
+	for lane in &mut lanes {
+		let hit_seconds = &mut lane.hit_seconds;
+		let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed;
+
+		if this_fingers_max_nps > max_finger_nps {
+			max_finger_nps = this_fingers_max_nps;
 		}
-	} else {
-		None
-	};
+	}
+	Some(max_finger_nps)
+}
 
+fn fastest_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
+	let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
+	let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
+	let mut sorted_hit_seconds = unsorted_hit_seconds;
+	sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+	let sorted_hit_seconds = sorted_hit_seconds;
+	let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
+	Some(fastest_nps)
+}
+
+fn adjust_offset(replay: &etternaonline_api::Replay) -> (f32, etternaonline_api::Replay) {
+	use etterna::SimpleReplay as _;
+
+	let mean_offset = replay.mean_deviation();
+	let replay_zero_mean = etternaonline_api::Replay {
+		notes: replay
+			.notes
+			.iter()
+			.map(|note| {
+				let mut note = note.clone();
+				if let etterna::Hit::Hit { deviation } = &mut note.hit {
+					*deviation -= mean_offset;
+				}
+				note
+			})
+			.collect(),
+	};
+	(mean_offset, replay_zero_mean)
+}
+
+fn make_scoring_system_comparison(
+	replay: &etternaonline_api::Replay,
+	judgements: &etterna::FullJudgements,
+	replay_zero_mean: &etternaonline_api::Replay,
+	judge: &etterna::Judge,
+) -> Option<ScoringSystemComparison> {
+	Some(ScoringSystemComparison {
+		wife2_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife2>(
+			replay,
+			judgements.hit_mines,
+			judgements.let_go_holds + judgements.missed_holds,
+			judge,
+		)?,
+		wife3_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+			replay,
+			judgements.hit_mines,
+			judgements.let_go_holds + judgements.missed_holds,
+			judge,
+		)?,
+		wife3_score_zero_mean: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife3>(
+			replay_zero_mean,
+			judgements.hit_mines,
+			judgements.let_go_holds + judgements.missed_holds,
+			judge,
+		)?,
+	})
+}
+
+fn do_replay_analysis(
+	score: &etternaonline_api::v2::ScoreData,
+	alternative_judge: Option<&etterna::Judge>,
+) -> Option<Result<ReplayAnalysis, Error>> {
+	use etterna::SimpleReplay as _;
+
+	let replay = score.replay.as_ref()?;
+
+	let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
+	if let Err(e) = r {
+		return Some(Err(e.into()));
+	}
+
+	let max_finger_nps = max_finger_nps(replay)?;
+	let fastest_nps = fastest_nps(replay)?;
+	let (mean_offset, replay_zero_mean) = adjust_offset(replay);
+
+	Some(Ok(ReplayAnalysis {
+		replay_graph_path: "replay_graph.png",
+		scoring_system_comparison_j4: make_scoring_system_comparison(
+			replay,
+			&score.judgements,
+			&replay_zero_mean,
+			etterna::J4,
+		)?,
+		scoring_system_comparison_alternative: match alternative_judge {
+			Some(alternative_judge) => make_scoring_system_comparison(
+				replay,
+				&score.judgements,
+				&replay_zero_mean,
+				alternative_judge,
+			),
+			None => None,
+		},
+		fastest_finger_jackspeed: max_finger_nps,
+		fastest_nps,
+		longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
+		longest_marv_combo: replay
+			.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
+		longest_perf_combo: replay
+			.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
+		longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
+		mean_offset,
+	}))
+}
+
+fn write_score_card_body(
+	info: &ScoreCard,
+	score: &etternaonline_api::v2::ScoreData,
+	alternative_judge_wifescore: Option<etterna::Wifescore>,
+) -> String {
 	let mut description = String::new();
+
 	if let Some(user_id) = info.user_id {
 		description += &format!(
 			"https://etternaonline.com/score/view/{}{}\n",
 			info.scorekey, user_id
 		);
 	}
+
 	if info.show_ssrs_and_judgements_and_modifiers {
 		description += &format!("```\n{}\n```", score.modifiers);
 	}
+
+	description += "```nim";
+	description += &if let Some(alternative_judge_wifescore) = alternative_judge_wifescore {
+		format!(
+			concat!(
+				"        Wife: {:<5.2}%  ⏐\n",
+				"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
+			),
+			score.wifescore.as_percent(),
+			// UWNRAP: if alternative_judge_wifescore is Some, info.alternative_judge is too
+			info.alternative_judge.unwrap().name,
+			alternative_judge_wifescore.as_percent(),
+			score.judgements.marvelouses,
+		)
+	} else {
+		format!(
+			"        Wife: {:<5.2}%  ⏐      Marvelous: {}",
+			score.wifescore.as_percent(),
+			score.judgements.marvelouses,
+		)
+	};
 	description += &format!(
-		r#"```nim
-{}
-   Max Combo: {:<5.0}   ⏐        Perfect: {}
+		r#"   Max Combo: {:<5.0}   ⏐        Perfect: {}
      Overall: {:<5.2}   ⏐          Great: {}
       Stream: {:<5.2}   ⏐           Good: {}
      Stamina: {:<5.2}   ⏐            Bad: {}
@@ -59,25 +203,6 @@ pub fn send_score_card(
    Technical: {:<5.2}   ⏐   Missed Holds: {}
 ```
 "#,
-		if let Some(alternative_judge_wifescore) = alternative_judge_wifescore {
-			format!(
-				concat!(
-					"        Wife: {:<5.2}%  ⏐\n",
-					"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
-				),
-				score.wifescore.as_percent(),
-				// UWNRAP: if alternative_judge_wifescore is Some, info.alternative_judge is too
-				info.alternative_judge.unwrap().name,
-				alternative_judge_wifescore.as_percent(),
-				score.judgements.marvelouses,
-			)
-		} else {
-			format!(
-				"        Wife: {:<5.2}%  ⏐      Marvelous: {}",
-				score.wifescore.as_percent(),
-				score.judgements.marvelouses,
-			)
-		},
 		score.max_combo,
 		score.judgements.perfects,
 		score.ssr.overall,
@@ -97,149 +222,32 @@ pub fn send_score_card(
 		score.ssr.technical,
 		score.judgements.missed_holds,
 	);
+	description
+}
 
-	struct ScoringSystemComparison {
-		wife2_score: etterna::Wifescore,
-		wife3_score: etterna::Wifescore,
-		wife3_score_zero_mean: etterna::Wifescore,
-	}
+pub fn send_score_card(
+	state: &State,
+	ctx: &serenity::Context,
+	channel_id: serenity::ChannelId,
+	info: ScoreCard<'_>,
+) -> Result<(), Error> {
+	let score = state.v2()?.score_data(info.scorekey)?;
 
-	struct ReplayAnalysis {
-		replay_graph_path: &'static str,
-		scoring_system_comparison_j4: ScoringSystemComparison,
-		scoring_system_comparison_alternative: Option<ScoringSystemComparison>,
-		fastest_finger_jackspeed: f32, // NPS, single finger
-		fastest_nps: f32,
-		longest_100_combo: u32,
-		longest_marv_combo: u32,
-		longest_perf_combo: u32,
-		longest_combo: u32,
-		mean_offset: f32,
-	}
+	let alternative_judge_wifescore = match (info.alternative_judge, &score.replay) {
+		(Some(alternative_judge), Some(replay)) => {
+			etterna::rescore_from_note_hits::<etterna::Wife3, _>(
+				replay.notes.iter().map(|note| note.hit),
+				score.judgements.hit_mines,
+				score.judgements.let_go_holds + score.judgements.missed_holds,
+				alternative_judge,
+			)
+		}
+		_ => None,
+	};
 
-	let do_replay_analysis =
-		|score: &etternaonline_api::v2::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
-			use etterna::SimpleReplay;
+	let description = write_score_card_body(&info, &score, alternative_judge_wifescore);
 
-			let replay = score.replay.as_ref()?;
-
-			let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
-			if let Err(e) = r {
-				return Some(Err(e.into()));
-			}
-
-			// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
-			// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
-			// _are_ scaled though.
-
-			let lanes = replay.split_into_lanes()?;
-			let mut max_finger_nps = 0.0;
-			for lane in &lanes {
-				let this_fingers_max_nps =
-					etterna::find_fastest_note_subset(&lane.hit_seconds, 20, 20).speed;
-
-				if this_fingers_max_nps > max_finger_nps {
-					max_finger_nps = this_fingers_max_nps;
-				}
-			}
-
-			let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
-			let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
-
-			let mut sorted_hit_seconds = unsorted_hit_seconds;
-			// UNWRAP: if one of those values is NaN... something is pretty wrong
-			sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-			let sorted_hit_seconds = sorted_hit_seconds;
-
-			let fastest_nps =
-				etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
-
-			let mean_offset = replay.mean_deviation();
-			let replay_zero_mean = etternaonline_api::Replay {
-				notes: replay
-					.notes
-					.iter()
-					.map(|note| {
-						let mut note = note.clone();
-						if let etterna::Hit::Hit { deviation } = &mut note.hit {
-							*deviation -= mean_offset;
-						}
-						note
-					})
-					.collect(),
-			};
-
-			Some(Ok(ReplayAnalysis {
-				replay_graph_path: "replay_graph.png",
-				scoring_system_comparison_j4: ScoringSystemComparison {
-					wife2_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife2>(
-						replay,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-					wife3_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-						replay,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-					wife3_score_zero_mean: etternaonline_api::rescore::<
-						etterna::NaiveScorer,
-						etterna::Wife3,
-					>(
-						&replay_zero_mean,
-						score.judgements.hit_mines,
-						score.judgements.let_go_holds + score.judgements.missed_holds,
-						&etterna::J4,
-					)?,
-				},
-				scoring_system_comparison_alternative: match info.alternative_judge {
-					Some(alternative_judge) => Some(ScoringSystemComparison {
-						wife2_score: etternaonline_api::rescore::<
-							etterna::NaiveScorer,
-							etterna::Wife2,
-						>(
-							replay,
-							score.judgements.hit_mines,
-							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
-						)?,
-						wife3_score: etternaonline_api::rescore::<
-							etterna::NaiveScorer,
-							etterna::Wife3,
-						>(
-							replay,
-							score.judgements.hit_mines,
-							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
-						)?,
-						wife3_score_zero_mean: etternaonline_api::rescore::<
-							etterna::NaiveScorer,
-							etterna::Wife3,
-						>(
-							&replay_zero_mean,
-							score.judgements.hit_mines,
-							score.judgements.let_go_holds + score.judgements.missed_holds,
-							alternative_judge,
-						)?,
-					}),
-					None => None,
-				},
-				fastest_finger_jackspeed: max_finger_nps,
-				fastest_nps,
-				longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
-				longest_marv_combo: replay
-					.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
-				longest_perf_combo: replay
-					.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
-				longest_combo: replay
-					.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
-				mean_offset,
-			}))
-		};
-
-	let replay_analysis = do_replay_analysis(&score).transpose()?;
+	let replay_analysis = do_replay_analysis(&score, info.alternative_judge).transpose()?;
 
 	channel_id.send_message(&ctx.http, |m| {
 		m.embed(|e| {
