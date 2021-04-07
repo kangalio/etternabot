@@ -40,6 +40,7 @@ fn max_finger_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
 	let mut max_finger_nps = 0.0;
 	for lane in &mut lanes {
 		let hit_seconds = &mut lane.hit_seconds;
+		hit_seconds.sort_by(|a, b| a.partial_cmp(b).unwrap());
 		let this_fingers_max_nps = etterna::find_fastest_note_subset(hit_seconds, 20, 20).speed;
 
 		if this_fingers_max_nps > max_finger_nps {
