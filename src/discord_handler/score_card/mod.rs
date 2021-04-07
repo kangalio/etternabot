@@ -172,12 +172,12 @@ fn write_score_card_body(
 		description += &format!("```\n{}\n```", score.modifiers);
 	}
 
-	description += "```nim";
+	description += "```nim\n";
 	description += &if let Some(alternative_judge_wifescore) = alternative_judge_wifescore {
 		format!(
 			concat!(
 				"        Wife: {:<5.2}%  ⏐\n",
-				"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}",
+				"     Wife {}: {:<5.2}%  ⏐      Marvelous: {}\n",
 			),
 			score.wifescore.as_percent(),
 			// UWNRAP: if alternative_judge_wifescore is Some, info.alternative_judge is too
@@ -187,13 +187,13 @@ fn write_score_card_body(
 		)
 	} else {
 		format!(
-			"        Wife: {:<5.2}%  ⏐      Marvelous: {}",
+			"        Wife: {:<5.2}%  ⏐      Marvelous: {}\n",
 			score.wifescore.as_percent(),
 			score.judgements.marvelouses,
 		)
 	};
 	description += &format!(
-		r#"   Max Combo: {:<5.0}   ⏐        Perfect: {}
+		"   Max Combo: {:<5.0}   ⏐        Perfect: {}
      Overall: {:<5.2}   ⏐          Great: {}
       Stream: {:<5.2}   ⏐           Good: {}
      Stamina: {:<5.2}   ⏐            Bad: {}
@@ -202,8 +202,7 @@ fn write_score_card_body(
        Jacks: {:<5.2}   ⏐     Held Holds: {}
    Chordjack: {:<5.2}   ⏐  Dropped Holds: {}
    Technical: {:<5.2}   ⏐   Missed Holds: {}
-```
-"#,
+```\n",
 		score.max_combo,
 		score.judgements.perfects,
 		score.ssr.overall,
