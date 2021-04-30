@@ -13,6 +13,8 @@ use config::{Config, Data};
 use etternaonline_api as eo;
 
 type Context<'a> = poise::Context<'a, State, Error>;
+type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
+// type SlashContext<'a> = poise::SlashContext<'a, State, Error>;
 
 fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 	static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> =
@@ -43,30 +45,26 @@ fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 }
 
 // Returns None if msg was sent in DMs
-fn get_guild_member(
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-) -> Result<Option<serenity::Member>, serenity::Error> {
-	Ok(match msg.guild_id {
-		Some(guild_id) => Some(match msg.member(&ctx.cache) {
-			Some(cached_member) => cached_member,
-			None => ctx.http.get_member(guild_id.0, msg.author.id.0)?,
-		}),
-		None => None,
-	})
+async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, serenity::Error> {
+	match ctx.guild_id() {
+		Some(guild_id) => guild_id
+			.member(ctx.discord(), ctx.author().id)
+			.await
+			.map(Some),
+		None => Ok(None),
+	}
 }
 
 // My Fucking GODDDDDDD WHY DOES SERENITY NOT PROVIDE THIS BASIC STUFF
-fn get_guild_permissions(
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
+async fn get_guild_permissions(
+	ctx: Context<'_>,
 ) -> Result<Option<serenity::Permissions>, serenity::Error> {
 	fn aggregate_role_permissions(
 		guild_member: &serenity::Member,
 		guild_owner_id: serenity::UserId,
 		guild_roles: &std::collections::HashMap<serenity::RoleId, serenity::Role>,
 	) -> serenity::Permissions {
-		if guild_owner_id == guild_member.user_id() {
+		if guild_owner_id == guild_member.user.id {
 			// author is owner -> all permissions
 			serenity::Permissions::all()
 		} else {
@@ -78,17 +76,16 @@ fn get_guild_permissions(
 		}
 	}
 
-	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx, msg)?, msg.guild_id) {
+	if let (Some(guild_member), Some(guild_id)) = (get_guild_member(ctx).await?, ctx.guild_id()) {
 		// `guild_member.permissions(&ctx.cache)` / `guild.member_permissions(msg.author.id)` can't
 		// be trusted - they return LITERALLY WRONG RESULTS AILUWRHDLIAUEHFISAUEHGLSIREUFHGLSIURHS
 		// See this thread on the serenity dev server: https://discord.com/channels/381880193251409931/381912587505500160/787965510124830790
-		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
+		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.discord()).await {
 			// try get guild data from cache and calculate permissions ourselves
-			let guild = guild.read();
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		} else {
 			// request guild data from http and calculate permissions ourselves
-			let guild = &guild_id.to_partial_guild(&ctx.http)?;
+			let guild = &guild_id.to_partial_guild(&ctx.discord()).await?;
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		};
 
@@ -133,241 +130,128 @@ impl Drop for AutoSaveGuard<'_> {
 }
 
 /// true if sent in DMs
-fn user_has_manage_messages_permission(ctx: Context<'_>) -> Result<bool, Error> {
-	Ok(get_guild_permissions(ctx.discord, ctx.msg)?.map_or(true, |p| p.manage_messages()))
+async fn user_has_manage_messages_permission(ctx: Context<'_>) -> Result<bool, Error> {
+	Ok(get_guild_permissions(ctx)
+		.await?
+		.map_or(true, |p| p.manage_messages()))
 }
 
 /// If the message is in etternaonline server, and not in an allowed channel, and not sent
 /// with elevated privileges, return false
-fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error> {
-	Ok(
-		if let Some(guild_member) = &get_guild_member(ctx.discord, ctx.msg)? {
-			user_has_manage_messages_permission(ctx)?
-				|| ctx
-					.data
-					.config
-					.allowed_channels
-					.contains(&ctx.msg.channel_id)
-				|| guild_member.guild_id != ctx.data.config.etterna_online_guild_id
-		} else {
-			true
-		},
-	)
+async fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error> {
+	Ok(if let Some(guild_member) = &get_guild_member(ctx).await? {
+		user_has_manage_messages_permission(ctx).await?
+			|| ctx
+				.data()
+				.config
+				.allowed_channels
+				.contains(&ctx.channel_id())
+			|| guild_member.guild_id != ctx.data().config.etterna_online_guild_id
+	} else {
+		true
+	})
+}
+
+async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
+	match ctx {
+		poise::ErrorContext::Command(ctx) => {
+			let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
+				// If we caught an argument parse error, give a helpful error message with the
+				// command explanation if available
+
+				let mut msg = None;
+				if let poise::CommandErrorContext::Prefix(ctx) = &ctx {
+					if let Some(explanation) = &ctx.command.options.multiline_help {
+						msg = Some(format!("{}\n{}", e, explanation()));
+					}
+				}
+				msg.unwrap_or_else(|| {
+					format!(
+						"You entered the command wrong, please check the help menu\n`{}`",
+						e
+					)
+				})
+			} else {
+				e.to_string()
+			};
+			if let Err(e) = poise::say_reply(ctx.ctx(), user_error_msg).await {
+				println!("Error while user command error: {}", e);
+			}
+		}
+		_ => println!("Something... happened?"),
+	}
+}
+
+async fn listener(
+	ctx: &serenity::Context,
+	event: &poise::Event<'_>,
+	framework: &poise::Framework<State, Error>,
+	state: &State,
+) -> Result<(), Error> {
+	match event {
+		poise::Event::Message { new_message } => {
+			let ctx = poise::PrefixContext {
+				data: state,
+				discord: ctx,
+				msg: new_message,
+				framework,
+			};
+			#[allow(clippy::eval_order_dependence)] // ???
+			listeners::listen_message(
+				ctx,
+				user_has_manage_messages_permission(poise::Context::Prefix(ctx)).await?,
+				user_is_allowed_bot_interaction(poise::Context::Prefix(ctx)).await?,
+			)
+			.await
+		}
+		poise::Event::GuildMemberUpdate {
+			old_if_available,
+			new,
+		} => listeners::guild_member_update(state, ctx, old_if_available.as_ref(), &new).await,
+		_ => Ok(()),
+	}
 }
 
 pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
-	poise::FrameworkOptions {
-		command_check: user_is_allowed_bot_interaction,
-		listener: |ctx, event, framework, state| match event {
-			poise::Event::Message { new_message } => {
-				let ctx = poise::Context {
-					data: state,
-					discord: ctx,
-					msg: new_message,
-					framework,
-				};
-				listeners::listen_message(
-					ctx,
-					user_has_manage_messages_permission(ctx)?,
-					user_is_allowed_bot_interaction(ctx)?,
-				)
-			}
-			poise::Event::GuildMemberUpdate {
-				old_if_available,
-				new,
-			} => listeners::guild_member_update(state, ctx, old_if_available.as_ref(), &new),
-			_ => Ok(()),
+	let mut framework = poise::FrameworkOptions {
+		listener: |ctx, event, framework, state| Box::pin(listener(ctx, event, framework, state)),
+		on_error: |e, ctx| Box::pin(on_error(e, ctx)),
+		prefix_options: poise::PrefixFrameworkOptions {
+			command_check: |c| Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c))),
+			broadcast_typing: true,
+			edit_tracker: Some(poise::EditTracker::for_timespan(
+				std::time::Duration::from_secs(3600),
+			)),
+			..Default::default()
 		},
-		on_error: |e, ctx| match ctx {
-			poise::ErrorContext::Command(ctx) => {
-				let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
-					// If we caught an argument parse error, give a helpful error message with the
-					// command explanation if available
-					if let Some(explanation) = &ctx.command.options.explanation {
-						format!("{}\n{}", e, explanation)
-					} else {
-						format!("You entered the command wrong, please check the help menu\n`{}`", e)
-					}
-				} else {
-					e.to_string()
-				};
-				if let Err(e) = ctx.ctx.msg.channel_id.say(ctx.ctx.discord, user_error_msg) {
-					println!("Error while posting argument parse error: {}", e);
-				}
-			}
-			_ => println!("Something... happened?"),
+		slash_options: poise::SlashFrameworkOptions {
+			command_check: |c| Box::pin(user_is_allowed_bot_interaction(poise::Context::Slash(c))),
+			defer_response: true,
+			..Default::default()
 		},
-		broadcast_typing: true,
-		edit_tracker: Some(poise::EditTracker::for_timespan(std::time::Duration::from_secs(3600))),
-		commands: vec![
-			poise::Command {
-				name: "help",
-				action: commands::help,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "profile",
-				action: commands::profile,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "advprof",
-				action: commands::profile,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "lastsession",
-				action: commands::latest_scores,
-				options: poise::CommandOptions {
-					aliases: &["ls"],
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "pattern",
-				action: |ctx, args| commands::pattern(ctx.data, ctx.discord, ctx.msg, args),
-				options: poise::CommandOptions {
-					check: Some(|_| Ok(true)), // allow pattern command everywhere
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "ping",
-				action: commands::ping,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "servers",
-				action: commands::servers,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "uptime",
-				action: commands::uptime,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "randomscore",
-				action: commands::random_score,
-				options: poise::CommandOptions {
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "lookup",
-				action: commands::lookup,
-				options: poise::CommandOptions {
-					explanation: Some("Call this command with `+lookup DISCORDUSERNAME`".into()),
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "quote",
-				action: commands::quote,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "scrollset",
-				action: commands::scrollset,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					explanation: Some("Call this command with `+scrollset [down/up]`".into()),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "userset",
-				action: commands::userset,
-				options: poise::CommandOptions {
-					explanation: Some("Call this command with `+userset YOUR_EO_USERNAME`".into()),
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "rivalset",
-				action: commands::rivalset,
-				options: poise::CommandOptions {
-					explanation: Some("Call this command with `+rivalset YOUR_EO_USERNAME`".into()),
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "rs",
-				action: commands::rs,
-				options: poise::CommandOptions {
-					explanation: Some("Call this command with `+rs [username] [judge]`".into()),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "rival",
-				action: commands::rival,
-				options: poise::CommandOptions {
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "compare",
-				action: commands::compare,
-				options: poise::CommandOptions {
-					explanation: Some("Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic".into()),
-					track_edits: Some(true),
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "skillgraph",
-				action: |ctx, args| commands::skillgraph(ctx.data, ctx.discord, ctx.msg, args),
-				options: poise::CommandOptions {
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "rivalgraph",
-				action: |ctx, args| commands::rivalgraph(ctx.data, ctx.discord, ctx.msg, args),
-				options: poise::CommandOptions {
-					..Default::default()
-				},
-			},
-			poise::Command {
-				name: "accuracygraph",
-				action: |ctx, args| commands::accuracygraph(ctx.data, ctx.discord, ctx.msg, args),
-				options: poise::CommandOptions {
-					aliases: &["accgraph"],
-					..Default::default()
-				},
-			},
-		],
-		..Default::default()
-	}
-
+		// ..Default::default()
+	};
+	framework.command(commands::compare);
+	framework.command(commands::help);
+	framework.command(commands::profile);
+	framework.command(commands::pattern);
+	framework.command(commands::ping);
+	framework.command(commands::servers);
+	framework.command(commands::uptime);
+	framework.command(commands::lastsession);
+	framework.command(commands::randomscore);
+	framework.command(commands::lookup);
+	framework.command(commands::scrollset);
+	framework.command(commands::userset);
+	framework.command(commands::rivalset);
+	framework.command(commands::rs);
+	framework.command(commands::rival);
+	framework.command(commands::skillgraph);
+	framework.command(commands::rivalgraph);
+	framework.command(commands::accuracygraph);
+	framework.command(commands::slashregister);
 	// TODO: add topNN command
+	framework
 }
 
 pub struct State {
@@ -382,7 +266,7 @@ pub struct State {
 }
 
 impl State {
-	pub fn load(
+	pub async fn load(
 		ctx: &serenity::Context,
 		auth: crate::Auth,
 		bot_user_id: serenity::UserId,
@@ -395,7 +279,8 @@ impl State {
 		let config = Config::load();
 		if config
 			.promotion_gratulations_channel
-			.to_channel(ctx)?
+			.to_channel(ctx)
+			.await?
 			.guild()
 			.is_none()
 		{
@@ -465,21 +350,17 @@ impl State {
 		}
 	}
 
-	fn get_eo_username(
-		&self,
-		_ctx: &serenity::Context,
-		msg: &serenity::Message,
-	) -> Result<String, Error> {
+	fn get_eo_username(&self, discord_user: &serenity::User) -> Result<String, Error> {
 		if let Some(user_entry) = self
 			.lock_data()
 			.user_registry
 			.iter()
-			.find(|user| user.discord_id == msg.author.id.0)
+			.find(|user| user.discord_id == discord_user.id.0)
 		{
 			return Ok(user_entry.eo_username.to_owned());
 		}
 
-		match self.web_session.user_details(&msg.author.name) {
+		match self.web_session.user_details(&discord_user.name) {
 			Ok(user_details) => {
 				// Seems like the user's EO name is the same as their Discord name :)
 				// TODO: could replace the user_details call with scores request to get
@@ -487,19 +368,19 @@ impl State {
 				self.lock_data()
 					.user_registry
 					.push(config::UserRegistryEntry {
-						discord_id: msg.author.id.0,
-						discord_username: msg.author.name.to_owned(),
+						discord_id: discord_user.id.0,
+						discord_username: discord_user.name.to_owned(),
 						eo_id: user_details.user_id,
-						eo_username: msg.author.name.to_owned(),
+						eo_username: discord_user.name.to_owned(),
 						last_known_num_scores: None,
 						last_rating: None,
 					});
 
-				Ok(msg.author.name.to_owned())
+				Ok(discord_user.name.to_owned())
 			}
 			Err(eo::Error::UserNotFound) => Err(format!(
 				"User {} not found on EO. Please manually specify your EtternaOnline username with `+userset`",
-				msg.author.name.to_owned()
+				discord_user.name.to_owned()
 			)
 			.into()),
 			Err(other) => Err(other.into()),

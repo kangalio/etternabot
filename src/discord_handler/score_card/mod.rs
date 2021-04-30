@@ -12,17 +12,19 @@ pub struct ScoreCard<'a> {
 	pub alternative_judge: Option<&'a etterna::Judge>,
 }
 
-pub fn send_score_card(
+pub async fn send_score_card(
 	state: &State,
 	ctx: &serenity::Context,
 	channel: serenity::ChannelId,
 	info: ScoreCard<'_>,
 ) -> Result<(), Error> {
 	let message = score_card_inner(state, info)?;
-	channel.send_message(ctx, |m| {
-		*m = message;
-		m
-	})?;
+	channel
+		.send_message(ctx, |m| {
+			*m = message;
+			m
+		})
+		.await?;
 	Ok(())
 }
 

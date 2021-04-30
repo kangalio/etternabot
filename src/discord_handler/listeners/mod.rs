@@ -14,9 +14,16 @@ fn contains_link(string: &str) -> bool {
 	LINK_REGEX.find_iter(string).count() >= 1
 }
 
+// struct Scorekey(String);
+// impl Scorekey {
+// 	fn new(s: String) -> Option<Self> {
+// 		Some(Self(s))
+// 	}
+// }
+
 fn extract_score_links_from_string(
 	string: &str,
-) -> impl Iterator<Item = (etterna::Scorekey, u32)> + '_ {
+) -> impl Iterator<Item = (etterna::Scorekey, u32)> + Send + '_ {
 	static SCORE_LINK_REGEX: once_cell::sync::Lazy<regex::Regex> =
 		once_cell::sync::Lazy::new(|| {
 			regex::Regex::new(r"https://etternaonline.com/score/view/(S\w{40})(\d+)").unwrap()
@@ -41,7 +48,7 @@ fn extract_score_links_from_string(
 	})
 }
 
-fn show_score_links_inside_message(ctx: Context<'_>) {
+async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 	let alternative_judge = super::extract_judge_from_string(&ctx.msg.content);
 	for (scorekey, user_id) in extract_score_links_from_string(&ctx.msg.content) {
 		println!(
@@ -58,14 +65,16 @@ fn show_score_links_inside_message(ctx: Context<'_>) {
 				show_ssrs_and_judgements_and_modifiers: true,
 				alternative_judge,
 			},
-		) {
+		)
+		.await
+		{
 			println!("Error while showing score card for {}: {}", scorekey, e);
 		}
 	}
 }
 
-pub fn listen_message(
-	ctx: Context<'_>,
+pub async fn listen_message(
+	ctx: PrefixContext<'_>,
 	has_manage_messages_permission: bool,
 	user_is_allowed_bot_interaction: bool,
 ) -> Result<(), Error> {
@@ -73,15 +82,19 @@ pub fn listen_message(
 		&& !has_manage_messages_permission
 	{
 		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
-			ctx.msg.delete(ctx.discord)?;
-			let notice_msg = ctx.msg.channel_id.say(
-				ctx.discord,
-				format!(
+			ctx.msg.delete(ctx.discord).await?;
+			let notice_msg = ctx
+				.msg
+				.channel_id
+				.say(
+					ctx.discord,
+					format!(
 					"Only links and attachments are allowed in this channel. For discussions use <#{}>",
 					ctx.data.config.work_in_progress_discussion_channel),
-			)?;
-			std::thread::sleep(std::time::Duration::from_millis(5000));
-			notice_msg.delete(ctx.discord)?;
+				)
+				.await?;
+			tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+			notice_msg.delete(ctx.discord).await?;
 			return Ok(());
 		}
 	}
@@ -90,31 +103,35 @@ pub fn listen_message(
 		&& !has_manage_messages_permission
 	{
 		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
-			ctx.msg.delete(ctx.discord)?;
-			let notice_msg = ctx.msg.channel_id.say(
-				ctx.discord,
-				"Only links and attachments are allowed in this channel.",
-			)?;
-			std::thread::sleep(std::time::Duration::from_millis(5000));
-			notice_msg.delete(ctx.discord)?;
+			ctx.msg.delete(ctx.discord).await?;
+			let notice_msg = ctx
+				.msg
+				.channel_id
+				.say(
+					ctx.discord,
+					"Only links and attachments are allowed in this channel.",
+				)
+				.await?;
+			tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+			notice_msg.delete(ctx.discord).await?;
 			return Ok(());
 		}
 	}
 
 	if user_is_allowed_bot_interaction {
-		show_score_links_inside_message(ctx);
+		show_score_links_inside_message(ctx).await;
 	}
 
 	Ok(())
 }
 
-pub fn check_member_update_for_max_300(
+pub async fn check_member_update_for_max_300(
 	state: &State,
 	ctx: &serenity::Context,
 	old: &serenity::Member,
 	new: &serenity::Member,
 ) -> Result<(), Error> {
-	let guild = new.guild_id.to_partial_guild(&ctx.http)?;
+	let guild = new.guild_id.to_partial_guild(&ctx.http).await?;
 
 	let get_guild_role = |guild_id| {
 		if let Some(guild) = guild.roles.get(guild_id) {
@@ -141,21 +158,22 @@ pub fn check_member_update_for_max_300(
 		state
 			.config
 			.promotion_gratulations_channel
-			.to_channel(ctx)?
+			.to_channel(ctx)
+			.await?
 			// UNWRAP: we verified in State::load()
 			.guild()
 			.unwrap()
-			.read()
 			.say(
 				&ctx.http,
-				format!("Congrats on the promotion, <@{}>!", old.user_id()),
-			)?;
+				format!("Congrats on the promotion, <@{}>!", old.user.id),
+			)
+			.await?;
 	}
 
 	Ok(())
 }
 
-pub fn guild_member_update(
+pub async fn guild_member_update(
 	state: &State,
 	ctx: &serenity::Context,
 	old: Option<&serenity::Member>,
@@ -165,15 +183,15 @@ pub fn guild_member_update(
 		.lock_data()
 		.user_registry
 		.iter_mut()
-		.find(|user| user.discord_id == new.user.read().id.0)
+		.find(|user| user.discord_id == new.user.id.0)
 	{
-		user_entry.discord_username = new.user.read().name.clone();
+		user_entry.discord_username = new.user.name.clone();
 	} else {
 		// TODO: integrate into registry?
 	}
 
 	if let Some(old) = old {
-		check_member_update_for_max_300(state, ctx, old, new)?;
+		check_member_update_for_max_300(state, ctx, old, new).await?;
 	}
 
 	Ok(())

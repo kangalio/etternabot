@@ -1,8 +1,8 @@
 mod pattern_draw;
 pub use pattern_draw::{Error as PatternError, Noteskin};
 
-use super::{Context, State};
-use crate::{serenity, Error};
+use super::{Context, PrefixContext};
+use crate::Error;
 
 pub struct NoteskinProvider {
 	dbz: pattern_draw::Noteskin,
@@ -86,19 +86,20 @@ impl NoteskinProvider {
 	}
 }
 
-pub fn pattern(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-) -> Result<(), Error> {
+async fn always_true(_: PrefixContext<'_>) -> Result<bool, Error> {
+	Ok(true)
+}
+
+#[poise::command(check = "always_true")]
+pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Error> {
 	let mut noteskin_override = None;
 	let mut keymode_override = None;
 	let mut snap = etterna::Snap::_16th.into();
 	let mut vertical_spacing_multiplier = 1.0;
-	let mut scroll_direction = state
+	let mut scroll_direction = ctx
+		.data
 		.lock_data()
-		.scroll(msg.author.id.0)
+		.scroll(ctx.msg.author.id.0)
 		.unwrap_or(etterna::ScrollDirection::Upscroll);
 	let mut segments = Vec::new();
 
@@ -123,14 +124,14 @@ pub fn pattern(
 		normalized_noteskin_name.retain(|c| c.is_alphanumeric());
 
 		match normalized_noteskin_name.as_str() {
-			"dbz" | "dividebyzero" => Some(&state.noteskin_provider.dbz),
-			"wafles" | "wafles3" => Some(&state.noteskin_provider.wafles),
-			"default" | "lambda" => Some(&state.noteskin_provider.lambda),
-			"deltanote" | "delta" => Some(&state.noteskin_provider.delta_note),
-			"sbz" | "subtractbyzero" => Some(&state.noteskin_provider.sbz),
-			"mbz" | "multiplybyzero" => Some(&state.noteskin_provider.mbz),
-			"eobaner" => Some(&state.noteskin_provider.eo_baner),
-			"rustmania" => Some(&state.noteskin_provider.rustmania),
+			"dbz" | "dividebyzero" => Some(&ctx.data.noteskin_provider.dbz),
+			"wafles" | "wafles3" => Some(&ctx.data.noteskin_provider.wafles),
+			"default" | "lambda" => Some(&ctx.data.noteskin_provider.lambda),
+			"deltanote" | "delta" => Some(&ctx.data.noteskin_provider.delta_note),
+			"sbz" | "subtractbyzero" => Some(&ctx.data.noteskin_provider.sbz),
+			"mbz" | "multiplybyzero" => Some(&ctx.data.noteskin_provider.mbz),
+			"eobaner" => Some(&ctx.data.noteskin_provider.eo_baner),
+			"rustmania" => Some(&ctx.data.noteskin_provider.rustmania),
 			_ => None,
 		}
 	};
@@ -181,8 +182,10 @@ pub fn pattern(
 			continue;
 		}
 		if did_user_intend {
-			msg.channel_id
-				.say(&ctx.http, format!("\"{}\" is not a valid snap", arg))?;
+			ctx.msg
+				.channel_id
+				.say(ctx.discord, format!("\"{}\" is not a valid snap", arg))
+				.await?;
 		}
 
 		let mut did_user_intend = false;
@@ -191,10 +194,13 @@ pub fn pattern(
 			continue;
 		}
 		if did_user_intend {
-			msg.channel_id.say(
-				&ctx.http,
-				format!("\"{}\" is not a valid noteskin name", arg),
-			)?;
+			ctx.msg
+				.channel_id
+				.say(
+					ctx.discord,
+					format!("\"{}\" is not a valid noteskin name", arg),
+				)
+				.await?;
 		}
 
 		let mut did_user_intend = false;
@@ -205,8 +211,13 @@ pub fn pattern(
 			continue;
 		}
 		if did_user_intend {
-			msg.channel_id
-				.say(&ctx.http, format!("\"{}\" is not a valid zoom option", arg))?;
+			ctx.msg
+				.channel_id
+				.say(
+					ctx.discord,
+					format!("\"{}\" is not a valid zoom option", arg),
+				)
+				.await?;
 		}
 
 		let mut did_user_intend = false;
@@ -216,10 +227,13 @@ pub fn pattern(
 			continue;
 		}
 		if did_user_intend {
-			msg.channel_id.say(
-				&ctx.http,
-				format!("\"{}\" is not a valid scroll direction", arg),
-			)?;
+			ctx.msg
+				.channel_id
+				.say(
+					ctx.discord,
+					format!("\"{}\" is not a valid scroll direction", arg),
+				)
+				.await?;
 		}
 
 		let mut did_user_intend = false;
@@ -228,8 +242,10 @@ pub fn pattern(
 			continue;
 		}
 		if did_user_intend {
-			msg.channel_id
-				.say(&ctx.http, format!("\"{}\" is not a valid keymode", arg))?;
+			ctx.msg
+				.channel_id
+				.say(ctx.discord, format!("\"{}\" is not a valid keymode", arg))
+				.await?;
 		}
 
 		// if nothing matched, this is just an ordinary part of the pattern
@@ -265,10 +281,10 @@ pub fn pattern(
 	} else {
 		// choose a default noteskin
 		match keymode {
-			3 | 4 | 6 | 8 => &state.noteskin_provider.dbz,
-			5 | 10 => &state.noteskin_provider.delta_note,
-			7 | 9 => &state.noteskin_provider.sbz,
-			_ => &state.noteskin_provider.sbz, // fallback
+			3 | 4 | 6 | 8 => &ctx.data.noteskin_provider.dbz,
+			5 | 10 => &ctx.data.noteskin_provider.delta_note,
+			7 | 9 => &ctx.data.noteskin_provider.sbz,
+			_ => &ctx.data.noteskin_provider.sbz, // fallback
 		}
 	};
 
@@ -288,22 +304,34 @@ pub fn pattern(
 		.map_err(pattern_draw::Error::ImageError)?;
 
 	// Send the image into the channel where the summoning message comes from
-	msg.channel_id
-		.send_files(&ctx.http, vec![(img_bytes.as_slice(), "output.png")], |m| m)?;
+	ctx.msg
+		.channel_id
+		.send_files(
+			ctx.discord,
+			vec![(img_bytes.as_slice(), "output.png")],
+			|m| m,
+		)
+		.await?;
 
 	Ok(())
 }
 
-pub fn scrollset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let scroll = poise::parse_args!(args => (String))?;
+/// Change the scroll direction in subsequent pattern command calls
+///
+/// Call this command with `+scrollset [down/up]`
+#[poise::command(track_edits, slash_command)]
+pub async fn scrollset(
+	ctx: Context<'_>,
+	#[description = "Scroll direction"] scroll: String,
+) -> Result<(), Error> {
 	let scroll = match scroll.to_lowercase().as_str() {
 		"down" | "downscroll" | "reverse" => etterna::ScrollDirection::Downscroll,
 		"up" | "upscroll" => etterna::ScrollDirection::Upscroll,
 		_ => return Err(format!("No such scroll '{}'", scroll).into()),
 	};
 
-	ctx.data.lock_data().set_scroll(ctx.msg.author.id.0, scroll);
-	poise::say_reply(ctx, format!("Your scroll type is now {:?}", scroll))?;
+	ctx.data().lock_data().set_scroll(ctx.author().id.0, scroll);
+	poise::say_reply(ctx, format!("Your scroll type is now {:?}", scroll)).await?;
 
 	Ok(())
 }

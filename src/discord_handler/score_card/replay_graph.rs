@@ -43,14 +43,14 @@ impl IconStamper {
 		// convert RGBA->RGB, making transparent pixels black
 		// plotters crate and image crate have united in their goal to make us do the most awkward
 		// fucking stupid dances to do basic things
-		let mut image = image.into_rgba();
+		let mut image = image.into_rgba8();
 		for pixel in image.pixels_mut() {
 			let mut new_pixel = image::Rgba([0, 0, 0, 255]);
 			new_pixel.blend(&pixel);
 			*pixel = new_pixel;
 		}
 		let image =
-			image::DynamicImage::ImageRgb8(image::DynamicImage::ImageRgba8(image).into_rgb());
+			image::DynamicImage::ImageRgb8(image::DynamicImage::ImageRgba8(image).into_rgb8());
 
 		// Triangle (aka bilinear) is the fastest resize algorithm that doesn't look garbage
 		let image = image.resize(size, size, image::imageops::FilterType::Triangle);

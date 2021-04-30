@@ -1,13 +1,20 @@
-use super::Context;
+use super::PrefixContext;
 use crate::Error;
 
-pub fn help(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let embed_contents = if args.eq_ignore_ascii_case("pattern") {
+/// Display usage help for this bot
+#[poise::command(track_edits)]
+pub async fn help(
+	ctx: PrefixContext<'_>,
+	#[flag]
+	#[description = "Explain the pattern command"]
+	pattern: bool,
+) -> Result<(), Error> {
+	let embed_contents = if pattern {
 		r#"
 **+pattern [down/up] [NN]ths [noteskin] [zoom]x [keymode]k PATTERN STRING**
 - `down/up` configures the scroll direction (note: you can set your default with `+scrollset`)
 - `NNths` (e.g. `20ths`) sets the note snap. Can be used mid-pattern
-- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`[.](https://pastebin.com/raw/5We1buQU)
+- `noteskin` can be `delta-note`, `sbz`/`subtract-by-zero`, `dbz`/`divide-by-zero`, `mbz`/`multiply-by-zero`, `lambda`, or `wafles`/`wafles3`[.](https://pastebin.com/raw/VSKisWbM)
 - `zoom` (e.g. `2x`) applies a certain stretch to the notes
 - `keymode` (e.g. `5k` can be used to force a certain keymode when it's not obvious
 
@@ -74,8 +81,9 @@ your message, I will also show the wifescores with that judge.
 		)
 	};
 
-	poise::send_reply(ctx, |m| {
+	poise::send_prefix_reply(ctx, |m| {
 		m.embed(|e| e.description(embed_contents).color(crate::ETTERNA_COLOR))
-	})?;
+	})
+	.await?;
 	Ok(())
 }

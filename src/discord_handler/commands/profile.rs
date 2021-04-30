@@ -54,9 +54,14 @@ fn rescale(value: f32, src_range: std::ops::Range<f32>, dest_range: std::ops::Ra
 	dest_range.start + proportion * (dest_range.end - dest_range.start)
 }
 
-fn profile_compare(ctx: Context<'_>, me: &str, you: &str, expanded: bool) -> Result<(), Error> {
-	let me = ctx.data.v2()?.user_details(me)?;
-	let you = ctx.data.v2()?.user_details(you)?;
+async fn profile_compare(
+	ctx: Context<'_>,
+	me: &str,
+	you: &str,
+	expanded: bool,
+) -> Result<(), Error> {
+	let me = ctx.data().v2()?.user_details(me)?;
+	let you = ctx.data().v2()?.user_details(you)?;
 
 	let my_rating = &me.rating;
 	let your_rating = &you.rating;
@@ -144,116 +149,135 @@ fn profile_compare(ctx: Context<'_>, me: &str, you: &str, expanded: bool) -> Res
 
 			e
 		})
-	})?;
+	})
+	.await?;
 
 	Ok(())
 }
 
-/// Case-insensitively matches the literal "expanded"
-struct Expanded;
-impl<'a> poise::ParseConsuming<'a> for Expanded {
-	type Err = ();
-	fn pop_from(args: &poise::Arguments<'a>) -> Result<(poise::Arguments<'a>, Self), ()> {
-		let (args, word) = args.pop::<String>().map_err(|_| ())?;
-		if word.eq_ignore_ascii_case("expanded") {
-			Ok((args, Self))
-		} else {
-			Err(())
-		}
-	}
-}
+/// Compare your skillsets against your rival
+#[poise::command(track_edits, slash_command)]
+pub async fn rival(
+	ctx: Context<'_>,
+	#[description = "Show a bar chart of individual skillsets"]
+	#[flag]
+	expanded: bool,
+) -> Result<(), Error> {
+	let me = &ctx.data().get_eo_username(ctx.author())?;
 
-pub fn rival(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let expanded = poise::parse_args!(args => (Option<Expanded>))?;
-
-	let me = &ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?;
-	let you = match ctx.data.lock_data().rival(ctx.msg.author.id.0) {
-		Some(rival) => rival.to_owned(),
+	let rival = ctx
+		.data()
+		.lock_data()
+		.rival(ctx.author().id.0)
+		.map(|x| x.to_owned());
+	let you = match rival {
+		Some(rival) => rival,
 		None => {
-			ctx.msg.channel_id.say(
-				&ctx.discord.http,
-				"Set your rival first with `+rivalset USERNAME`",
-			)?;
+			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`".into()).await?;
 			return Ok(());
 		}
 	};
 
-	profile_compare(ctx, me, &you, expanded.is_some())
+	profile_compare(ctx, me, &you, expanded).await
 }
 
-pub fn compare(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let (me, you, expanded) =
-		poise::parse_args!(args => #[lazy] (Option<String>), (String), (Option<Expanded>))?;
+// /// Compare two users' skillsets.
 
-	let me = match me {
+/// Compare two users skillsets.
+///
+/// Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic
+#[poise::command(track_edits, slash_command)]
+pub async fn compare(
+	ctx: Context<'_>,
+	#[description = "User on the left side of the comparison"]
+	#[lazy]
+	left: Option<String>,
+	#[description = "User on the right side of the comparison"] right: String,
+	#[description = "Show a bar chart of individual skillsets"]
+	#[flag]
+	expanded: bool,
+) -> Result<(), Error> {
+	let left = match left {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?,
+		None => ctx.data().get_eo_username(ctx.author())?,
 	};
 
-	profile_compare(ctx, &me, &you, expanded.is_some())
+	profile_compare(ctx, &left, &right, expanded).await
 }
 
-pub fn userset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let username = poise::parse_args!(args => (String))?;
-
+/// Save your EtternaOnline username in the bot
+///
+/// Call this command with `+userset YOUR_EO_USERNAME`
+#[poise::command(track_edits, slash_command)]
+pub async fn userset(
+	ctx: Context<'_>,
+	#[description = "Your EtternaOnline username"] username: String,
+) -> Result<(), Error> {
 	let new_user_entry = super::config::UserRegistryEntry {
-		discord_id: ctx.msg.author.id.0,
-		discord_username: ctx.msg.author.name.to_owned(),
-		eo_id: ctx.data.web_session.user_details(&username)?.user_id,
+		discord_id: ctx.author().id.0,
+		discord_username: ctx.author().name.to_owned(),
+		eo_id: ctx.data().web_session.user_details(&username)?.user_id,
 		eo_username: username.to_owned(),
 		last_known_num_scores: None,
 		last_rating: None,
 	};
 
-	let mut data = ctx.data.lock_data();
-	match data
-		.user_registry
-		.iter_mut()
-		.find(|u| u.discord_id == ctx.msg.author.id.0)
+	let old_eo_username;
 	{
-		Some(existing_user_entry) => {
-			poise::say_reply(
-				ctx,
-				format!(
-					"Successfully updated username from `{}` to `{}`",
-					existing_user_entry.eo_username, new_user_entry.eo_username,
-				),
-			)?;
-
-			*existing_user_entry = new_user_entry;
+		let mut data = ctx.data().lock_data();
+		match data
+			.user_registry
+			.iter_mut()
+			.find(|u| u.discord_id == ctx.author().id.0)
+		{
+			Some(existing_user_entry) => {
+				old_eo_username = Some(existing_user_entry.eo_username.clone());
+				*existing_user_entry = new_user_entry;
+			}
+			None => {
+				old_eo_username = None;
+				data.user_registry.push(new_user_entry);
+			}
 		}
-		None => {
-			poise::say_reply(ctx, format!("Successfully set username to `{}`", username))?;
+	}
 
-			data.user_registry.push(new_user_entry);
-		}
+	let response = match old_eo_username {
+		Some(old) => format!(
+			"Successfully updated username from `{}` to `{}`",
+			old, username,
+		),
+		None => format!("Successfully set username to `{}`", username),
 	};
+	poise::say_reply(ctx, response).await?;
 
 	Ok(())
 }
 
-pub fn rivalset(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let username = poise::parse_args!(args => (String))?;
-
-	if let Err(etternaonline_api::Error::UserNotFound) = ctx.data.v2()?.user_details(&username) {
-		ctx.msg
-			.channel_id
-			.say(&ctx.discord.http, &format!("User `{}` doesn't exist", args))?;
+/// Set a rival to compete against!
+///
+/// Call this command with `+rivalset YOUR_EO_USERNAME`
+#[poise::command(track_edits, slash_command)]
+pub async fn rivalset(
+	ctx: Context<'_>,
+	#[description = "EtternaOnline username of your new rival"] rival: String,
+) -> Result<(), Error> {
+	if ctx.data().v2()?.user_details(&rival).is_err() {
+		poise::say_reply(ctx, format!("User `{}` doesn't exist", rival)).await?;
 		return Ok(());
 	}
 
 	let response = match ctx
-		.data
+		.data()
 		.lock_data()
-		.set_rival(ctx.msg.author.id.0, username.to_owned())
+		.set_rival(ctx.author().id.0, rival.to_owned())
 	{
 		Some(old_rival) => format!(
 			"Successfully updated your rival from `{}` to `{}`",
-			old_rival, username,
+			old_rival, rival,
 		),
-		None => format!("Successfully set your rival to `{}`", username),
+		None => format!("Successfully set your rival to `{}`", rival),
 	};
-	poise::say_reply(ctx, response)?;
+	poise::say_reply(ctx, response).await?;
 
 	Ok(())
 }
@@ -277,15 +301,20 @@ fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
 	}
 }
 
-pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let eo_username = poise::parse_args!(args => (Option<String>))?;
+/// Display your skillsets and your improvements since last time
+#[poise::command(aliases("advprof"), track_edits, slash_command)]
+pub async fn profile(
+	ctx: Context<'_>,
+	#[description = "EtternaOnline username. If not specified, shows your stats"] // dummy
+	eo_username: Option<String>,
+) -> Result<(), Error> {
 	let (eo_username, overwrite_prev_ratings) = match eo_username {
 		Some(eo_username) => (eo_username, false),
-		None => (ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?, true),
+		None => (ctx.data().get_eo_username(ctx.author())?, true),
 	};
 
-	let details = ctx.data.v2()?.user_details(&eo_username)?;
-	let ranks = ctx.data.v2()?.user_ranks_per_skillset(&eo_username)?;
+	let details = ctx.data().v2()?.user_details(&eo_username)?;
+	let ranks = ctx.data().v2()?.user_ranks_per_skillset(&eo_username)?;
 
 	let mut title = eo_username.to_owned();
 	if details.is_moderator {
@@ -306,44 +335,48 @@ pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 		}
 	}
 
-	let mut data = ctx.data.lock_data();
-	// None if user is not in registry, None(None) if user is in registry but no prev rating
-	let previous_ratings = data
-		.user_registry
-		.iter_mut()
-		.find(|entry| entry.eo_username.eq_ignore_ascii_case(&eo_username))
-		.map(|entry| &mut entry.last_rating);
+	let rating_string = {
+		let mut data = ctx.data().lock_data();
+		// None if user is not in registry, None(None) if user is in registry but no prev rating
+		let previous_ratings = data
+			.user_registry
+			.iter_mut()
+			.find(|entry| entry.eo_username.eq_ignore_ascii_case(&eo_username))
+			.map(|entry| &mut entry.last_rating);
 
-	let mut rating_string = "```prolog\n".to_owned();
-	for skillset in etterna::Skillset8::iter() {
-		match &previous_ratings {
-			Some(Some(prev)) => {
-				rating_string += &format!(
-					"{: >10}:   {: >5.2} ({: >+4.2})  #{: <4}\n",
-					skillset.to_string(),
-					details.rating.get(skillset),
-					details.rating.get(skillset) - prev.get(skillset),
-					ranks.get(skillset),
-				)
-			}
-			Some(None) | None => {
-				rating_string += &format!(
-					"{: >10}:   {: >5.2}  #{: <4}\n",
-					skillset.to_string(),
-					details.rating.get(skillset),
-					ranks.get(skillset),
-				)
+		let mut rating_string = "```prolog\n".to_owned();
+		for skillset in etterna::Skillset8::iter() {
+			match &previous_ratings {
+				Some(Some(prev)) => {
+					rating_string += &format!(
+						"{: >10}:   {: >5.2} ({: >+4.2})  #{: <4}\n",
+						skillset.to_string(),
+						details.rating.get(skillset),
+						details.rating.get(skillset) - prev.get(skillset),
+						ranks.get(skillset),
+					)
+				}
+				Some(None) | None => {
+					rating_string += &format!(
+						"{: >10}:   {: >5.2}  #{: <4}\n",
+						skillset.to_string(),
+						details.rating.get(skillset),
+						ranks.get(skillset),
+					)
+				}
 			}
 		}
-	}
-	rating_string += "```";
+		rating_string += "```";
 
-	if overwrite_prev_ratings {
-		// TODO: could create new entry if doesn't already exist to store ratings
-		if let Some(previous_ratings) = previous_ratings {
-			*previous_ratings = Some(details.rating.clone());
+		if overwrite_prev_ratings {
+			// TODO: could create new entry if doesn't already exist to store ratings
+			if let Some(previous_ratings) = previous_ratings {
+				*previous_ratings = Some(details.rating.clone());
+			}
 		}
-	}
+
+		rating_string
+	};
 
 	poise::send_reply(ctx, |m| {
 		m.embed(|embed| {
@@ -378,7 +411,8 @@ pub fn profile(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 
 			embed
 		})
-	})?;
+	})
+	.await?;
 
 	Ok(())
 }

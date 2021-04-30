@@ -1,77 +1,41 @@
-use super::{Context, State};
-use crate::{serenity, Error};
+use super::Context;
+use crate::Error;
 
-pub const CMD_TOP_HELP: &str =
-	"Call this command with `+top[NN] [USERNAME] [SKILLSET]` (both params optional)";
-
-pub fn top_scores(
-	state: &State,
-	ctx: &serenity::Context,
-	msg: &serenity::Message,
-	args: &str,
-	mut limit: u32,
+/// Call this command with `+top [NN] [USERNAME] [SKILLSET]` (username and skillset optional)
+#[poise::command(track_edits, slash_command)]
+pub async fn top_scores(
+	ctx: Context<'_>,
+	#[description = "Number of scores to show"] mut limit: u32,
+	#[description = "Specific skillset to focus on"] skillset: Option<
+		poise::Wrapper<etterna::Skillset7>,
+	>,
+	#[description = "Falls back to your username"] username: Option<String>,
 ) -> Result<(), Error> {
+	let username = match username {
+		Some(x) => x,
+		None => ctx.data().get_eo_username(ctx.author())?,
+	};
+
 	if !(1..=30).contains(&limit) {
-		msg.channel_id
-			.say(&ctx.http, "Only limits up to 30 are supported")?;
+		poise::say_reply(ctx, "Only limits up to 30 are supported".into()).await?;
 		return Ok(());
-	}
-
-	let args: Vec<&str> = args.split_whitespace().collect();
-
-	let skillset;
-	let eo_username;
-	match *args.as_slice() {
-		[] => {
-			skillset = None;
-			eo_username = state.get_eo_username(ctx, msg)?;
-		}
-		[skillset_or_username] => match etterna::Skillset7::from_user_input(skillset_or_username) {
-			Some(parsed_skillset) => {
-				skillset = Some(parsed_skillset);
-				eo_username = state.get_eo_username(ctx, msg)?;
-			}
-			None => {
-				skillset = None;
-				eo_username = skillset_or_username.to_owned();
-			}
-		},
-		[skillset_str, username] => {
-			skillset = match etterna::Skillset7::from_user_input(skillset_str) {
-				Some(parsed_skillset) => Some(parsed_skillset),
-				None => {
-					msg.channel_id.say(
-						&ctx.http,
-						format!("Unrecognized skillset \"{}\"", skillset_str),
-					)?;
-					return Ok(());
-				}
-			};
-			eo_username = username.to_owned();
-		}
-		_ => {
-			msg.channel_id.say(&ctx.http, CMD_TOP_HELP)?;
-			return Ok(());
-		}
 	}
 
 	// Download top scores
 	let top_scores = match skillset {
-		None => state.v2()?.user_top_10_scores(&eo_username),
-		Some(skillset) => state
+		None => ctx.data().v2()?.user_top_10_scores(&username),
+		Some(skillset) => ctx
+			.data()
 			.v2()?
-			.user_top_skillset_scores(&eo_username, skillset, limit),
+			.user_top_skillset_scores(&username, skillset.0, limit),
 	};
 	if let Err(etternaonline_api::Error::UserNotFound) = top_scores {
-		msg.channel_id.say(
-			&ctx.http,
-			format!("No such user or skillset \"{}\"", eo_username),
-		)?;
+		poise::say_reply(ctx, format!("No such user or skillset \"{}\"", username)).await?;
 		return Ok(());
 	}
 	let top_scores = top_scores?;
 
-	let country_code = state.v2()?.user_details(&eo_username)?.country_code;
+	let country_code = ctx.data().v2()?.user_details(&username)?.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in top_scores.iter().enumerate() {
@@ -93,11 +57,11 @@ pub fn top_scores(
 	response += "```";
 
 	let title = match skillset {
-		None => format!("{}'s Top {}", eo_username, limit),
-		Some(skillset) => format!("{}'s Top {} {}", eo_username, limit, skillset),
+		None => format!("{}'s Top {}", username, limit),
+		Some(skillset) => format!("{}'s Top {} {}", username, limit, skillset.0),
 	};
 
-	msg.channel_id.send_message(&ctx.http, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|e| {
 			e.color(crate::ETTERNA_COLOR)
 				.description(&response)
@@ -105,7 +69,7 @@ pub fn top_scores(
 					a.name(title)
 						.url(format!(
 							"https://etternaonline.com/user/profile/{}",
-							eo_username
+							username
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
@@ -113,21 +77,26 @@ pub fn top_scores(
 						))
 				})
 		})
-	})?;
+	})
+	.await?;
 
 	Ok(())
 }
 
-pub fn latest_scores(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let eo_username = poise::parse_args!(args => (Option<String>))?;
-	let eo_username = match eo_username {
+/// Show a list of recent scores
+#[poise::command(aliases("ls"), track_edits, slash_command)]
+pub async fn lastsession(
+	ctx: Context<'_>,
+	#[description = "Falls back to your username"] username: Option<String>,
+) -> Result<(), Error> {
+	let username = match username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.discord, &ctx.msg)?,
+		None => ctx.data().get_eo_username(ctx.author())?,
 	};
 
-	let latest_scores = ctx.data.v2()?.user_latest_scores(&eo_username)?;
+	let latest_scores = ctx.data().v2()?.user_latest_scores(&username)?;
 
-	let country_code = ctx.data.v2()?.user_details(&eo_username)?.country_code;
+	let country_code = ctx.data().v2()?.user_details(&username)?.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in latest_scores.iter().enumerate() {
@@ -142,7 +111,7 @@ pub fn latest_scores(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	}
 	response += "```";
 
-	let title = format!("{}'s Last 10 Scores", eo_username);
+	let title = format!("{}'s Last 10 Scores", username);
 
 	poise::send_reply(ctx, |m| {
 		m.embed(|e| {
@@ -152,7 +121,7 @@ pub fn latest_scores(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 					a.name(title)
 						.url(format!(
 							"https://etternaonline.com/user/profile/{}",
-							eo_username
+							username
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
@@ -160,7 +129,8 @@ pub fn latest_scores(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 						))
 				})
 		})
-	})?;
+	})
+	.await?;
 
 	Ok(())
 }

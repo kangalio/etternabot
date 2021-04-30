@@ -90,11 +90,11 @@ impl Noteskin {
 		mine_path: &str,
 	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
-		let center_receptor = middle_texture(&image::open(center_receptor_path)?.into_rgba())?;
-		let corner_receptor = middle_texture(&image::open(corner_receptor_path)?.into_rgba())?;
-		let center_notes = image::open(center_notes_path)?.into_rgba();
-		let corner_notes = image::open(corner_notes_path)?.into_rgba();
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
+		let center_receptor = middle_texture(&image::open(center_receptor_path)?.into_rgba8())?;
+		let corner_receptor = middle_texture(&image::open(corner_receptor_path)?.into_rgba8())?;
+		let center_notes = image::open(center_notes_path)?.into_rgba8();
+		let corner_notes = image::open(corner_notes_path)?.into_rgba8();
 
 		Ok(Self {
 			sprite_resolution,
@@ -138,9 +138,9 @@ impl Noteskin {
 		mine_path: &str,
 	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
-		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
-		let notes = image::open(notes_path)?.into_rgba();
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
+		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba8())?;
+		let notes = image::open(notes_path)?.into_rgba8();
 
 		Ok(Self {
 			sprite_resolution,
@@ -194,18 +194,18 @@ impl Noteskin {
 			sprite_resolution,
 			textures: Textures::MonoSnapLdur {
 				notes: [
-					image::open(left_note_path)?.into_rgba(),
-					image::open(down_note_path)?.into_rgba(),
-					image::open(up_note_path)?.into_rgba(),
-					image::open(right_note_path)?.into_rgba(),
+					image::open(left_note_path)?.into_rgba8(),
+					image::open(down_note_path)?.into_rgba8(),
+					image::open(up_note_path)?.into_rgba8(),
+					image::open(right_note_path)?.into_rgba8(),
 				],
 				receptors: [
-					image::open(left_receptor_path)?.into_rgba(),
-					image::open(down_receptor_path)?.into_rgba(),
-					image::open(up_receptor_path)?.into_rgba(),
-					image::open(right_receptor_path)?.into_rgba(),
+					image::open(left_receptor_path)?.into_rgba8(),
+					image::open(down_receptor_path)?.into_rgba8(),
+					image::open(up_receptor_path)?.into_rgba8(),
+					image::open(right_receptor_path)?.into_rgba8(),
 				],
-				mine: image::open(mine_path)?.into_rgba(),
+				mine: image::open(mine_path)?.into_rgba8(),
 			},
 		})
 	}
@@ -217,9 +217,9 @@ impl Noteskin {
 		mine_path: &str,
 	) -> Result<Self, super::Error> {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba())?;
-		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba())?;
-		let notes = image::open(notes_path)?.into_rgba();
+		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
+		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba8())?;
+		let notes = image::open(notes_path)?.into_rgba8();
 
 		Ok(Self {
 			sprite_resolution,

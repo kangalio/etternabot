@@ -1,33 +1,37 @@
 //! Miscellaneous "fun-fact" commands
 
-use super::Context;
+use super::{Context, PrefixContext};
 use crate::Error;
 
-pub fn ping(ctx: Context<'_>, args: &str) -> Result<(), Error> {
+#[poise::command(track_edits)]
+pub async fn ping(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Error> {
 	let mut response = String::from("Pong");
 	for _ in 0..args.matches("ping").count() {
 		response += " pong";
 	}
 	response += "!";
-	poise::say_reply(ctx, response)?;
+	poise::say_prefix_reply(ctx, response).await?;
 
 	Ok(())
 }
 
-pub fn servers(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
-	let guilds = ctx.discord.http.get_current_user()?.guilds(ctx.discord)?;
+#[poise::command(track_edits)]
+pub async fn servers(ctx: PrefixContext<'_>) -> Result<(), Error> {
+	let current_user = ctx.discord.http.get_current_user().await?;
+	let guilds = current_user.guilds(ctx.discord).await?;
 
 	let mut response = format!("I am currently in {} servers!\n", guilds.len());
 	for guild in guilds {
 		response += &format!("- {}\n", guild.name);
 	}
 
-	poise::say_reply(ctx, response)?;
+	poise::say_prefix_reply(ctx, response).await?;
 
 	Ok(())
 }
 
-pub fn uptime(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
+#[poise::command(track_edits)]
+pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
 	let uptime = std::time::Instant::now() - ctx.data.bot_start_time;
 
 	let div_mod = |a, b| (a / b, a % b);
@@ -38,29 +42,37 @@ pub fn uptime(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
 	let (hours, minutes) = div_mod(minutes, 60);
 	let (days, hours) = div_mod(hours, 24);
 
-	poise::say_reply(
+	poise::say_prefix_reply(
 		ctx,
 		format!(
 			"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
 			days, hours, minutes, seconds, millis
 		),
-	)?;
+	)
+	.await?;
 
 	Ok(())
 }
 
-pub fn lookup(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let discord_username = poise::parse_args!(args => (String))?;
-
-	let data = ctx.data.lock_data();
-	let user = data
+/// Lookup a saved user by their Discord username
+///
+/// Call this command with `+lookup DISCORDUSERNAME`
+#[poise::command(track_edits, slash_command)]
+pub async fn lookup(
+	ctx: Context<'_>,
+	#[description = "Discord username"] discord_username: String,
+) -> Result<(), Error> {
+	let user = ctx
+		.data()
+		.lock_data()
 		.user_registry
 		.iter()
 		.find(|user| {
 			user.discord_username
 				.eq_ignore_ascii_case(&discord_username)
 		})
-		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
+		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?
+		.clone();
 
 	poise::say_reply(
 		ctx,
@@ -68,22 +80,42 @@ pub fn lookup(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 			"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
 			user.discord_username, user.eo_username, user.eo_username,
 		),
-	)?;
+	)
+	.await?;
 
 	Ok(())
 }
 
-pub fn quote(ctx: Context<'_>, _args: &str) -> Result<(), Error> {
+/// Print one of various random quotes, phrases and memes from various rhythm gaming communities
+#[poise::command(track_edits, slash_command)]
+pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 	use rand::Rng as _;
 
-	let quote_index = rand::thread_rng().gen_range(0, ctx.data.config.quotes.len());
+	let quote_index = rand::thread_rng().gen_range(0, ctx.data().config.quotes.len());
 	// UNWRAP: index is below quotes len because we instructed the rand crate to do so
-	let quote = ctx.data.config.quotes.get(quote_index).unwrap();
+	let quote = ctx.data().config.quotes.get(quote_index).unwrap();
 	let string = match &quote.source {
 		Some(source) => format!("> {}\n~ {}", quote.quote, source),
 		None => format!("> {}", quote.quote),
 	};
-	poise::say_reply(ctx, string)?;
+	poise::say_reply(ctx, string).await?;
 
+	Ok(())
+}
+
+#[poise::command(broadcast_typing)]
+pub async fn slashregister(ctx: PrefixContext<'_>) -> Result<(), Error> {
+	// REMEMBER: hardcoded id is bad
+	if ctx.msg.author.id.0 != 472029906943868929 {
+		return Err("You're not kangalioo".into());
+	}
+	let guild_id = ctx.msg.guild_id.ok_or("Must be in guild")?;
+	for slash_cmd in &ctx.framework.options().slash_options.commands {
+		println!("Registering {}", slash_cmd.name);
+		slash_cmd
+			.create_in_guild(&ctx.discord.http, guild_id)
+			.await?;
+	}
+	poise::say_prefix_reply(ctx, "Successfully registered commands".into()).await?;
 	Ok(())
 }

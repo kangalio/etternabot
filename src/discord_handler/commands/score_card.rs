@@ -1,9 +1,9 @@
 //! All commands that spawn a score card
 
-use super::Context;
+use super::PrefixContext;
 use crate::Error;
 
-struct Judge(&'static etterna::Judge);
+pub struct Judge(&'static etterna::Judge);
 impl std::str::FromStr for Judge {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -11,12 +11,16 @@ impl std::str::FromStr for Judge {
 	}
 }
 
-pub fn rs(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let (eo_username, alternative_judge) =
-		poise::parse_args!(args => #[lazy] (Option<String>), (Option<poise::Wrapper<Judge>>))?;
+/// Call this command with `+rs [username] [judge]`
+#[poise::command] // can't make slash command because it shows a score card
+pub async fn rs(
+	ctx: PrefixContext<'_>,
+	#[lazy] eo_username: Option<String>,
+	alternative_judge: Option<poise::Wrapper<Judge>>,
+) -> Result<(), Error> {
 	let eo_username = match eo_username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(ctx.discord, ctx.msg)?,
+		None => ctx.data.get_eo_username(&ctx.msg.author)?,
 	};
 	let alternative_judge = alternative_judge.map(|j| j.0 .0);
 
@@ -24,7 +28,7 @@ pub fn rs(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 	let latest_score = match latest_scores.first() {
 		Some(x) => x,
 		None => {
-			poise::say_reply(ctx, "User has no scores".into())?;
+			poise::say_prefix_reply(ctx, "User has no scores".into()).await?;
 			return Ok(());
 		}
 	};
@@ -40,7 +44,8 @@ pub fn rs(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge,
 		},
-	)?;
+	)
+	.await?;
 
 	Ok(())
 }
@@ -87,29 +92,35 @@ fn get_random_score(
 		.ok_or_else(|| "A score was requested from EO but none was sent".into())
 }
 
-pub fn random_score(ctx: Context<'_>, args: &str) -> Result<(), Error> {
-	let username = match args.split_ascii_whitespace().next() {
-		Some(x) => x.to_owned(),
-		None => ctx.data.get_eo_username(ctx.discord, ctx.msg)?,
+#[poise::command]
+pub async fn randomscore(
+	ctx: PrefixContext<'_>,
+	#[lazy] username: Option<String>,
+	judge: Option<poise::Wrapper<Judge>>,
+) -> Result<(), Error> {
+	let username = match username {
+		Some(x) => x,
+		None => ctx.data.get_eo_username(&ctx.msg.author)?,
 	};
 
-	let mut data = ctx.data.lock_data();
-	let user = data
-		.user_registry
-		.iter_mut()
-		.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
-		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
+	let (user_eo_id, scorekey) = {
+		let mut data = ctx.data.lock_data();
+		let user = data
+			.user_registry
+			.iter_mut()
+			.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
+			.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
 
-	let user_eo_id = user.eo_id;
+		// find a random score. If it's invalid, find another one
+		let scorekey = loop {
+			let score = get_random_score(user, &ctx.data.web_session)?;
+			if let Some(validity_dependant) = score.validity_dependant {
+				break validity_dependant.scorekey;
+			}
+		};
 
-	// find a random score. If it's invalid, find another one
-	let scorekey = loop {
-		let score = get_random_score(user, &ctx.data.web_session)?;
-		if let Some(validity_dependant) = score.validity_dependant {
-			break validity_dependant.scorekey;
-		}
+		(user.eo_id, scorekey)
 	};
-	drop(data);
 
 	super::send_score_card(
 		ctx.data,
@@ -119,9 +130,10 @@ pub fn random_score(ctx: Context<'_>, args: &str) -> Result<(), Error> {
 			scorekey: &scorekey,
 			user_id: Some(user_eo_id),
 			show_ssrs_and_judgements_and_modifiers: true,
-			alternative_judge: super::extract_judge_from_string(args),
+			alternative_judge: judge.map(|x| x.0 .0),
 		},
-	)?;
+	)
+	.await?;
 
 	Ok(())
 }
