@@ -103,7 +103,7 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 	Ok(())
 }
 
-#[poise::command(broadcast_typing)]
+#[poise::command]
 pub async fn slashregister(ctx: PrefixContext<'_>) -> Result<(), Error> {
 	// REMEMBER: hardcoded id is bad
 	if ctx.msg.author.id.0 != 472029906943868929 {

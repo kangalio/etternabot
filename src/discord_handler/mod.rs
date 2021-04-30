@@ -218,7 +218,9 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 		on_error: |e, ctx| Box::pin(on_error(e, ctx)),
 		prefix_options: poise::PrefixFrameworkOptions {
 			command_check: |c| Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c))),
-			broadcast_typing: true,
+			broadcast_typing: poise::BroadcastTypingBehavior::WithDelay(
+				std::time::Duration::from_secs_f32(1.0),
+			),
 			edit_tracker: Some(poise::EditTracker::for_timespan(
 				std::time::Duration::from_secs(3600),
 			)),
@@ -249,6 +251,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::skillgraph);
 	framework.command(commands::rivalgraph);
 	framework.command(commands::accuracygraph);
+	framework.command(commands::quote);
 	framework.command(commands::slashregister);
 	// TODO: add topNN command
 	framework
