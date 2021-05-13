@@ -18,7 +18,7 @@ pub async fn send_score_card(
 	channel: serenity::ChannelId,
 	info: ScoreCard<'_>,
 ) -> Result<(), Error> {
-	let message = score_card_inner(state, info)?;
+	let message = score_card_inner(state, info).await?;
 	channel
 		.send_message(ctx, |m| {
 			*m = message;
@@ -28,11 +28,11 @@ pub async fn send_score_card(
 	Ok(())
 }
 
-fn score_card_inner(
+async fn score_card_inner(
 	state: &State,
 	info: ScoreCard<'_>,
 ) -> Result<serenity::CreateMessage<'static>, Error> {
-	let score = state.v2()?.score_data(info.scorekey)?;
+	let score = state.v2().await?.score_data(info.scorekey).await?;
 
 	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
 		if let Some(replay) = &score.replay {

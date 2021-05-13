@@ -60,8 +60,8 @@ async fn profile_compare(
 	you: &str,
 	expanded: bool,
 ) -> Result<(), Error> {
-	let me = ctx.data().v2()?.user_details(me)?;
-	let you = ctx.data().v2()?.user_details(you)?;
+	let me = ctx.data().v2().await?.user_details(me).await?;
+	let you = ctx.data().v2().await?.user_details(you).await?;
 
 	let my_rating = &me.rating;
 	let your_rating = &you.rating;
@@ -163,7 +163,7 @@ pub async fn rival(
 	#[flag]
 	expanded: bool,
 ) -> Result<(), Error> {
-	let me = &ctx.data().get_eo_username(ctx.author())?;
+	let me = &ctx.data().get_eo_username(ctx.author()).await?;
 
 	let rival = ctx
 		.data()
@@ -199,7 +199,7 @@ pub async fn compare(
 ) -> Result<(), Error> {
 	let left = match left {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author())?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
 	profile_compare(ctx, &left, &right, expanded).await
@@ -216,11 +216,17 @@ pub async fn userset(
 	let new_user_entry = super::config::UserRegistryEntry {
 		discord_id: ctx.author().id.0,
 		discord_username: ctx.author().name.to_owned(),
-		eo_id: ctx.data().web_session.user_details(&username)?.user_id,
+		eo_id: ctx
+			.data()
+			.web_session
+			.user_details(&username)
+			.await?
+			.user_id,
 		eo_username: username.to_owned(),
 		last_known_num_scores: None,
 		last_rating: None,
 	};
+	println!("a");
 
 	let old_eo_username;
 	{
@@ -248,6 +254,7 @@ pub async fn userset(
 		),
 		None => format!("Successfully set username to `{}`", username),
 	};
+	println!("b");
 	poise::say_reply(ctx, response).await?;
 
 	Ok(())
@@ -261,7 +268,7 @@ pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
 ) -> Result<(), Error> {
-	if ctx.data().v2()?.user_details(&rival).is_err() {
+	if ctx.data().v2().await?.user_details(&rival).await.is_err() {
 		poise::say_reply(ctx, format!("User `{}` doesn't exist", rival)).await?;
 		return Ok(());
 	}
@@ -310,11 +317,16 @@ pub async fn profile(
 ) -> Result<(), Error> {
 	let (eo_username, overwrite_prev_ratings) = match eo_username {
 		Some(eo_username) => (eo_username, false),
-		None => (ctx.data().get_eo_username(ctx.author())?, true),
+		None => (ctx.data().get_eo_username(ctx.author()).await?, true),
 	};
 
-	let details = ctx.data().v2()?.user_details(&eo_username)?;
-	let ranks = ctx.data().v2()?.user_ranks_per_skillset(&eo_username)?;
+	let details = ctx.data().v2().await?.user_details(&eo_username).await?;
+	let ranks = ctx
+		.data()
+		.v2()
+		.await?
+		.user_ranks_per_skillset(&eo_username)
+		.await?;
 
 	let mut title = eo_username.to_owned();
 	if details.is_moderator {

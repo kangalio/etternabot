@@ -2,7 +2,6 @@ mod render;
 
 use super::PrefixContext;
 use crate::Error;
-use tokio::task::block_in_place;
 
 // usernames slice must contain at least one element!
 async fn skillgraph_inner(
@@ -42,20 +41,23 @@ async fn skillgraph_inner(
 		[] => unreachable!(),
 	};
 
-	fn download_skill_timeline<'a>(
+	#[allow(clippy::needless_lifetimes)] // false positive
+	async fn download_skill_timeline<'a>(
 		username: &str,
 		web_session: &etternaonline_api::web::Session,
 		storage: &'a mut Option<etternaonline_api::web::UserScores>,
 	) -> Result<etterna::SkillTimeline<&'a str>, Error> {
-		let user_id = web_session.user_details(&username)?.user_id;
-		let scores = web_session.user_scores(
-			user_id,
-			..,
-			None,
-			etternaonline_api::web::UserScoresSortBy::Date,
-			etternaonline_api::web::SortDirection::Ascending,
-			false, // exclude invalid
-		)?;
+		let user_id = web_session.user_details(&username).await?.user_id;
+		let scores = web_session
+			.user_scores(
+				user_id,
+				..,
+				None,
+				etternaonline_api::web::UserScoresSortBy::Date,
+				etternaonline_api::web::SortDirection::Ascending,
+				false, // exclude invalid
+			)
+			.await?;
 
 		*storage = Some(scores);
 		let scores = storage.as_ref().expect("impossible");
@@ -71,32 +73,18 @@ async fn skillgraph_inner(
 		))
 	}
 
-	const MAX_SIMULTANEOUS_DOWNLOADS: usize = 3;
+	use futures::{StreamExt, TryStreamExt};
 
-	let mut storages = (0..usernames.len()).map(|_| None).collect::<Vec<_>>();
-	let mut skill_timelines = Vec::with_capacity(usernames.len());
-	for (username_chunk, storage_chunk) in usernames
-		.chunks(MAX_SIMULTANEOUS_DOWNLOADS)
-		.zip(storages.chunks_mut(MAX_SIMULTANEOUS_DOWNLOADS))
-	{
-		let join_handles = username_chunk
-			.iter()
-			.zip(storage_chunk)
-			.map(|(username, storage)| {
-				let web_session = &ctx.data.web_session;
-				// SAFETY: this is safe as long as the returned handle is not leaked, which we're not doing
-				unsafe {
-					thread_scoped::scoped(move || {
-						download_skill_timeline(username, web_session, storage)
-					})
-				}
-			})
-			.collect::<Vec<_>>();
-
-		for join_handle in join_handles {
-			skill_timelines.push(block_in_place(|| join_handle.join())?);
-		}
-	}
+	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
+		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
+	let skill_timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
+		.then(|(username, storage)| {
+			download_skill_timeline(username, &ctx.data.web_session, storage)
+		})
+		// uncommenting this borks Rust's async :/
+		// .buffered(3) // have up to three parallel connections
+		.try_collect::<Vec<_>>()
+		.await?;
 
 	if skill_timelines.len() == 1 {
 		render::draw_skillsets_graph(&skill_timelines[0], "output.png")
@@ -122,7 +110,7 @@ async fn skillgraph_inner(
 #[poise::command]
 pub async fn skillgraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Result<(), Error> {
 	if usernames.len() == 0 {
-		skillgraph_inner(ctx, &[&ctx.data.get_eo_username(&ctx.msg.author)?]).await
+		skillgraph_inner(ctx, &[&ctx.data.get_eo_username(&ctx.msg.author).await?]).await
 	} else {
 		let usernames = usernames.iter().map(|s| s.as_str()).collect::<Vec<_>>();
 		skillgraph_inner(ctx, &usernames).await
@@ -131,7 +119,7 @@ pub async fn skillgraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 
 #[poise::command]
 pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
-	let me = ctx.data.get_eo_username(&ctx.msg.author)?;
+	let me = ctx.data.get_eo_username(&ctx.msg.author).await?;
 	let rival = ctx
 		.data
 		.lock_data()
@@ -155,7 +143,7 @@ pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
 pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.msg.author)?,
+		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
 	};
 
 	ctx.msg
@@ -166,14 +154,18 @@ pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> 
 		)
 		.await?;
 
-	let scores = ctx.data.web_session.user_scores(
-		ctx.data.web_session.user_details(&username)?.user_id,
-		..,
-		None,
-		etternaonline_api::web::UserScoresSortBy::Date,
-		etternaonline_api::web::SortDirection::Ascending,
-		false, // exclude invalid
-	)?;
+	let scores = ctx
+		.data
+		.web_session
+		.user_scores(
+			ctx.data.web_session.user_details(&username).await?.user_id,
+			..,
+			None,
+			etternaonline_api::web::UserScoresSortBy::Date,
+			etternaonline_api::web::SortDirection::Ascending,
+			false, // exclude invalid
+		)
+		.await?;
 
 	fn calculate_skill_timeline(
 		scores: &etternaonline_api::web::UserScores,

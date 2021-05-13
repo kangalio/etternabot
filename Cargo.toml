@@ -14,7 +14,8 @@ html2md = "0.2.9" # for making profile descriptions (html) viewable
 thiserror = "1.0.20" # pattern draw Error type
 rand = "0.7.3" # for selecting random minanyms
 # etternaonline_api = { path = "../etternaonline-api" }
-etternaonline_api = "0.2.0"
+etternaonline_api = { git = "https://github.com/kangalioo/etternaonline-api" }
+# etternaonline_api = "0.2.0"
 plotters = "0.3.0"
 plotters-backend = "0.3.0"
 plotters-bitmap = "0.3.0" # sjkhebrgkjhsdrfg why is plotters so segmentated

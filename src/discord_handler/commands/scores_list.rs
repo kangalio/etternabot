@@ -13,7 +13,7 @@ pub async fn top_scores(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author())?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
 	if !(1..=30).contains(&limit) {
@@ -23,11 +23,14 @@ pub async fn top_scores(
 
 	// Download top scores
 	let top_scores = match skillset {
-		None => ctx.data().v2()?.user_top_10_scores(&username),
-		Some(skillset) => ctx
-			.data()
-			.v2()?
-			.user_top_skillset_scores(&username, skillset.0, limit),
+		None => ctx.data().v2().await?.user_top_10_scores(&username).await,
+		Some(skillset) => {
+			ctx.data()
+				.v2()
+				.await?
+				.user_top_skillset_scores(&username, skillset.0, limit)
+				.await
+		}
 	};
 	if let Err(etternaonline_api::Error::UserNotFound) = top_scores {
 		poise::say_reply(ctx, format!("No such user or skillset \"{}\"", username)).await?;
@@ -35,7 +38,13 @@ pub async fn top_scores(
 	}
 	let top_scores = top_scores?;
 
-	let country_code = ctx.data().v2()?.user_details(&username)?.country_code;
+	let country_code = ctx
+		.data()
+		.v2()
+		.await?
+		.user_details(&username)
+		.await?
+		.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in top_scores.iter().enumerate() {
@@ -91,12 +100,18 @@ pub async fn lastsession(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author())?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx.data().v2()?.user_latest_scores(&username)?;
+	let latest_scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
 
-	let country_code = ctx.data().v2()?.user_details(&username)?.country_code;
+	let country_code = ctx
+		.data()
+		.v2()
+		.await?
+		.user_details(&username)
+		.await?
+		.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in latest_scores.iter().enumerate() {

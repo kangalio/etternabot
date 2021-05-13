@@ -97,7 +97,7 @@ async fn get_guild_permissions(
 
 /// The contained Option must be Some!!!
 struct IdkWhatImDoing<'a> {
-	guard: crate::AntiDeadlockMutexGuard<'a, Option<eo::v2::Session>>,
+	guard: tokio::sync::MutexGuard<'a, Option<eo::v2::Session>>,
 }
 impl std::ops::Deref for IdkWhatImDoing<'_> {
 	type Target = eo::v2::Session;
@@ -262,7 +262,8 @@ pub struct State {
 	bot_start_time: std::time::Instant,
 	config: Config,
 	_data: crate::AntiDeadlockMutex<Data>,
-	v2_session: crate::AntiDeadlockMutex<Option<eo::v2::Session>>, // stores the session, or None if login failed
+	// stores the session, or None if login failed
+	v2_session: tokio::sync::Mutex<Option<eo::v2::Session>>,
 	web_session: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
 	_bot_user_id: serenity::UserId,
@@ -292,7 +293,7 @@ impl State {
 
 		Ok(Self {
 			bot_start_time: std::time::Instant::now(),
-			v2_session: crate::AntiDeadlockMutex::new(match Self::attempt_v2_login(&auth) {
+			v2_session: tokio::sync::Mutex::new(match Self::attempt_v2_login(&auth).await {
 				Ok(v2) => Some(v2),
 				Err(e) => {
 					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
@@ -308,7 +309,7 @@ impl State {
 		})
 	}
 
-	fn attempt_v2_login(auth: &crate::Auth) -> Result<eo::v2::Session, eo::Error> {
+	async fn attempt_v2_login(auth: &crate::Auth) -> Result<eo::v2::Session, eo::Error> {
 		eo::v2::Session::new_from_login(
 			auth.eo_username.to_owned(),
 			auth.eo_password.to_owned(),
@@ -316,6 +317,7 @@ impl State {
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(30000)),
 		)
+		.await
 	}
 
 	// Automatically saves when the returned guard goes out of scope
@@ -329,13 +331,13 @@ impl State {
 	/// retry login just to make sure that EO is _really_ done
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
 	/// holds the result from its call to v2(), thread 1 will block.
-	fn v2(&self) -> Result<IdkWhatImDoing<'_>, Error> {
-		let mut v2_session = self.v2_session.lock();
+	async fn v2(&self) -> Result<IdkWhatImDoing<'_>, Error> {
+		let mut v2_session = self.v2_session.lock().await;
 
 		if v2_session.is_some() {
 			Ok(IdkWhatImDoing { guard: v2_session })
 		} else {
-			match Self::attempt_v2_login(&self.auth) {
+			match Self::attempt_v2_login(&self.auth).await {
 				Ok(v2) => {
 					*v2_session = Some(v2);
 					Ok(IdkWhatImDoing { guard: v2_session })
@@ -353,7 +355,7 @@ impl State {
 		}
 	}
 
-	fn get_eo_username(&self, discord_user: &serenity::User) -> Result<String, Error> {
+	async fn get_eo_username(&self, discord_user: &serenity::User) -> Result<String, Error> {
 		if let Some(user_entry) = self
 			.lock_data()
 			.user_registry
@@ -363,7 +365,7 @@ impl State {
 			return Ok(user_entry.eo_username.to_owned());
 		}
 
-		match self.web_session.user_details(&discord_user.name) {
+		match self.web_session.user_details(&discord_user.name).await {
 			Ok(user_details) => {
 				// Seems like the user's EO name is the same as their Discord name :)
 				// TODO: could replace the user_details call with scores request to get
@@ -390,15 +392,16 @@ impl State {
 		}
 	}
 
-	fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
-		match self
+	async fn get_eo_user_id(&self, eo_username: &str) -> Result<u32, Error> {
+		if let Some(user) = self
 			.lock_data()
 			.user_registry
 			.iter_mut()
 			.find(|user| user.eo_username == eo_username)
 		{
-			Some(user) => Ok(user.eo_id),
-			None => Ok(self.web_session.user_details(eo_username)?.user_id), // TODO: integrate into registry?
+			return Ok(user.eo_id);
 		}
+
+		Ok(self.web_session.user_details(eo_username).await?.user_id) // TODO: integrate into registry?
 	}
 }
