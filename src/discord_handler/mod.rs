@@ -159,18 +159,13 @@ async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
 				// If we caught an argument parse error, give a helpful error message with the
 				// command explanation if available
 
-				let mut msg = None;
+				let mut usage = "Please check the help menu for usage information".into();
 				if let poise::CommandErrorContext::Prefix(ctx) = &ctx {
-					if let Some(explanation) = &ctx.command.options.multiline_help {
-						msg = Some(format!("{}\n{}", e, explanation()));
+					if let Some(multiline_help) = &ctx.command.options.multiline_help {
+						usage = multiline_help();
 					}
 				}
-				msg.unwrap_or_else(|| {
-					format!(
-						"You entered the command wrong, please check the help menu\n`{}`",
-						e
-					)
-				})
+				format!("**{}**\n{}", e, usage)
 			} else {
 				e.to_string()
 			};
@@ -178,7 +173,7 @@ async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
 				println!("Error while user command error: {}", e);
 			}
 		}
-		_ => println!("Something... happened?"),
+		_ => println!("Something... happened?"), // TODO
 	}
 }
 
