@@ -47,7 +47,7 @@ Here are my commands: (Descriptions by Fission)
 *Show your fabulously superberful profile*
 **+top10 [username] [skillset]**
 *For when top9 isn't enough*
-**+top[nn] [username] [skillset]**
+**+top [nn] [username] [skillset]**
 *Sometimes we take things too far*
 **+compare [user1] [user2] ["expanded"]**
 *One person is an objectively better person than the other, find out which one!*

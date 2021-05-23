@@ -1,15 +1,36 @@
 use super::Context;
 use crate::Error;
 
-/// Call this command with `+top [NN] [USERNAME] [SKILLSET]` (username and skillset optional)
+/// Call this command with `+top10 [USERNAME] [SKILLSET]` (username and skillset optional)
 #[poise::command(track_edits, slash_command)]
-pub async fn top_scores(
+pub async fn top10(
 	ctx: Context<'_>,
-	#[description = "Number of scores to show"] mut limit: u32,
 	#[description = "Specific skillset to focus on"] skillset: Option<
 		poise::Wrapper<etterna::Skillset7>,
 	>,
 	#[description = "Falls back to your username"] username: Option<String>,
+) -> Result<(), Error> {
+	topscores(ctx, 10, skillset, username).await
+}
+
+/// Call this command with `+top [NN] [USERNAME] [SKILLSET]` (username and skillset optional)
+#[poise::command(track_edits, slash_command)]
+pub async fn top(
+	ctx: Context<'_>,
+	#[description = "Number of scores to show"] limit: u32,
+	#[description = "Specific skillset to focus on"] skillset: Option<
+		poise::Wrapper<etterna::Skillset7>,
+	>,
+	#[description = "Falls back to your username"] username: Option<String>,
+) -> Result<(), Error> {
+	topscores(ctx, limit, skillset, username).await
+}
+
+async fn topscores(
+	ctx: Context<'_>,
+	mut limit: u32,
+	skillset: Option<poise::Wrapper<etterna::Skillset7>>,
+	username: Option<String>,
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,

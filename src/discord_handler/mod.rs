@@ -190,6 +190,7 @@ async fn listener(
 				discord: ctx,
 				msg: new_message,
 				framework,
+				command: None,
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(
@@ -248,7 +249,8 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::accuracygraph);
 	framework.command(commands::quote);
 	framework.command(commands::slashregister);
-	// TODO: add topNN command
+	framework.command(commands::top);
+	framework.command(commands::top10);
 	framework
 }
 
