@@ -3,11 +3,22 @@
 use super::PrefixContext;
 use crate::Error;
 
+#[derive(Debug)]
+pub struct InvalidJudge;
+impl std::fmt::Display for InvalidJudge {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("Invalid judge")
+	}
+}
+impl std::error::Error for InvalidJudge {}
+
 pub struct Judge(&'static etterna::Judge);
 impl std::str::FromStr for Judge {
-	type Err = ();
+	type Err = InvalidJudge;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		super::extract_judge_from_string(s).map(Self).ok_or(())
+		super::extract_judge_from_string(s)
+			.map(Self)
+			.ok_or(InvalidJudge)
 	}
 }
 
