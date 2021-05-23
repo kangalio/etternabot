@@ -110,12 +110,20 @@ pub async fn slashregister(ctx: PrefixContext<'_>) -> Result<(), Error> {
 		return Err("You're not kangalioo".into());
 	}
 	let guild_id = ctx.msg.guild_id.ok_or("Must be in guild")?;
-	for slash_cmd in &ctx.framework.options().slash_options.commands {
+
+	let commands = &ctx.framework.options().slash_options.commands;
+	for slash_cmd in commands {
 		println!("Registering {}", slash_cmd.name);
 		slash_cmd
 			.create_in_guild(&ctx.discord.http, guild_id)
 			.await?;
 	}
-	poise::say_prefix_reply(ctx, "Successfully registered commands".into()).await?;
+
+	poise::say_prefix_reply(
+		ctx,
+		format!("Successfully registered {} slash commands", commands.len()),
+	)
+	.await?;
+
 	Ok(())
 }
