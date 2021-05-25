@@ -29,10 +29,7 @@ poise = { git = "https://github.com/kangalioo/poise" }
 futures = "0.3.13"
 tokio = { version = "1.4.0", features = ["rt", "rt-multi-thread"] }
 
-# Fix retarded compilation errors, hopefully...?
-openssl-probe = "=0.1.2"
-openssl-sys = "=0.9.62"
-rustls = "=0.19.0"
+openssl-sys = { version = "0.9", features = ["vendored"] }
 
 [patch.crates-io]
 # etterna = { path = "../etterna-base", features = ["parallel", "serde"] }
