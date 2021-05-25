@@ -212,6 +212,30 @@ async fn listener(
 	}
 }
 
+async fn pre_command(ctx: poise::Context<'_, State, Error>) {
+	let author = ctx.author();
+	match ctx {
+		poise::Context::Slash(ctx) => {
+			let command_name = match &ctx.interaction.data {
+				Some(data) => &data.name,
+				None => "<not an interaction>",
+			};
+			println!(
+				"{} invoked command {} on {:?}",
+				&author.name,
+				command_name,
+				&ctx.interaction.id.created_at()
+			);
+		}
+		poise::Context::Prefix(ctx) => {
+			println!(
+				"{} sent message {:?} on {:?}",
+				&author.name, &ctx.msg.content, &ctx.msg.timestamp
+			);
+		}
+	}
+}
+
 pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	let mut framework = poise::FrameworkOptions {
 		listener: |ctx, event, framework, state| Box::pin(listener(ctx, event, framework, state)),
@@ -231,7 +255,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 			defer_response: true,
 			..Default::default()
 		},
-		// ..Default::default()
+		pre_command: |ctx| Box::pin(pre_command(ctx)), // ..Default::default()
 	};
 	framework.command(commands::compare);
 	framework.command(commands::help);
