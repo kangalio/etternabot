@@ -276,7 +276,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::rivalgraph);
 	framework.command(commands::accuracygraph);
 	framework.command(commands::quote);
-	framework.command(commands::slashregister);
+	framework.command(commands::register);
 	framework.command(commands::top);
 	framework.command(commands::top10);
 	framework

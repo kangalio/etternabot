@@ -103,27 +103,29 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 	Ok(())
 }
 
-#[poise::command]
-pub async fn slashregister(ctx: PrefixContext<'_>) -> Result<(), Error> {
+/// Register slash commands in this guild or globally
+///
+/// Run with no arguments to register in guild, run with argument "global" to register globally.
+#[poise::command(hide_in_help)]
+pub async fn register(ctx: PrefixContext<'_>, #[flag] global: bool) -> Result<(), Error> {
 	// REMEMBER: hardcoded id is bad
 	if ctx.msg.author.id.0 != 472029906943868929 {
 		return Err("You're not kangalioo".into());
 	}
-	let guild_id = ctx.msg.guild_id.ok_or("Must be in guild")?;
+
+	let guild_id = ctx.msg.guild_id.ok_or("Must be called in guild")?;
 
 	let commands = &ctx.framework.options().slash_options.commands;
-	for slash_cmd in commands {
-		println!("Registering {}", slash_cmd.name);
-		slash_cmd
-			.create_in_guild(&ctx.discord.http, guild_id)
-			.await?;
+	poise::say_prefix_reply(ctx, format!("Registering {} commands...", commands.len())).await?;
+	for cmd in commands {
+		if global {
+			cmd.create_global(&ctx.discord.http).await?;
+		} else {
+			cmd.create_in_guild(&ctx.discord.http, guild_id).await?;
+		}
 	}
 
-	poise::say_prefix_reply(
-		ctx,
-		format!("Successfully registered {} slash commands", commands.len()),
-	)
-	.await?;
+	poise::say_prefix_reply(ctx, "Done!".to_owned()).await?;
 
 	Ok(())
 }
