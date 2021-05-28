@@ -7,7 +7,9 @@ use crate::Error;
 #[poise::command(track_edits, slash_command)]
 pub async fn top10(
 	ctx: Context<'_>,
-	#[description = "Falls back to your username"] username: Option<String>,
+	#[description = "Falls back to your username"]
+	#[lazy]
+	username: Option<String>,
 	#[description = "Specific skillset to focus on"] skillset: Option<
 		poise::Wrapper<etterna::Skillset7>,
 	>,
@@ -22,7 +24,9 @@ pub async fn top10(
 pub async fn top(
 	ctx: Context<'_>,
 	#[description = "Number of scores to show"] limit: u32,
-	#[description = "Falls back to your username"] username: Option<String>,
+	#[description = "Falls back to your username"]
+	#[lazy]
+	username: Option<String>,
 	#[description = "Specific skillset to focus on"] skillset: Option<
 		poise::Wrapper<etterna::Skillset7>,
 	>,
