@@ -8,7 +8,6 @@
 
 mod anti_deadlock_mutex;
 mod discord_handler;
-// mod initialization;
 
 pub use anti_deadlock_mutex::*;
 
