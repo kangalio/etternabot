@@ -34,6 +34,3 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 [patch.crates-io]
 # etterna = { path = "../etterna-base", features = ["parallel", "serde"] }
 etterna = { git = "https://github.com/kangalioo/etterna-base", features = ["parallel", "serde"] }
-
-[profile.release]
-debug = 2 # full debug info, to allow me to use gdb the next time the bot mysteriously fails out of the blue
