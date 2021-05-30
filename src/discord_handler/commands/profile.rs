@@ -181,9 +181,7 @@ pub async fn rival(
 	profile_compare(ctx, me, &you, expanded).await
 }
 
-// /// Compare two users' skillsets.
-
-/// Compare two users skillsets.
+/// Compare two users' skillsets.
 ///
 /// Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic
 #[poise::command(track_edits, slash_command)]
