@@ -25,6 +25,7 @@ pub struct Auth {
 	eo_username: String,
 	eo_password: String,
 	eo_client_data: String,
+	imgbb_api_key: String,
 }
 
 fn env_var<T: std::str::FromStr>(name: &str) -> Result<T, Error>
@@ -43,6 +44,7 @@ async fn main() -> Result<(), Error> {
 		eo_username: env_var("EO_USERNAME")?,
 		eo_password: env_var("EO_PASSWORD")?,
 		eo_client_data: env_var("EO_CLIENT_DATA")?,
+		imgbb_api_key: env_var("IMGBB_API_KEY")?,
 	};
 	let discord_bot_token: String = env_var("DISCORD_BOT_TOKEN")?;
 	let application_id = env_var("APPLICATION_ID")?;
