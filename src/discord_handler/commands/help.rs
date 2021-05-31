@@ -9,6 +9,10 @@ pub async fn help(
 	#[description = "Explain the pattern command"]
 	pattern: bool,
 ) -> Result<(), Error> {
+	send_help(ctx, pattern).await
+}
+
+pub async fn send_help(ctx: PrefixContext<'_>, pattern: bool) -> Result<(), Error> {
 	let embed_contents = if pattern {
 		r#"
 **+pattern [down/up] [NN]ths [noteskin] [zoom]x [keymode]k PATTERN STRING**
