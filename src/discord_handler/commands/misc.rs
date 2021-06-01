@@ -36,8 +36,7 @@ pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
 
 	let div_mod = |a, b| (a / b, a % b);
 
-	let millis = uptime.as_millis();
-	let (seconds, millis) = div_mod(millis, 1000);
+	let seconds = uptime.as_secs();
 	let (minutes, seconds) = div_mod(seconds, 60);
 	let (hours, minutes) = div_mod(minutes, 60);
 	let (days, hours) = div_mod(hours, 24);
@@ -45,8 +44,8 @@ pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
 	poise::say_prefix_reply(
 		ctx,
 		format!(
-			"Duration since last restart: {}:{:02}:{:02}:{:02}.{:03}",
-			days, hours, minutes, seconds, millis
+			"Duration since last restart: {}d {}h {}m {}s",
+			days, hours, minutes, seconds
 		),
 	)
 	.await?;
