@@ -56,7 +56,11 @@ async fn main() -> Result<(), Error> {
 		discord_handler::init_framework(),
 	);
 	framework
-		.start(serenity::Client::builder(discord_bot_token))
+		.start(serenity::Client::builder(discord_bot_token).intents(
+			serenity::GatewayIntents::non_privileged()
+				| serenity::GatewayIntents::GUILD_MEMBERS
+				| serenity::GatewayIntents::GUILD_PRESENCES,
+		))
 		.await?;
 
 	Ok(())
