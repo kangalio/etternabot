@@ -91,7 +91,7 @@ async fn always_true(_: Context<'_>) -> Result<bool, Error> {
 }
 
 /// Visualize note patterns
-#[poise::command(slash_command, check = "always_true")]
+#[poise::command(slash_command, track_edits, check = "always_true")]
 pub async fn pattern(
 	ctx: Context<'_>,
 	#[rest]
@@ -296,14 +296,13 @@ pub async fn pattern(
 
 	match ctx {
 		poise::Context::Prefix(ctx) => {
-			ctx.msg
-				.channel_id
-				.send_files(
-					ctx.discord,
-					vec![(img_bytes.as_slice(), "output.png")],
-					|m| m,
-				)
-				.await?;
+			poise::send_prefix_reply(ctx, |f| {
+				f.attachment(serenity::AttachmentType::Bytes {
+					data: img_bytes.into(),
+					filename: "output.png".to_owned(),
+				})
+			})
+			.await?;
 		}
 		poise::Context::Slash(ctx) => {
 			// We can't send images in slash command responses yet, so we have to upload them
