@@ -474,13 +474,14 @@ pub async fn aroundme(
 
 	let self_entry = entries
 		.iter()
-		.find(|entry| entry.rank == rank)
-		.or_else(|| entries.get(0)) // just as a fallback
-		.ok_or("Error when retrieving leaderboard entries")?;
+		.find(|entry| entry.username.eq_ignore_ascii_case(&username))
+		.or_else(|| entries.iter().find(|entry| entry.rank == rank)) // fallback 1
+		.or_else(|| entries.get(0)) // fallback 2
+		.ok_or("Error when retrieving leaderboard entries")?; // welp we did everything we could
 
 	let mut output = String::from("```c\n");
 	for entry in &entries {
-		let is_self = entry.rank == rank;
+		let is_self = std::ptr::eq(self_entry, entry);
 
 		let flag_emoji = match &entry.country {
 			Some(country) => country_code_to_flag_emoji(&country.code) + " ",
