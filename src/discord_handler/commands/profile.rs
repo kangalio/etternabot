@@ -2,18 +2,22 @@ use super::Context;
 use crate::Error;
 use std::borrow::Cow;
 
-fn country_code_to_flag_emoji(country_code: &str) -> Option<String> {
-	if country_code.chars().any(|c| !c.is_alphabetic()) {
-		return None;
-	}
+/// Returns a question mark emoji on invalid country code
+fn country_code_to_flag_emoji(country_code: &str) -> String {
+	fn inner(country_code: &str) -> Option<String> {
+		if country_code.chars().any(|c| !c.is_alphabetic()) {
+			return None;
+		}
 
-	let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
-	country_code
-		.chars()
-		.map(|c| {
-			std::char::from_u32(c.to_ascii_lowercase() as u32 + regional_indicator_value_offset)
-		})
-		.collect()
+		let regional_indicator_value_offset = '🇦' as u32 - 'a' as u32;
+		country_code
+			.chars()
+			.map(|c| {
+				std::char::from_u32(c.to_ascii_lowercase() as u32 + regional_indicator_value_offset)
+			})
+			.collect()
+	}
+	inner(country_code).unwrap_or_else(|| "❓".into())
 }
 
 /// Returns a string that may be shorter than `max_length`, but never longer
@@ -132,10 +136,10 @@ async fn profile_compare(
 			e.color(crate::ETTERNA_COLOR)
 				.title(format!(
 					"{} {} vs. {} {}",
-					country_code_to_flag_emoji(&me.country_code).unwrap_or_else(|| "❓".into()),
+					country_code_to_flag_emoji(&me.country_code),
 					me.username,
 					you.username,
-					country_code_to_flag_emoji(&you.country_code).unwrap_or_else(|| "❓".into()),
+					country_code_to_flag_emoji(&you.country_code),
 				))
 				.description(string);
 
@@ -421,6 +425,91 @@ pub async fn profile(
 
 			embed
 		})
+	})
+	.await?;
+
+	Ok(())
+}
+
+/// Retrieve leaderboard entries directly above and below the current user.
+///
+/// Call this command with `+aroundme [SKILLSET] [ENTRIES] [USERNAME]
+#[poise::command(slash_command, track_edits)]
+pub async fn aroundme(
+	ctx: Context<'_>,
+	#[description = "Skillset to sort by"] skillset: Option<poise::Wrapper<etterna::Skillset8>>,
+	#[description = "How many entries to fetch above and below"] entries: Option<u32>,
+	#[description = "EtternaOnline username"] username: Option<String>,
+) -> Result<(), Error> {
+	let username = match username {
+		Some(x) => x.to_owned(),
+		None => ctx.data().get_eo_username(ctx.author()).await?,
+	};
+
+	let skillset = match skillset {
+		Some(x) => x.0,
+		None => etterna::Skillset8::Overall,
+	};
+
+	let entries = entries.unwrap_or(10);
+
+	let rank = ctx
+		.data()
+		.v2()
+		.await?
+		.user_ranks_per_skillset(&username)
+		.await?
+		.get(skillset);
+
+	let self_index = rank - 1; // E.g. first player in leaderboard has rank 1 but index 0;
+	let entries = ctx
+		.data()
+		.web_session
+		.leaderboard(
+			self_index.saturating_sub(entries)..=(self_index + entries),
+			etternaonline_api::web::LeaderboardSortBy::Rating(skillset),
+			etternaonline_api::web::SortDirection::Descending,
+		)
+		.await?;
+
+	let self_entry = entries
+		.iter()
+		.find(|entry| entry.rank == rank)
+		.or_else(|| entries.get(0)) // just as a fallback
+		.ok_or("Error when retrieving leaderboard entries")?;
+
+	let mut output = String::from("```c\n");
+	for entry in &entries {
+		let is_self = entry.rank == rank;
+
+		let flag_emoji = match &entry.country {
+			Some(country) => country_code_to_flag_emoji(&country.code) + " ",
+			None => String::new(),
+		};
+
+		let diff_string_if_not_self = if is_self {
+			String::from("       ")
+		} else {
+			format!(
+				"({:+.02})",
+				entry.rating.get(skillset) - self_entry.rating.get(skillset)
+			)
+		};
+
+		output += &format!(
+			"{prefix}#{rank} | {rating:.02} {diff} | {flag}{user}\n",
+			prefix = if is_self { "> " } else { "  " },
+			rank = entry.rank,
+			rating = entry.rating.get(skillset),
+			diff = diff_string_if_not_self,
+			flag = flag_emoji,
+			user = entry.username,
+		);
+	}
+	output += "```";
+
+	poise::send_reply(ctx, |f| {
+		f.embed(|f| f.color(crate::ETTERNA_COLOR).description(output))
 	})
 	.await?;
 
