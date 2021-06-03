@@ -67,8 +67,6 @@ Here are my commands: (Descriptions by Fission)
 More commands:
 **+pattern [pattern string]**
 *Visualize note patterns, for example `lrlr` or `[14]3[12]`. This command has many options, type `+help pattern` for that*
-**+scrollset [down/up]**
-*Set your preferred scroll type that will be used as a default*
 **+skillgraph [user] [user 2] [...]** or **+accuracygraph [user]**
 *Show a graph of your profile rating over time*
 **+rs [username] [judge]**
@@ -77,6 +75,8 @@ More commands:
 *Print one of various random quotes, phrases and memes from various rhythm gaming communities ([Credit](https://github.com/ca25nada/spawncamping-wallhack/blob/master/Scripts/Quotes.lua))*
 **+lastsession [username]**
 *Show the last 10 scores*
+**+aroundme [skillset] [amount] [username]**
+*Show surrounding leaderboard entries*
 
 You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
 your message, I will also show the wifescores with that judge.
