@@ -149,8 +149,12 @@ async fn score_card_inner(
 			let lanes = replay.split_into_lanes()?;
 			let mut max_finger_nps = 0.0;
 			for lane in &lanes {
+				let mut hit_seconds = lane.hit_seconds.clone();
+				// required because EO is jank
+				hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+
 				let this_fingers_max_nps =
-					etterna::find_fastest_note_subset(&lane.hit_seconds, 20, 20).speed;
+					etterna::find_fastest_note_subset(&hit_seconds, 20, 20).speed;
 
 				if this_fingers_max_nps > max_finger_nps {
 					max_finger_nps = this_fingers_max_nps;

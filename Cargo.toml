@@ -28,15 +28,12 @@ imageproc = "0.21.0"
 poise = { git = "https://github.com/kangalioo/poise" }
 futures = "0.3.13"
 tokio = { version = "1.4.0", features = ["rt", "rt-multi-thread"] }
+reqwest = { version = "0.11.3", features = ["json"] } # to call ImgBB API to upload pattern images
+base64 = "0.13"
 
-# Fix retarded compilation errors, hopefully...?
-openssl-probe = "=0.1.2"
-openssl-sys = "=0.9.62"
-rustls = "=0.19.0"
+# To fix stupid cross compile errors
+openssl-sys = { version = "0.9", features = ["vendored"] }
 
 [patch.crates-io]
 # etterna = { path = "../etterna-base", features = ["parallel", "serde"] }
 etterna = { git = "https://github.com/kangalioo/etterna-base", features = ["parallel", "serde"] }
-
-[profile.release]
-debug = 2 # full debug info, to allow me to use gdb the next time the bot mysteriously fails out of the blue

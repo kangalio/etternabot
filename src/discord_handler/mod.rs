@@ -153,6 +153,7 @@ async fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error
 }
 
 async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
+	println!("Encountered an error: {:?}", e);
 	match ctx {
 		poise::ErrorContext::Command(ctx) => {
 			let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
@@ -173,7 +174,10 @@ async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
 				println!("Error while user command error: {}", e);
 			}
 		}
-		_ => println!("Something... happened?"), // TODO
+		poise::ErrorContext::Listener(event) => {
+			println!("Error in listener while processing {:?}: {}", event, e)
+		}
+		poise::ErrorContext::Setup => println!("Setup failed: {}", e),
 	}
 }
 
@@ -208,6 +212,30 @@ async fn listener(
 	}
 }
 
+async fn pre_command(ctx: poise::Context<'_, State, Error>) {
+	let author = ctx.author();
+	match ctx {
+		poise::Context::Slash(ctx) => {
+			let command_name = match &ctx.interaction.data {
+				Some(data) => &data.name,
+				None => "<not an interaction>",
+			};
+			println!(
+				"{} invoked command {} on {:?}",
+				&author.name,
+				command_name,
+				&ctx.interaction.id.created_at()
+			);
+		}
+		poise::Context::Prefix(ctx) => {
+			println!(
+				"{} sent message {:?} on {:?}",
+				&author.name, &ctx.msg.content, &ctx.msg.timestamp
+			);
+		}
+	}
+}
+
 pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	let mut framework = poise::FrameworkOptions {
 		listener: |ctx, event, framework, state| Box::pin(listener(ctx, event, framework, state)),
@@ -227,7 +255,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 			defer_response: true,
 			..Default::default()
 		},
-		// ..Default::default()
+		pre_command: |ctx| Box::pin(pre_command(ctx)), // ..Default::default()
 	};
 	framework.command(commands::compare);
 	framework.command(commands::help);
@@ -248,7 +276,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::rivalgraph);
 	framework.command(commands::accuracygraph);
 	framework.command(commands::quote);
-	framework.command(commands::slashregister);
+	framework.command(commands::register);
 	framework.command(commands::top);
 	framework.command(commands::top10);
 	framework

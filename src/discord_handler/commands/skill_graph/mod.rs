@@ -139,7 +139,7 @@ pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
 }
 
 // TODO: integrate into skillgraph_inner to not duplicate logic
-#[poise::command]
+#[poise::command(aliases("accgraph"))]
 pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,

@@ -1,7 +1,7 @@
 mod pattern_draw;
 pub use pattern_draw::{Error as PatternError, Noteskin};
 
-use super::{Context, PrefixContext};
+use super::Context;
 use crate::Error;
 
 pub struct NoteskinProvider {
@@ -86,20 +86,35 @@ impl NoteskinProvider {
 	}
 }
 
-async fn always_true(_: PrefixContext<'_>) -> Result<bool, Error> {
+async fn always_true(_: Context<'_>) -> Result<bool, Error> {
 	Ok(true)
 }
 
-#[poise::command(check = "always_true")]
-pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Error> {
+/// Visualize note patterns
+#[poise::command(slash_command, track_edits, check = "always_true")]
+pub async fn pattern(
+	ctx: Context<'_>,
+	#[rest]
+	#[description = "Pattern string to render"]
+	pattern: String,
+) -> Result<(), Error> {
+	if let poise::Context::Prefix(ctx) = ctx {
+		// People are supposed to write `+help pattern` but some write `+pattern help` so let's help
+		// them as well :)
+		if pattern.eq_ignore_ascii_case("help") {
+			super::help::send_help(ctx, true).await?;
+			return Ok(());
+		}
+	}
+
 	let mut noteskin_override = None;
 	let mut keymode_override = None;
 	let mut snap = etterna::Snap::_16th.into();
 	let mut vertical_spacing_multiplier = 1.0;
 	let mut scroll_direction = ctx
-		.data
+		.data()
 		.lock_data()
-		.scroll(ctx.msg.author.id.0)
+		.scroll(ctx.author().id.0)
 		.unwrap_or(etterna::ScrollDirection::Upscroll);
 	let mut segments = Vec::new();
 
@@ -124,14 +139,14 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 		normalized_noteskin_name.retain(|c| c.is_alphanumeric());
 
 		match normalized_noteskin_name.as_str() {
-			"dbz" | "dividebyzero" => Some(&ctx.data.noteskin_provider.dbz),
-			"wafles" | "wafles3" => Some(&ctx.data.noteskin_provider.wafles),
-			"default" | "lambda" => Some(&ctx.data.noteskin_provider.lambda),
-			"deltanote" | "delta" => Some(&ctx.data.noteskin_provider.delta_note),
-			"sbz" | "subtractbyzero" => Some(&ctx.data.noteskin_provider.sbz),
-			"mbz" | "multiplybyzero" => Some(&ctx.data.noteskin_provider.mbz),
-			"eobaner" => Some(&ctx.data.noteskin_provider.eo_baner),
-			"rustmania" => Some(&ctx.data.noteskin_provider.rustmania),
+			"dbz" | "dividebyzero" => Some(&ctx.data().noteskin_provider.dbz),
+			"wafles" | "wafles3" => Some(&ctx.data().noteskin_provider.wafles),
+			"default" | "lambda" => Some(&ctx.data().noteskin_provider.lambda),
+			"deltanote" | "delta" => Some(&ctx.data().noteskin_provider.delta_note),
+			"sbz" | "subtractbyzero" => Some(&ctx.data().noteskin_provider.sbz),
+			"mbz" | "multiplybyzero" => Some(&ctx.data().noteskin_provider.mbz),
+			"eobaner" => Some(&ctx.data().noteskin_provider.eo_baner),
+			"rustmania" => Some(&ctx.data().noteskin_provider.rustmania),
 			_ => None,
 		}
 	};
@@ -171,7 +186,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 	};
 
 	let mut pattern_buffer = String::new();
-	for arg in args.split_whitespace() {
+	for arg in pattern.split_whitespace() {
 		let mut did_user_intend = false;
 		if let Some(new_snap) = extract_snap(arg, &mut did_user_intend) {
 			if pattern_buffer.len() > 0 {
@@ -182,10 +197,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 			continue;
 		}
 		if did_user_intend {
-			ctx.msg
-				.channel_id
-				.say(ctx.discord, format!("\"{}\" is not a valid snap", arg))
-				.await?;
+			poise::say_reply(ctx, format!("\"{}\" is not a valid snap", arg)).await?;
 		}
 
 		let mut did_user_intend = false;
@@ -194,13 +206,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 			continue;
 		}
 		if did_user_intend {
-			ctx.msg
-				.channel_id
-				.say(
-					ctx.discord,
-					format!("\"{}\" is not a valid noteskin name", arg),
-				)
-				.await?;
+			poise::say_reply(ctx, format!("\"{}\" is not a valid noteskin name", arg)).await?;
 		}
 
 		let mut did_user_intend = false;
@@ -211,13 +217,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 			continue;
 		}
 		if did_user_intend {
-			ctx.msg
-				.channel_id
-				.say(
-					ctx.discord,
-					format!("\"{}\" is not a valid zoom option", arg),
-				)
-				.await?;
+			poise::say_reply(ctx, format!("\"{}\" is not a valid zoom option", arg)).await?;
 		}
 
 		let mut did_user_intend = false;
@@ -227,13 +227,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 			continue;
 		}
 		if did_user_intend {
-			ctx.msg
-				.channel_id
-				.say(
-					ctx.discord,
-					format!("\"{}\" is not a valid scroll direction", arg),
-				)
-				.await?;
+			poise::say_reply(ctx, format!("\"{}\" is not a valid scroll direction", arg)).await?;
 		}
 
 		let mut did_user_intend = false;
@@ -242,10 +236,7 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 			continue;
 		}
 		if did_user_intend {
-			ctx.msg
-				.channel_id
-				.say(ctx.discord, format!("\"{}\" is not a valid keymode", arg))
-				.await?;
+			poise::say_reply(ctx, format!("\"{}\" is not a valid keymode", arg)).await?;
 		}
 
 		// if nothing matched, this is just an ordinary part of the pattern
@@ -281,10 +272,10 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 	} else {
 		// choose a default noteskin
 		match keymode {
-			3 | 4 | 6 | 8 => &ctx.data.noteskin_provider.dbz,
-			5 | 10 => &ctx.data.noteskin_provider.delta_note,
-			7 | 9 => &ctx.data.noteskin_provider.sbz,
-			_ => &ctx.data.noteskin_provider.sbz, // fallback
+			3 | 4 | 6 | 8 => &ctx.data().noteskin_provider.dbz,
+			5 | 10 => &ctx.data().noteskin_provider.delta_note,
+			7 | 9 => &ctx.data().noteskin_provider.sbz,
+			_ => &ctx.data().noteskin_provider.sbz, // fallback
 		}
 	};
 
@@ -303,15 +294,36 @@ pub async fn pattern(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(),
 		.write_to(&mut img_bytes, image::ImageOutputFormat::Png)
 		.map_err(pattern_draw::Error::ImageError)?;
 
-	// Send the image into the channel where the summoning message comes from
-	ctx.msg
-		.channel_id
-		.send_files(
-			ctx.discord,
-			vec![(img_bytes.as_slice(), "output.png")],
-			|m| m,
-		)
-		.await?;
+	match ctx {
+		poise::Context::Prefix(ctx) => {
+			poise::send_prefix_reply(ctx, |f| {
+				f.attachment(serenity::AttachmentType::Bytes {
+					data: img_bytes.into(),
+					filename: "output.png".to_owned(),
+				})
+			})
+			.await?;
+		}
+		poise::Context::Slash(ctx) => {
+			// We can't send images in slash command responses yet, so we have to upload them
+			// manually and post a link instead
+
+			let imgbb_response = reqwest::Client::new()
+				.post("https://api.imgbb.com/1/upload")
+				.query(&[("key", &ctx.data.auth.imgbb_api_key)])
+				.form(&[("image", base64::encode(&img_bytes).as_str())])
+				.send()
+				.await?
+				.json::<serde_json::Value>()
+				.await?;
+			let img_url = imgbb_response["data"]["url"]
+				.as_str()
+				.ok_or("Failed to upload image :(")?;
+
+			// Send the image into the channel where the summoning message comes from
+			poise::say_slash_reply(ctx, img_url.to_owned()).await?;
+		}
+	}
 
 	Ok(())
 }
