@@ -433,13 +433,15 @@ pub async fn profile(
 
 /// Retrieve leaderboard entries directly above and below the current user.
 ///
-/// Call this command with `+aroundme [SKILLSET] [ENTRIES] [USERNAME]
+/// Call this command with `+aroundme [USERNAME] [SKILLSET] [AMOUNT]
 #[poise::command(slash_command, track_edits)]
 pub async fn aroundme(
 	ctx: Context<'_>,
+	#[lazy]
+	#[description = "EtternaOnline username"]
+	username: Option<String>,
 	#[description = "Skillset to sort by"] skillset: Option<poise::Wrapper<etterna::Skillset8>>,
-	#[description = "How many entries to fetch above and below"] entries: Option<u32>,
-	#[description = "EtternaOnline username"] username: Option<String>,
+	#[description = "How many entries to fetch above and below"] num_entries: Option<u32>,
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x.to_owned(),
@@ -451,26 +453,45 @@ pub async fn aroundme(
 		None => etterna::Skillset8::Overall,
 	};
 
-	let entries = entries.unwrap_or(10);
+	let num_entries = num_entries.unwrap_or(7);
 
-	let rank = ctx
+	let ranks = ctx
 		.data()
 		.v2()
 		.await?
 		.user_ranks_per_skillset(&username)
-		.await?
-		.get(skillset);
+		.await?;
+	let rank = ranks.get(skillset);
 
 	let self_index = rank - 1; // E.g. first player in leaderboard has rank 1 but index 0;
 	let entries = ctx
 		.data()
 		.web_session
 		.leaderboard(
-			self_index.saturating_sub(entries)..=(self_index + entries),
+			self_index.saturating_sub(num_entries)..=(self_index + num_entries),
 			etternaonline_api::web::LeaderboardSortBy::Rating(skillset),
 			etternaonline_api::web::SortDirection::Descending,
 		)
 		.await?;
+
+	// Detect if user doesn't exist (EO doesn't actually tell us this, it just returns garbage
+	// results)
+	let all_ones = etterna::UserRank {
+		overall: 1,
+		stream: 1,
+		jumpstream: 1,
+		handstream: 1,
+		stamina: 1,
+		jackspeed: 1,
+		chordjack: 1,
+		technical: 1,
+	};
+	let username_present_in_results = entries
+		.iter()
+		.any(|entry| entry.username.eq_ignore_ascii_case(&username));
+	if ranks == all_ones && !username_present_in_results {
+		return Err(etternaonline_api::Error::UserNotFound.into());
+	}
 
 	let self_entry = entries
 		.iter()
