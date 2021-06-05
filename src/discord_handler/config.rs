@@ -28,8 +28,6 @@ pub struct Config {
 	pub work_in_progress_discussion_channel: serenity::ChannelId,
 	/// Channels in which bot commands can be used
 	pub allowed_channels: Vec<serenity::ChannelId>,
-	/// Channel to scan for score screenshots in
-	pub score_channel: serenity::ChannelId,
 	pub etterna_online_guild_id: serenity::GuildId,
 }
 
