@@ -78,8 +78,8 @@ More commands:
 **+aroundme [username] [skillset] [amount]**
 *Show surrounding leaderboard entries*
 
-You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to
-your message, I will also show the wifescores with that judge.
+You can also post links to scores and I will show info about them. If you add a judge (e.g. "J7") to your message, I will also show the wifescores with that judge.
+If you edit your message, the bot will update its response.
 				"#,
 			minanym,
 		)
