@@ -1,31 +1,4 @@
-use super::Error;
-
-fn is_equal_no_order_no_duplicates<T: PartialEq>(a: &[T], b: &[T]) -> bool {
-	a.iter().all(|a_elem| b.contains(a_elem)) && b.iter().all(|b_elem| a.contains(b_elem))
-}
-
-/// Represents a simple note pattern without any holds or mines or snap changes.
-#[derive(Debug, Default)]
-pub struct SimplePattern {
-	/// Each row is a vector of lane numbers. For example a plain jumptrill would be
-	/// `vec![vec![0, 1], vec![2, 3], vec![0, 1], vec![2, 3]...]`
-	pub rows: Vec<Vec<(Lane, NoteType)>>,
-}
-
-impl PartialEq for SimplePattern {
-	fn eq(&self, other: &Self) -> bool {
-		if self.rows.len() != other.rows.len() {
-			return false;
-		}
-
-		self.rows
-			.iter()
-			.zip(&other.rows)
-			.all(|(row_a, row_b)| is_equal_no_order_no_duplicates(row_a, row_b))
-	}
-}
-
-impl Eq for SimplePattern {}
+use super::{structures::*, Error};
 
 // Pops off the first full character as a substring. This will not panic on
 // multi-byte UTF-8 characters.
@@ -33,39 +6,6 @@ fn pop_first_char<'a>(string: &mut &'a str) -> Option<&'a str> {
 	let (substring, rest) = string.split_at(string.chars().next()?.len_utf8());
 	*string = rest;
 	Some(substring)
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
-pub enum Lane {
-	Index(u32),
-	Left,
-	Down,
-	Up,
-	Right,
-}
-
-impl Lane {
-	pub fn column_number_with_keymode(&self, keymode: u32) -> u32 {
-		match *self {
-			Lane::Index(lane) => lane,
-			Lane::Left => 0,
-			Lane::Down => 1,
-			Lane::Up => 2,
-			Lane::Right => {
-				if keymode == 3 {
-					2
-				} else {
-					3
-				}
-			} // in 3k it goes left-down-right
-		}
-	}
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash, Copy)]
-pub enum NoteType {
-	Tap,
-	Mine,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -82,11 +22,9 @@ struct State {
 
 fn parse_note_identifier(note: &str, state: &mut State) -> NoteIdentifier {
 	if let Ok(lane) = note.parse::<u32>() {
-		if lane == 0 {
-			NoteIdentifier::Empty
-		} else {
-			// Must have checked that lane isn't zero! to prevent underflow
-			NoteIdentifier::Note(Lane::Index(lane - 1), state.selected_note_type)
+		match lane.checked_sub(1) {
+			Some(lane) => NoteIdentifier::Note(Lane::Index(lane), state.selected_note_type),
+			None => NoteIdentifier::Empty, // 0 means empty row
 		}
 	} else {
 		match note.to_lowercase().as_str() {
