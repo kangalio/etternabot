@@ -76,7 +76,7 @@ async fn topscores(
 		SkillOrAcc::Skillset(skillset) => {
 			let scores = ctx
 				.data()
-				.v1_session
+				.v1
 				.user_top_scores(&username, skillset, limit)
 				.await;
 			scores.map(|scores| scores.into_iter().map(Score::V1).collect::<Vec<_>>())
@@ -84,7 +84,7 @@ async fn topscores(
 		SkillOrAcc::Accuracy => {
 			let scores = ctx
 				.data()
-				.web_session
+				.web
 				.user_scores(
 					ctx.data().get_eo_user_id(&username).await?,
 					0..limit,
@@ -103,12 +103,7 @@ async fn topscores(
 	}
 	let top_scores = top_scores?;
 
-	let country_code = ctx
-		.data()
-		.v1_session
-		.user_data(&username)
-		.await?
-		.country_code;
+	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in top_scores.iter().enumerate() {
@@ -174,18 +169,9 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx
-		.data()
-		.v1_session
-		.user_latest_10_scores(&username)
-		.await?;
+	let latest_scores = ctx.data().v1.user_latest_10_scores(&username).await?;
 
-	let country_code = ctx
-		.data()
-		.v1_session
-		.user_data(&username)
-		.await?
-		.country_code;
+	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
 
 	let mut response = String::from("```");
 	for (i, entry) in latest_scores.iter().enumerate() {

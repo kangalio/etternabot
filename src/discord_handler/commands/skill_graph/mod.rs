@@ -78,9 +78,7 @@ async fn skillgraph_inner(
 	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
 		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
 	let skill_timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
-		.then(|(username, storage)| {
-			download_skill_timeline(username, &ctx.data.web_session, storage)
-		})
+		.then(|(username, storage)| download_skill_timeline(username, &ctx.data.web, storage))
 		// uncommenting this borks Rust's async :/
 		// .buffered(3) // have up to three parallel connections
 		.try_collect::<Vec<_>>()
@@ -156,9 +154,9 @@ pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> 
 
 	let scores = ctx
 		.data
-		.web_session
+		.web
 		.user_scores(
-			ctx.data.web_session.user_details(&username).await?.user_id,
+			ctx.data.web.user_details(&username).await?.user_id,
 			..,
 			None,
 			etternaonline_api::web::UserScoresSortBy::Date,

@@ -64,8 +64,8 @@ async fn profile_compare(
 	you: &str,
 	expanded: bool,
 ) -> Result<(), Error> {
-	let me = ctx.data().v1_session.user_data(me).await?;
-	let you = ctx.data().v1_session.user_data(you).await?;
+	let me = ctx.data().v1.user_data(me).await?;
+	let you = ctx.data().v1.user_data(you).await?;
 
 	let my_rating = &me.rating;
 	let your_rating = &you.rating;
@@ -218,12 +218,7 @@ pub async fn userset(
 	let new_user_entry = super::config::UserRegistryEntry {
 		discord_id: ctx.author().id.0,
 		discord_username: ctx.author().name.to_owned(),
-		eo_id: ctx
-			.data()
-			.web_session
-			.user_details(&username)
-			.await?
-			.user_id,
+		eo_id: ctx.data().web.user_details(&username).await?.user_id,
 		eo_username: username.to_owned(),
 		last_known_num_scores: None,
 		last_rating: None,
@@ -270,7 +265,7 @@ pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
 ) -> Result<(), Error> {
-	if ctx.data().v1_session.user_data(&rival).await.is_err() {
+	if ctx.data().v1.user_data(&rival).await.is_err() {
 		poise::say_reply(ctx, format!("User `{}` doesn't exist", rival)).await?;
 		return Ok(());
 	}
@@ -322,8 +317,8 @@ pub async fn profile(
 		None => (ctx.data().get_eo_username(ctx.author()).await?, true),
 	};
 
-	let details = ctx.data().v1_session.user_data(&eo_username).await?;
-	let ranks = ctx.data().v1_session.user_ranks(&eo_username).await?;
+	let details = ctx.data().v1.user_data(&eo_username).await?;
+	let ranks = ctx.data().v1.user_ranks(&eo_username).await?;
 
 	let mut title = eo_username.to_owned();
 	if details.is_moderator {
@@ -452,13 +447,13 @@ pub async fn aroundme(
 
 	let num_entries = num_entries.unwrap_or(7);
 
-	let ranks = ctx.data().v1_session.user_ranks(&username).await?;
+	let ranks = ctx.data().v1.user_ranks(&username).await?;
 	let rank = ranks.get(skillset);
 
 	let self_index = rank - 1; // E.g. first player in leaderboard has rank 1 but index 0;
 	let entries = ctx
 		.data()
-		.web_session
+		.web
 		.leaderboard(
 			self_index.saturating_sub(num_entries)..=(self_index + num_entries),
 			etternaonline_api::web::LeaderboardSortBy::Rating(skillset),
@@ -543,7 +538,7 @@ pub async fn leaderboard(
 ) -> Result<(), Error> {
 	let leaderboard = match &country {
 		Some(country) => {
-			let result = ctx.data().v1_session.country_leaderboard(country).await;
+			let result = ctx.data().v1.country_leaderboard(country).await;
 			if let Err(etternaonline_api::Error::NoUsersFound) = result {
 				let response = format!("No users registered for country code `{}`", country);
 				poise::say_reply(ctx, response).await?;
@@ -551,7 +546,7 @@ pub async fn leaderboard(
 			}
 			result?
 		}
-		None => ctx.data().v1_session.global_leaderboard().await?,
+		None => ctx.data().v1.global_leaderboard().await?,
 	};
 
 	let title = match &country {

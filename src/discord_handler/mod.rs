@@ -280,8 +280,8 @@ pub struct State {
 	config: Config,
 	_data: std::sync::Mutex<Data>,
 	// stores the session, or None if login failed
-	v1_session: eo::v1::Session,
-	web_session: eo::web::Session,
+	v1: eo::v1::Session,
+	web: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
 	_bot_user_id: serenity::UserId,
 }
@@ -310,13 +310,13 @@ impl State {
 
 		Ok(Self {
 			bot_start_time: std::time::Instant::now(),
-			v1_session: etternaonline_api::v1::Session::new(
+			v1: etternaonline_api::v1::Session::new(
 				auth.eo_v1_api_key.clone(),
 				EO_COOLDOWN,
 				Some(EO_TIMEOUT),
 			),
 			auth,
-			web_session,
+			web: web_session,
 			config,
 			_data: std::sync::Mutex::new(Data::load()),
 			_bot_user_id: bot_user_id,
@@ -341,7 +341,7 @@ impl State {
 			return Ok(user_entry.eo_username.to_owned());
 		}
 
-		match self.web_session.user_details(&discord_user.name).await {
+		match self.web.user_details(&discord_user.name).await {
 			Ok(user_details) => {
 				// Seems like the user's EO name is the same as their Discord name :)
 				// TODO: could replace the user_details call with scores request to get
@@ -378,6 +378,6 @@ impl State {
 			return Ok(user.eo_id);
 		}
 
-		Ok(self.web_session.user_details(eo_username).await?.user_id) // TODO: integrate into registry?
+		Ok(self.web.user_details(eo_username).await?.user_id) // TODO: integrate into registry?
 	}
 }

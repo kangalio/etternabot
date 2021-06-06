@@ -32,7 +32,7 @@ async fn score_card_inner(
 	state: &State,
 	info: ScoreCard<'_>,
 ) -> Result<serenity::CreateMessage<'static>, Error> {
-	let score = state.v1_session.score_data(info.scorekey).await?;
+	let score = state.v1.score_data(info.scorekey).await?;
 
 	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
 		if let Some(replay) = &score.replay {

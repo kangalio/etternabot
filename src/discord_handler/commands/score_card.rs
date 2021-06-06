@@ -39,7 +39,7 @@ pub async fn rs(
 
 	let latest_scores = ctx
 		.data
-		.web_session
+		.web
 		.user_scores(
 			user_id,
 			0..1,
@@ -153,7 +153,7 @@ pub async fn randomscore(
 
 	// find a random score. If it's invalid, find another one
 	let (user_eo_id, scorekey) = loop {
-		let score = get_random_score(ctx.data, &username, &ctx.data.web_session).await?;
+		let score = get_random_score(ctx.data, &username, &ctx.data.web).await?;
 		if let Some(validity_dependant) = score.validity_dependant {
 			break (validity_dependant.user_id, validity_dependant.scorekey);
 		}
