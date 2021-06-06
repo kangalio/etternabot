@@ -433,7 +433,7 @@ pub async fn profile(
 
 /// Retrieve leaderboard entries directly above and below the current user.
 ///
-/// Call this command with `+aroundme [USERNAME] [SKILLSET] [AMOUNT]
+/// Call this command with `+aroundme [USERNAME] [SKILLSET] [AMOUNT]`
 #[poise::command(slash_command, track_edits)]
 pub async fn aroundme(
 	ctx: Context<'_>,
@@ -532,6 +532,58 @@ pub async fn aroundme(
 
 	poise::send_reply(ctx, |f| {
 		f.embed(|f| f.color(crate::ETTERNA_COLOR).description(output))
+	})
+	.await?;
+
+	Ok(())
+}
+
+/// Get EtternaOnline leaderboards with an optional country code.
+///
+/// Call this command with `+leaderboard [COUNTRY CODE]`
+#[poise::command(slash_command, track_edits)]
+pub async fn leaderboard(
+	ctx: Context<'_>,
+	#[description = "Country code"] country: Option<String>,
+) -> Result<(), Error> {
+	let leaderboard = match &country {
+		Some(country) => {
+			let result = ctx.data().v2().await?.country_leaderboard(country).await;
+			if let Err(etternaonline_api::Error::NoUsersFound) = result {
+				let response = format!("No users registered for country code `{}`", country);
+				poise::say_reply(ctx, response).await?;
+				return Ok(());
+			}
+			result?
+		}
+		None => ctx.data().v2().await?.world_leaderboard().await?,
+	};
+
+	let title = match &country {
+		Some(country) => format!(
+			"{} Country leaderboard",
+			country_code_to_flag_emoji(country)
+		),
+		None => String::from("Worldwide leaderboard"),
+	};
+
+	let mut response = String::new();
+	for (i, entry) in leaderboard.iter().enumerate() {
+		response += &format!(
+			"{0}. [{1}](https://etternaonline.com/user/{1}) ({2:.02})\n",
+			i + 1,
+			entry.user.username,
+			entry.rating.overall,
+			// can't use entry.user.country_code because that's always returned blank
+		);
+	}
+
+	poise::send_reply(ctx, |f: &mut poise::CreateReply<'_>| {
+		f.embed(|f| {
+			f.title(title)
+				.description(response)
+				.color(crate::ETTERNA_COLOR)
+		})
 	})
 	.await?;
 

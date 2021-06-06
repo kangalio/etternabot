@@ -280,6 +280,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::top);
 	framework.command(commands::top10);
 	framework.command(commands::aroundme);
+	framework.command(commands::leaderboard);
 	framework
 }
 
@@ -354,7 +355,7 @@ impl State {
 	}
 
 	/// attempt to retrieve the v2 session object. If there is none because login had failed,
-	/// retry login just to make sure that EO is _really_ done
+	/// retry login just to make sure that EO is _really_ down
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
 	/// holds the result from its call to v2(), thread 1 will block.
 	async fn v2(&self) -> Result<IdkWhatImDoing<'_>, Error> {
