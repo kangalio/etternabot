@@ -50,7 +50,8 @@ fn extract_score_links_from_string(
 
 async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 	let alternative_judge = super::extract_judge_from_string(&ctx.msg.content);
-	for (scorekey, user_id) in extract_score_links_from_string(&ctx.msg.content) {
+	let mut score_links = extract_score_links_from_string(&ctx.msg.content);
+	if let Some((scorekey, user_id)) = score_links.next() {
 		println!(
 			"Trying to show score card for scorekey {} user id {}",
 			scorekey, user_id
@@ -70,6 +71,11 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 		{
 			println!("Error while showing score card for {}: {}", scorekey, e);
 		}
+	}
+
+	let num_score_links = score_links.count() + 1;
+	if num_score_links > 1 {
+		println!("Refusing to show all {} score links", num_score_links);
 	}
 }
 
