@@ -101,7 +101,7 @@ async fn topscores(
 			scores.map(|s| s.scores.into_iter().map(Score::Web).collect::<Vec<_>>())
 		}
 	};
-	if let Err(etternaonline_api::Error::UserNotFound) = top_scores {
+	if let Err(etternaonline_api::Error::UserNotFound { name: _ }) = top_scores {
 		poise::say_reply(ctx, format!("No such user or skillset \"{}\"", username)).await?;
 		return Ok(());
 	}

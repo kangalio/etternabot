@@ -410,7 +410,7 @@ impl State {
 
 				Ok(discord_user.name.to_owned())
 			}
-			Err(eo::Error::UserNotFound) => Err(format!(
+			Err(eo::Error::UserNotFound { name: _ }) => Err(format!(
 				"User {} not found on EO. Please manually specify your EtternaOnline username with `+userset`",
 				discord_user.name.to_owned()
 			)

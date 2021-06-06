@@ -490,7 +490,10 @@ pub async fn aroundme(
 		.iter()
 		.any(|entry| entry.username.eq_ignore_ascii_case(&username));
 	if ranks == all_ones && !username_present_in_results {
-		return Err(etternaonline_api::Error::UserNotFound.into());
+		return Err(etternaonline_api::Error::UserNotFound {
+			name: Some(username),
+		}
+		.into());
 	}
 
 	let self_entry = entries
