@@ -50,7 +50,7 @@ pub async fn top(
 
 async fn topscores(
 	ctx: Context<'_>,
-	mut limit: u32,
+	limit: u32,
 	skillset: Option<SkillOrAcc>,
 	username: Option<String>,
 ) -> Result<(), Error> {
@@ -71,13 +71,12 @@ async fn topscores(
 		Web(etternaonline_api::web::UserScore),
 	}
 
-	// Download top scores, either via V2 or web API
+	// Download top scores, either via V1 or web API
 	let top_scores: Result<Vec<Score>, etternaonline_api::Error> = match skillset {
 		SkillOrAcc::Skillset(skillset) => {
 			let scores = ctx
 				.data()
-				.v2()
-				.await?
+				.v1_session
 				.user_top_scores(&username, skillset, limit)
 				.await;
 			scores.map(|scores| scores.into_iter().map(Score::V1).collect::<Vec<_>>())
@@ -106,8 +105,7 @@ async fn topscores(
 
 	let country_code = ctx
 		.data()
-		.v2()
-		.await?
+		.v1_session
 		.user_data(&username)
 		.await?
 		.country_code;
@@ -133,12 +131,6 @@ async fn topscores(
 			wifescore.as_percent(),
 		);
 	}
-
-	if limit != 10 && skillset == SkillOrAcc::Skillset(etterna::Skillset8::Overall) {
-		limit = 10;
-		response += "(due to a bug in the EO v2 API, only 10 entries can be shown in Overall mode)";
-	}
-
 	response += "```";
 
 	let title = match skillset {
@@ -182,12 +174,15 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx.data().v2().await?.user_latest_10_scores(&username).await?;
+	let latest_scores = ctx
+		.data()
+		.v1_session
+		.user_latest_10_scores(&username)
+		.await?;
 
 	let country_code = ctx
 		.data()
-		.v2()
-		.await?
+		.v1_session
 		.user_data(&username)
 		.await?
 		.country_code;

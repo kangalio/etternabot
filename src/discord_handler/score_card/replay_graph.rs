@@ -1,7 +1,6 @@
 #![allow(clippy::type_complexity)] // type complexity is not my fault
 
 use etterna::Wife;
-use etternaonline_api::v2 as eo;
 use plotters::{
 	prelude::*,
 	style::text_anchor::{HPos, Pos, VPos}, /*style::RGBAColor*/
@@ -83,7 +82,7 @@ struct ReplayStats {
 	chart_length: f32,
 }
 
-fn gen_replay_stats(replay: &eo::Replay) -> Option<ReplayStats> {
+fn gen_replay_stats(replay: &etternaonline_api::Replay) -> Option<ReplayStats> {
 	let notes = &replay.notes;
 
 	let mut hits: Vec<(f32, f32)> = Vec::new();
@@ -163,7 +162,7 @@ fn draw_mines(
 }
 
 fn draw_hit_dots<'a, 'b>(
-	replay: &eo::Replay,
+	replay: &etternaonline_api::Replay,
 	stats: &ReplayStats,
 	x_range: &std::ops::Range<f32>,
 	canvas: &'a DrawingArea<
@@ -273,7 +272,10 @@ fn draw_wifescore_chart<'a, 'b>(
 	Ok(())
 }
 
-fn inner(replay: &eo::Replay, output_path: &str) -> Result<Option<()>, Box<dyn std::error::Error>> {
+fn inner(
+	replay: &etternaonline_api::Replay,
+	output_path: &str,
+) -> Result<Option<()>, Box<dyn std::error::Error>> {
 	let stats = match gen_replay_stats(replay) {
 		Some(stats) => stats,
 		None => return Ok(None),
@@ -298,7 +300,7 @@ fn inner(replay: &eo::Replay, output_path: &str) -> Result<Option<()>, Box<dyn s
 /// plotters did a GREAT fucking JOB of hiding their error types so that I'm **unable** to handle
 /// them. For that reason, this has a String as an error type.
 pub fn generate_replay_graph(
-	replay: &etternaonline_api::v2::Replay,
+	replay: &etternaonline_api::Replay,
 	output_path: &str,
 ) -> Result<Option<()>, String> {
 	// match inner(replay, output_path) {

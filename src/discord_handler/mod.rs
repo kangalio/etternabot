@@ -98,19 +98,6 @@ async fn get_guild_permissions(
 	}
 }
 
-/// The contained Option must be Some!!!
-struct IdkWhatImDoing<'a> {
-	guard: tokio::sync::MutexGuard<'a, Option<eo::v2::Session>>,
-}
-impl std::ops::Deref for IdkWhatImDoing<'_> {
-	type Target = eo::v2::Session;
-
-	fn deref(&self) -> &Self::Target {
-		// UNWRAP: this will work because it's an invariant of this type
-		self.guard.as_ref().unwrap()
-	}
-}
-
 struct AutoSaveGuard<'a> {
 	guard: crate::AntiDeadlockMutexGuard<'a, Data>,
 }
@@ -294,7 +281,6 @@ pub struct State {
 	_data: crate::AntiDeadlockMutex<Data>,
 	// stores the session, or None if login failed
 	v1_session: eo::v1::Session,
-	v2_session: tokio::sync::Mutex<Option<eo::v2::Session>>,
 	web_session: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
 	_bot_user_id: serenity::UserId,
@@ -329,13 +315,6 @@ impl State {
 				EO_COOLDOWN,
 				Some(EO_TIMEOUT),
 			),
-			v2_session: tokio::sync::Mutex::new(match Self::attempt_v2_login(&auth).await {
-				Ok(v2) => Some(v2),
-				Err(e) => {
-					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
-					None
-				}
-			}),
 			auth,
 			web_session,
 			config,
@@ -345,53 +324,10 @@ impl State {
 		})
 	}
 
-	async fn attempt_v2_login(auth: &crate::Auth) -> Result<eo::v2::Session, eo::Error> {
-		eo::v2::Session::new_from_login(
-			auth.eo_username.to_owned(),
-			auth.eo_password.to_owned(),
-			auth.eo_v2_client_data.to_owned(),
-			EO_COOLDOWN,
-			Some(EO_TIMEOUT),
-		)
-		.await
-	}
-
 	// Automatically saves when the returned guard goes out of scope
 	fn lock_data(&self) -> AutoSaveGuard<'_> {
 		AutoSaveGuard {
 			guard: self._data.lock(),
-		}
-	}
-
-	async fn v2(&self) -> Result<&etternaonline_api::v1::Session, Error> {
-		Ok(&self.v1_session)
-	}
-
-	/// attempt to retrieve the v2 session object. If there is none because login had failed,
-	/// retry login just to make sure that EO is _really_ down
-	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
-	/// holds the result from its call to v2(), thread 1 will block.
-	async fn v2_______(&self) -> Result<IdkWhatImDoing<'_>, Error> {
-		let mut v2_session = self.v2_session.lock().await;
-
-		if v2_session.is_some() {
-			Ok(IdkWhatImDoing { guard: v2_session })
-		} else {
-			match Self::attempt_v2_login(&self.auth).await {
-				Ok(v2) => {
-					*v2_session = Some(v2);
-					Ok(IdkWhatImDoing { guard: v2_session })
-				}
-				Err(e) => {
-					*v2_session = None;
-
-					let e = format!(
-						"Can't complete this request because EO login failed ({})",
-						e
-					);
-					Err(e.into())
-				}
-			}
 		}
 	}
 
