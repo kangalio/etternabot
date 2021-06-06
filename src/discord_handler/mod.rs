@@ -99,7 +99,7 @@ async fn get_guild_permissions(
 }
 
 struct AutoSaveGuard<'a> {
-	guard: crate::AntiDeadlockMutexGuard<'a, Data>,
+	guard: std::sync::MutexGuard<'a, Data>,
 }
 impl std::ops::Deref for AutoSaveGuard<'_> {
 	type Target = Data;
@@ -278,7 +278,7 @@ pub struct State {
 	auth: crate::Auth,
 	bot_start_time: std::time::Instant,
 	config: Config,
-	_data: crate::AntiDeadlockMutex<Data>,
+	_data: std::sync::Mutex<Data>,
 	// stores the session, or None if login failed
 	v1_session: eo::v1::Session,
 	web_session: eo::web::Session,
@@ -318,7 +318,7 @@ impl State {
 			auth,
 			web_session,
 			config,
-			_data: crate::AntiDeadlockMutex::new(Data::load()),
+			_data: std::sync::Mutex::new(Data::load()),
 			_bot_user_id: bot_user_id,
 			noteskin_provider: commands::NoteskinProvider::load()?,
 		})
@@ -327,7 +327,7 @@ impl State {
 	// Automatically saves when the returned guard goes out of scope
 	fn lock_data(&self) -> AutoSaveGuard<'_> {
 		AutoSaveGuard {
-			guard: self._data.lock(),
+			guard: self._data.lock().unwrap(),
 		}
 	}
 

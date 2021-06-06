@@ -6,10 +6,7 @@
 )]
 #![warn(rust_2018_idioms)]
 
-mod anti_deadlock_mutex;
 mod discord_handler;
-
-pub use anti_deadlock_mutex::*;
 
 // Custom serenity prelude module
 use poise::serenity_prelude as serenity;
