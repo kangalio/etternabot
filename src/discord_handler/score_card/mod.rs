@@ -32,7 +32,7 @@ async fn score_card_inner(
 	state: &State,
 	info: ScoreCard<'_>,
 ) -> Result<serenity::CreateMessage<'static>, Error> {
-	let score = state.v2().await?.score_data(info.scorekey).await?;
+	let score = state.v1_session.score_data(info.scorekey).await?;
 
 	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
 		if let Some(replay) = &score.replay {
@@ -132,7 +132,7 @@ async fn score_card_inner(
 	}
 
 	let do_replay_analysis =
-		|score: &etternaonline_api::v2::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
+		|score: &etternaonline_api::v1::ScoreData| -> Option<Result<ReplayAnalysis, Error>> {
 			use etterna::SimpleReplay;
 
 			let replay = score.replay.as_ref()?;
@@ -263,24 +263,28 @@ async fn score_card_inner(
 	embed
 		.color(crate::ETTERNA_COLOR)
 		.author(|a| {
-			a.name(&score.song_name)
+			a.name(&score.song.name)
 				.url(format!(
 					"https://etternaonline.com/song/view/{}",
-					score.song_id
+					score.song.id
 				))
 				.icon_url(format!(
 					"https://etternaonline.com/img/flags/{}.png",
-					score.user.country_code
+					score.user.country_code.as_deref().unwrap_or("")
 				))
 		})
 		// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 		.description(description)
 		.footer(|f| {
-			f.text(format!("Played by {}", &score.user.username))
-				.icon_url(format!(
-					"https://etternaonline.com/avatars/{}",
-					score.user.avatar
-				))
+			f.text(format!(
+				"Played by {} on {}",
+				&score.user.username,
+				&score.datetime[..Ord::min(10, score.datetime.len())]
+			))
+			.icon_url(format!(
+				"https://etternaonline.com/avatars/{}",
+				score.user.avatar
+			))
 		});
 
 	if let Some(analysis) = &replay_analysis {

@@ -64,8 +64,8 @@ async fn profile_compare(
 	you: &str,
 	expanded: bool,
 ) -> Result<(), Error> {
-	let me = ctx.data().v2().await?.user_details(me).await?;
-	let you = ctx.data().v2().await?.user_details(you).await?;
+	let me = ctx.data().v2().await?.user_data(me).await?;
+	let you = ctx.data().v2().await?.user_data(you).await?;
 
 	let my_rating = &me.rating;
 	let your_rating = &you.rating;
@@ -136,16 +136,16 @@ async fn profile_compare(
 			e.color(crate::ETTERNA_COLOR)
 				.title(format!(
 					"{} {} vs. {} {}",
-					country_code_to_flag_emoji(&me.country_code),
-					me.username,
-					you.username,
-					country_code_to_flag_emoji(&you.country_code),
+					country_code_to_flag_emoji(&me.country_code.unwrap_or_default()),
+					me.user_name,
+					you.user_name,
+					country_code_to_flag_emoji(&you.country_code.unwrap_or_default()),
 				))
 				.description(string);
 
 			if let Some(bar_graph_block) = bar_graph_block {
 				e.field(
-					format!("Above is {}, below is {}", me.username, you.username),
+					format!("Above is {}, below is {}", me.user_name, you.user_name),
 					bar_graph_block,
 					false,
 				);
@@ -270,7 +270,7 @@ pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
 ) -> Result<(), Error> {
-	if ctx.data().v2().await?.user_details(&rival).await.is_err() {
+	if ctx.data().v2().await?.user_data(&rival).await.is_err() {
 		poise::say_reply(ctx, format!("User `{}` doesn't exist", rival)).await?;
 		return Ok(());
 	}
@@ -322,13 +322,8 @@ pub async fn profile(
 		None => (ctx.data().get_eo_username(ctx.author()).await?, true),
 	};
 
-	let details = ctx.data().v2().await?.user_details(&eo_username).await?;
-	let ranks = ctx
-		.data()
-		.v2()
-		.await?
-		.user_ranks_per_skillset(&eo_username)
-		.await?;
+	let details = ctx.data().v2().await?.user_data(&eo_username).await?;
+	let ranks = ctx.data().v2().await?.user_ranks(&eo_username).await?;
 
 	let mut title = eo_username.to_owned();
 	if details.is_moderator {
@@ -404,23 +399,25 @@ pub async fn profile(
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
-							&details.country_code
+							details.country_code.as_deref().unwrap_or("")
 						))
 				})
 				.thumbnail(format!(
 					"https://etternaonline.com/avatars/{}",
-					&details.avatar_url
+					&details.avatar
 				))
 				.color(crate::ETTERNA_COLOR);
 			if let Some(modifiers) = &details.default_modifiers {
 				embed.field("Default modifiers:", modifiers, false);
 			}
-			if !details.about_me.is_empty() {
-				embed.field(
-					format!("About {}:", eo_username),
-					truncate_text_maybe(&html2md::parse_html(&details.about_me), 1024),
-					false,
-				);
+			if let Some(about_me) = &details.about_me {
+				if !about_me.is_empty() {
+					embed.field(
+						format!("About {}:", eo_username),
+						truncate_text_maybe(&html2md::parse_html(about_me), 1024),
+						false,
+					);
+				}
 			}
 
 			embed
@@ -455,12 +452,7 @@ pub async fn aroundme(
 
 	let num_entries = num_entries.unwrap_or(7);
 
-	let ranks = ctx
-		.data()
-		.v2()
-		.await?
-		.user_ranks_per_skillset(&username)
-		.await?;
+	let ranks = ctx.data().v2().await?.user_ranks(&username).await?;
 	let rank = ranks.get(skillset);
 
 	let self_index = rank - 1; // E.g. first player in leaderboard has rank 1 but index 0;
@@ -559,7 +551,7 @@ pub async fn leaderboard(
 			}
 			result?
 		}
-		None => ctx.data().v2().await?.world_leaderboard().await?,
+		None => ctx.data().v2().await?.global_leaderboard().await?,
 	};
 
 	let title = match &country {
@@ -575,7 +567,7 @@ pub async fn leaderboard(
 		response += &format!(
 			"{0}. [{1}](https://etternaonline.com/user/{1}) ({2:.02})\n",
 			i + 1,
-			entry.user.username,
+			entry.username,
 			entry.rating.overall,
 			// can't use entry.user.country_code because that's always returned blank
 		);

@@ -67,23 +67,20 @@ async fn topscores(
 	let skillset = skillset.unwrap_or(SkillOrAcc::Skillset(etterna::Skillset8::Overall));
 
 	enum Score {
-		V2(etternaonline_api::v2::TopScore),
+		V1(etternaonline_api::v1::TopScore),
 		Web(etternaonline_api::web::UserScore),
 	}
 
 	// Download top scores, either via V2 or web API
 	let top_scores: Result<Vec<Score>, etternaonline_api::Error> = match skillset {
 		SkillOrAcc::Skillset(skillset) => {
-			let scores = if let Some(skillset) = skillset.into_skillset7() {
-				ctx.data()
-					.v2()
-					.await?
-					.user_top_skillset_scores(&username, skillset, limit)
-					.await
-			} else {
-				ctx.data().v2().await?.user_top_10_scores(&username).await
-			};
-			scores.map(|scores| scores.into_iter().map(Score::V2).collect::<Vec<_>>())
+			let scores = ctx
+				.data()
+				.v2()
+				.await?
+				.user_top_scores(&username, skillset, limit)
+				.await;
+			scores.map(|scores| scores.into_iter().map(Score::V1).collect::<Vec<_>>())
 		}
 		SkillOrAcc::Accuracy => {
 			let scores = ctx
@@ -111,7 +108,7 @@ async fn topscores(
 		.data()
 		.v2()
 		.await?
-		.user_details(&username)
+		.user_data(&username)
 		.await?
 		.country_code;
 
@@ -125,7 +122,7 @@ async fn topscores(
 				};
 				(&s.song_name, s.rate, more.ssr_overall_nerfed, s.wifescore)
 			}
-			Score::V2(s) => (&s.song_name, s.rate, s.ssr_overall, s.wifescore),
+			Score::V1(s) => (&s.song_name, s.rate, s.ssr_overall, s.wifescore),
 		};
 		response += &format!(
 			"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
@@ -164,7 +161,7 @@ async fn topscores(
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
-							country_code
+							country_code.as_deref().unwrap_or("")
 						))
 				})
 		})
@@ -185,13 +182,13 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
+	let latest_scores = ctx.data().v2().await?.user_latest_10_scores(&username).await?;
 
 	let country_code = ctx
 		.data()
 		.v2()
 		.await?
-		.user_details(&username)
+		.user_data(&username)
 		.await?
 		.country_code;
 
@@ -222,7 +219,7 @@ pub async fn lastsession(
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
-							country_code
+							country_code.as_deref().unwrap_or("")
 						))
 				})
 		})

@@ -24,7 +24,8 @@ pub const MISSING_REGISTRY_ENTRY_ERROR_MESSAGE: &str =
 pub struct Auth {
 	eo_username: String,
 	eo_password: String,
-	eo_client_data: String,
+	eo_v1_api_key: String,
+	eo_v2_client_data: String,
 	imgbb_api_key: String,
 }
 
@@ -43,7 +44,8 @@ async fn main() -> Result<(), Error> {
 	let auth = crate::Auth {
 		eo_username: env_var("EO_USERNAME")?,
 		eo_password: env_var("EO_PASSWORD")?,
-		eo_client_data: env_var("EO_CLIENT_DATA")?,
+		eo_v1_api_key: env_var("EO_API_KEY")?,
+		eo_v2_client_data: env_var("EO_CLIENT_DATA")?,
 		imgbb_api_key: env_var("IMGBB_API_KEY")?,
 	};
 	let discord_bot_token: String = env_var("DISCORD_BOT_TOKEN")?;

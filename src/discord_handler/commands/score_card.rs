@@ -35,27 +35,34 @@ pub async fn rs(
 	};
 	let alternative_judge = alternative_judge.map(|j| j.0 .0);
 
+	let user_id = ctx.data.get_eo_user_id(&eo_username).await?;
+
 	let latest_scores = ctx
 		.data
-		.v2()
+		.web_session
+		.user_scores(
+			user_id,
+			0..1,
+			None,
+			etternaonline_api::web::UserScoresSortBy::Date,
+			etternaonline_api::web::SortDirection::Descending,
+			false,
+		)
 		.await?
-		.user_latest_scores(&eo_username)
-		.await?;
-	let latest_score = match latest_scores.first() {
-		Some(x) => x,
-		None => {
-			poise::say_prefix_reply(ctx, "User has no scores".into()).await?;
-			return Ok(());
-		}
-	};
+		.scores;
+	let score = latest_scores.first().ok_or("User has no scores")?;
+	let scorekey = &score
+		.validity_dependant
+		.as_ref()
+		.ok_or("Latest score is invalid")?
+		.scorekey;
 
-	let user_id = ctx.data.get_eo_user_id(&eo_username).await?;
 	super::send_score_card(
 		ctx.data,
 		ctx.discord,
 		ctx.msg.channel_id,
 		super::ScoreCard {
-			scorekey: &latest_score.scorekey,
+			scorekey,
 			user_id: Some(user_id),
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge,

@@ -16,6 +16,9 @@ type Context<'a> = poise::Context<'a, State, Error>;
 type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
 // type SlashContext<'a> = poise::SlashContext<'a, State, Error>;
 
+const EO_COOLDOWN: std::time::Duration = std::time::Duration::from_millis(1000);
+const EO_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(30000);
+
 fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 	static JUDGE_REGEX: once_cell::sync::Lazy<regex::Regex> =
 		once_cell::sync::Lazy::new(|| regex::Regex::new(r"[jJ](\d)").unwrap());
@@ -290,6 +293,7 @@ pub struct State {
 	config: Config,
 	_data: crate::AntiDeadlockMutex<Data>,
 	// stores the session, or None if login failed
+	v1_session: eo::v1::Session,
 	v2_session: tokio::sync::Mutex<Option<eo::v2::Session>>,
 	web_session: eo::web::Session,
 	noteskin_provider: commands::NoteskinProvider,
@@ -320,6 +324,11 @@ impl State {
 
 		Ok(Self {
 			bot_start_time: std::time::Instant::now(),
+			v1_session: etternaonline_api::v1::Session::new(
+				auth.eo_v1_api_key.clone(),
+				EO_COOLDOWN,
+				Some(EO_TIMEOUT),
+			),
 			v2_session: tokio::sync::Mutex::new(match Self::attempt_v2_login(&auth).await {
 				Ok(v2) => Some(v2),
 				Err(e) => {
@@ -340,9 +349,9 @@ impl State {
 		eo::v2::Session::new_from_login(
 			auth.eo_username.to_owned(),
 			auth.eo_password.to_owned(),
-			auth.eo_client_data.to_owned(),
-			std::time::Duration::from_millis(1000),
-			Some(std::time::Duration::from_millis(30000)),
+			auth.eo_v2_client_data.to_owned(),
+			EO_COOLDOWN,
+			Some(EO_TIMEOUT),
 		)
 		.await
 	}
@@ -354,11 +363,15 @@ impl State {
 		}
 	}
 
+	async fn v2(&self) -> Result<&etternaonline_api::v1::Session, Error> {
+		Ok(&self.v1_session)
+	}
+
 	/// attempt to retrieve the v2 session object. If there is none because login had failed,
 	/// retry login just to make sure that EO is _really_ down
 	/// the returned value contains a mutex guard. so if thread 1 calls v2() while thread 2 still
 	/// holds the result from its call to v2(), thread 1 will block.
-	async fn v2(&self) -> Result<IdkWhatImDoing<'_>, Error> {
+	async fn v2_______(&self) -> Result<IdkWhatImDoing<'_>, Error> {
 		let mut v2_session = self.v2_session.lock().await;
 
 		if v2_session.is_some() {
