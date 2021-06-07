@@ -89,7 +89,7 @@ pub struct PatternRecipe<'a> {
 	pub keymode: usize,
 	pub vertical_spacing_multiplier: f32,
 	// List of pattern segments and their snap
-	pub pattern: &'a [(SimplePattern, FractionalSnap)],
+	pub pattern: &'a [(Pattern, FractionalSnap)],
 	pub max_image_dimensions: (usize, usize),
 	pub max_sprites: usize,
 }
@@ -138,7 +138,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 	}
 
 	for (row_data, row_number) in rows {
-		for &(note_lane, note_type) in row_data {
+		for &(note_lane, note_type) in &row_data.notes {
 			let note_lane = note_lane.column_number_with_keymode(keymode as u32);
 
 			sprites.push(Sprite {
@@ -154,6 +154,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 						etterna::Snap::from_row(row_number as _),
 					)?,
 					NoteType::Mine => noteskin.mine()?,
+					NoteType::Hold { .. } => return Err(Error::HoldsAreUnsupported),
 				},
 			});
 		}

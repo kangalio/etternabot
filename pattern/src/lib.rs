@@ -39,8 +39,6 @@ pub enum Error {
 		max_width: usize,
 		max_height: usize,
 	},
-	#[error("Missing closing bracket")]
-	UnclosedBracket,
-	#[error("Missing closing paranthesis")]
-	UnclosedParanthesis,
+	#[error("Holds are not supported yet")]
+	HoldsAreUnsupported,
 }

@@ -190,7 +190,7 @@ pub async fn pattern(
 		let mut did_user_intend = false;
 		if let Some(new_snap) = extract_snap(arg, &mut did_user_intend) {
 			if pattern_buffer.len() > 0 {
-				segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, snap));
+				segments.push((pattern_draw::parse_pattern(&pattern_buffer), snap));
 				pattern_buffer.clear();
 			}
 			snap = new_snap;
@@ -243,7 +243,7 @@ pub async fn pattern(
 		pattern_buffer += arg;
 	}
 	if pattern_buffer.len() > 0 {
-		segments.push((pattern_draw::parse_pattern(&pattern_buffer)?, snap));
+		segments.push((pattern_draw::parse_pattern(&pattern_buffer), snap));
 		pattern_buffer.clear();
 	}
 
@@ -257,7 +257,8 @@ pub async fn pattern(
 			// meaning of `r` depends on keymode, but we don't know the keymode yet. I've
 			// decided to assume 4k in the fallback case
 			.filter_map(|row| {
-				row.iter()
+				row.notes
+					.iter()
 					.map(|(lane, _note_type)| lane.column_number_with_keymode(4))
 					.max()
 			})

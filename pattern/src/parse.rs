@@ -1,116 +1,123 @@
-use super::{structures::*, Error};
+use super::structures::*;
 
-// Pops off the first full character as a substring. This will not panic on
-// multi-byte UTF-8 characters.
-fn pop_first_char<'a>(string: &mut &'a str) -> Option<&'a str> {
-	let (substring, rest) = string.split_at(string.chars().next()?.len_utf8());
-	*string = rest;
-	Some(substring)
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-enum NoteIdentifier {
-	Note(Lane, NoteType),
-	Empty,
-	Invalid,
-	ControlCharacter,
-}
-
-struct State {
-	selected_note_type: NoteType,
-}
-
-fn parse_note_identifier(note: &str, state: &mut State) -> NoteIdentifier {
-	if let Ok(lane) = note.parse::<u32>() {
-		match lane.checked_sub(1) {
-			Some(lane) => NoteIdentifier::Note(Lane::Index(lane), state.selected_note_type),
-			None => NoteIdentifier::Empty, // 0 means empty row
-		}
-	} else {
-		match note.to_lowercase().as_str() {
-			"l" => NoteIdentifier::Note(Lane::Left, state.selected_note_type),
-			"d" => NoteIdentifier::Note(Lane::Down, state.selected_note_type),
-			"u" => NoteIdentifier::Note(Lane::Up, state.selected_note_type),
-			"r" => NoteIdentifier::Note(Lane::Right, state.selected_note_type),
-			"" => NoteIdentifier::Empty,
-			"m" => {
-				state.selected_note_type = NoteType::Mine;
-				NoteIdentifier::ControlCharacter
-			}
-			// other => Err(Error::UnrecognizedNote(other.to_owned())),
-			_other => NoteIdentifier::Invalid,
-		}
-	}
-}
-
-/// Will panic if string is too short
-fn parse_single_note(pattern: &mut &str, state: &mut State) -> Result<NoteIdentifier, Error> {
-	let note;
-
-	if pattern.starts_with('(') {
-		let closing_paran = pattern.find(')').ok_or(Error::UnclosedParanthesis)?;
-
-		note = parse_note_identifier(&pattern[1..closing_paran], state);
-
-		*pattern = &pattern[closing_paran + 1..];
-	} else {
-		// UNWRAP: documented panic behavior
-		note = parse_note_identifier(pop_first_char(pattern).unwrap(), state);
-	}
-
-	Ok(note)
-}
-
-// Will panic if string is too short
-// If None is returned, an invalid or control character was popped
-fn parse_row(
-	pattern: &mut &str,
-	state: &mut State,
-) -> Result<Option<Vec<(Lane, NoteType)>>, Error> {
-	let row = if pattern.starts_with('[') {
-		let closing_bracket = pattern.find(']').ok_or(Error::UnclosedBracket)?;
-
-		let mut bracket_contents = &pattern[1..closing_bracket];
-		let mut row = Vec::new();
-		while !bracket_contents.is_empty() {
-			match parse_single_note(&mut bracket_contents, state)? {
-				NoteIdentifier::Note(lane, note_type) => row.push((lane, note_type)),
-				NoteIdentifier::Empty
-				| NoteIdentifier::Invalid
-				| NoteIdentifier::ControlCharacter => {}
-			}
-		}
-
-		*pattern = &pattern[closing_bracket + 1..];
-
-		Some(row)
-	} else {
-		match parse_single_note(pattern, state)? {
-			NoteIdentifier::Note(lane, note_type) => Some(vec![(lane, note_type)]),
-			NoteIdentifier::Empty => return Ok(Some(vec![])),
-			NoteIdentifier::Invalid => return Ok(None),
-			NoteIdentifier::ControlCharacter => return Ok(None),
-		}
-	};
-	state.selected_note_type = NoteType::Tap;
-	Ok(row)
-}
-
-pub fn parse_pattern(pattern: &str) -> Result<SimplePattern, Error> {
-	// remove all whitespace
-	let pattern = pattern.split_whitespace().collect::<String>();
-	let mut pattern = pattern.as_str();
-
-	let mut state = State {
-		selected_note_type: NoteType::Tap,
+/// Also handles missing end delimiters gracefully
+fn pop_delimited<'a>(t: &'a str, start: &str, end: &str) -> Option<(&'a str, &'a str)> {
+	let t = t.strip_prefix(start)?;
+	let (inside, rest) = match (t.find(start), t.find(end)) {
+		// Like `(12(34)`
+		(Some(start_i), Some(end_i)) if start_i < end_i => (&t[..start_i], &t[start_i..]),
+		// Like `(12)34` or `(12)(34)`
+		(_, Some(end_i)) => (&t[..end_i], &t[(end_i + end.len())..]),
+		// Like `(12(34`
+		(Some(start_i), None) => (&t[..start_i], &t[start_i..]),
+		// Like `(12`
+		(None, None) => (t, ""),
 	};
 
-	let mut rows = Vec::with_capacity(pattern.len() / 2); // rough estimate
-	while !pattern.is_empty() {
-		if let Some(row) = parse_row(&mut pattern, &mut state)? {
-			rows.push(row);
-		}
+	Some((rest, inside))
+}
+
+/// Pop first character as &str
+fn pop_char_str(t: &str) -> Option<(&str, &str)> {
+	let (substring, rest) = t.split_at(t.chars().next()?.len_utf8());
+	Some((rest, substring))
+}
+
+/// Pop first character as char
+fn pop_char(t: &str) -> Option<(&str, char)> {
+	let mut chars = t.chars();
+	let c = chars.next()?;
+	Some((chars.as_str(), c))
+}
+
+/// Pop a literal string case-insensitively
+fn pop_literal<'a>(t: &'a str, s: &str) -> Option<&'a str> {
+	if t.get(0..s.len())?.eq_ignore_ascii_case(s) {
+		Some(t.get(s.len()..)?)
+	} else {
+		None
+	}
+}
+
+/// Pop a number, either single digit `8...` or multidigit `(16)...`
+fn parse_number(t: &str) -> Option<(&str, Option<u32>)> {
+	let (t, number) = pop_delimited(t, "(", ")").or_else(|| pop_char_str(t))?;
+	Some((t, number.parse().ok()))
+}
+
+fn parse_tap(t: &str) -> Option<(&str, Option<Lane>)> {
+	if let Some((t, num)) = parse_number(t) {
+		let lane = num.map(|num| num.checked_sub(1).map_or(Lane::Empty, Lane::Index));
+		Some((t, lane))
+	} else {
+		let (t, char_) = pop_char(t)?;
+		let lane = match char_.to_ascii_lowercase() {
+			'l' => Some(Lane::Left),
+			'd' => Some(Lane::Down),
+			'u' => Some(Lane::Up),
+			'r' => Some(Lane::Right),
+			_ => None,
+		};
+		Some((t, lane))
+	}
+}
+
+fn parse_note(mut t: &str) -> Option<(&str, Option<(Lane, NoteType)>)> {
+	let mut note_type = NoteType::Tap;
+
+	// If prefixed with 'm', change to mine
+	if let Some(new_t) = pop_literal(t, "m") {
+		t = new_t;
+		note_type = NoteType::Mine;
 	}
 
-	Ok(SimplePattern { rows })
+	let (mut t, lane) = parse_tap(t)?;
+
+	// If postfixed by `x<number>`, change to hold
+	if let Some((new_t, Some(length))) = pop_literal(t, "x").and_then(parse_number) {
+		t = new_t;
+		note_type = NoteType::Hold { length };
+	}
+
+	let note = lane.map(|lane| (lane, note_type));
+	Some((t, note))
+}
+
+fn pop_until_none<'a, T: 'a>(
+	mut t: &'a str,
+	f: fn(&str) -> Option<(&str, T)>,
+) -> impl Iterator<Item = T> + 'a {
+	std::iter::from_fn(move || {
+		let (new_t, data) = f(t)?;
+		t = new_t;
+		Some(data)
+	})
+}
+
+fn parse_row(t: &str) -> Option<(&str, Option<Row>)> {
+	if let Some((mut t, in_brackets)) = pop_delimited(t, "[", "]") {
+		let mut notes = pop_until_none(in_brackets, parse_note)
+			.flatten()
+			.collect::<Vec<_>>();
+
+		// If postfixed by `x<number>`, change entire row to hold
+		if let Some((new_t, Some(length))) = pop_literal(t, "x").and_then(parse_number) {
+			t = new_t;
+			for note in &mut notes {
+				note.1 = NoteType::Hold { length };
+			}
+		}
+
+		Some((t, Some(Row { notes })))
+	} else {
+		let (t, note) = parse_note(t)?;
+		let row = note.map(|note| Row { notes: vec![note] });
+		Some((t, row))
+	}
+}
+
+pub fn parse_pattern(pattern: &str) -> Pattern {
+	Pattern {
+		rows: pop_until_none(pattern, parse_row).flatten().collect(),
+	}
 }

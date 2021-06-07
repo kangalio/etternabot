@@ -1,9 +1,14 @@
 /// Represents a simple note pattern without any holds or mines or snap changes.
 #[derive(Debug, Default)]
-pub struct SimplePattern {
+pub struct Pattern {
 	/// Each row is a vector of lane numbers. For example a plain jumptrill would be
 	/// `vec![vec![0, 1], vec![2, 3], vec![0, 1], vec![2, 3]...]`
-	pub rows: Vec<Vec<(Lane, NoteType)>>,
+	pub rows: Vec<Row>,
+}
+
+#[derive(Debug, Default)]
+pub struct Row {
+	pub notes: Vec<(Lane, NoteType)>,
 }
 
 // impl PartialEq for SimplePattern {
@@ -33,6 +38,7 @@ pub enum Lane {
 	Down,
 	Up,
 	Right,
+	Empty,
 }
 
 impl Lane {
@@ -49,6 +55,7 @@ impl Lane {
 					3
 				}
 			} // in 3k it goes left-down-right
+			Lane::Empty => 0, // STUB
 		}
 	}
 }
@@ -57,4 +64,5 @@ impl Lane {
 pub enum NoteType {
 	Tap,
 	Mine,
+	Hold { length: u32 },
 }
