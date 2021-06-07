@@ -5,7 +5,7 @@ mod profile;
 pub use profile::*;
 
 mod pattern;
-pub use pattern::*;
+pub use self::pattern::*;
 
 mod skill_graph;
 pub use skill_graph::*;

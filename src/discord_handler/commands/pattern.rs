@@ -1,4 +1,4 @@
-mod pattern_draw;
+use ::pattern as pattern_draw;
 pub use pattern_draw::{Error as PatternError, Noteskin};
 
 use super::Context;
