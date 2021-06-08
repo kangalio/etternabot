@@ -1,4 +1,6 @@
-use super::structures::*;
+use super::structures;
+
+/// GENERIC PARSING UTILITES
 
 /// Also handles missing end delimiters gracefully
 fn pop_delimited<'a>(t: &'a str, start: &str, end: &str) -> Option<(&'a str, &'a str)> {
@@ -39,12 +41,38 @@ fn pop_literal<'a>(t: &'a str, s: &str) -> Option<&'a str> {
 	}
 }
 
+/// INTERNAL PATTERN STRUCTURES
+
+/// Represents a note pattern without snap changes.
+#[derive(Debug)]
+struct Row {
+	notes: Vec<(Lane, NoteType)>,
+	// this field is a difference in this internal representation
+	move_draw_cursor_to_end_of_holds: bool,
+}
+
+#[derive(Debug)]
+enum Lane {
+	Index(u32),
+	Left,
+	Down,
+	Up,
+	Right,
+	// this variant is a difference in this internal representation
+	Empty,
+}
+
+use structures::NoteType; // we can use that struct internally as is no modifications needed
+
+/// PARSING CODE
+
 /// Pop a number, either single digit `8...` or multidigit `(16)...`
 fn parse_number(t: &str) -> Option<(&str, Option<u32>)> {
 	let (t, number) = pop_delimited(t, "(", ")").or_else(|| pop_char_str(t))?;
 	Some((t, number.parse().ok()))
 }
 
+/// Option<Lane> is None for invalid char or empty ("0")
 fn parse_tap(t: &str) -> Option<(&str, Option<Lane>)> {
 	if let Some((t, num)) = parse_number(t) {
 		let lane = num.map(|num| num.checked_sub(1).map_or(Lane::Empty, Lane::Index));
@@ -96,6 +124,8 @@ fn pop_until_none<'a, T: 'a>(
 
 fn parse_row(t: &str) -> Option<(&str, Option<Row>)> {
 	if let Some((mut t, in_brackets)) = pop_delimited(t, "[", "]") {
+		let mut move_draw_cursor_to_end_of_holds = false;
+
 		let mut notes = pop_until_none(in_brackets, parse_note)
 			.flatten()
 			.collect::<Vec<_>>();
@@ -103,21 +133,73 @@ fn parse_row(t: &str) -> Option<(&str, Option<Row>)> {
 		// If postfixed by `x<number>`, change entire row to hold
 		if let Some((new_t, Some(length))) = pop_literal(t, "x").and_then(parse_number) {
 			t = new_t;
-			for note in &mut notes {
-				note.1 = NoteType::Hold { length };
+
+			if notes.is_empty() {
+				// If you write `[]x10` it should have the same effect as `0x10`
+				notes.push((Lane::Empty, NoteType::Hold { length }));
+				move_draw_cursor_to_end_of_holds = true;
+			} else {
+				for note in &mut notes {
+					note.1 = NoteType::Hold { length };
+				}
 			}
 		}
 
-		Some((t, Some(Row { notes })))
+		let row = Row {
+			notes,
+			move_draw_cursor_to_end_of_holds,
+		};
+		Some((t, Some(row)))
 	} else {
 		let (t, note) = parse_note(t)?;
-		let row = note.map(|note| Row { notes: vec![note] });
+		let row = note.map(|note| Row {
+			notes: vec![note],
+			move_draw_cursor_to_end_of_holds: true,
+		});
 		Some((t, row))
 	}
 }
 
-pub fn parse_pattern(pattern: &str) -> Pattern {
-	Pattern {
-		rows: pop_until_none(pattern, parse_row).flatten().collect(),
+pub fn parse_pattern(pattern: &str) -> structures::Pattern {
+	// Parse the pattern into internal representation, then convert to more practical representation
+	let mut rows = Vec::new();
+	for row in pop_until_none(pattern, parse_row).flatten() {
+		let mut extra_empty_rows_to_insert = 0;
+		if row.move_draw_cursor_to_end_of_holds {
+			let max_hold_length = row
+				.notes
+				.iter()
+				.filter_map(|(_, note_type)| match note_type {
+					NoteType::Hold { length } => Some(length),
+					_ => None,
+				})
+				.max();
+			if let Some(max_hold_length) = max_hold_length {
+				extra_empty_rows_to_insert = max_hold_length.saturating_sub(1);
+			}
+		}
+
+		let notes = row
+			.notes
+			.into_iter()
+			.filter_map(|(lane, note_type)| {
+				let lane = match lane {
+					Lane::Index(num) => structures::Lane::Index(num),
+					Lane::Left => structures::Lane::Left,
+					Lane::Down => structures::Lane::Down,
+					Lane::Up => structures::Lane::Up,
+					Lane::Right => structures::Lane::Right,
+					Lane::Empty => return None,
+				};
+				Some((lane, note_type))
+			})
+			.collect::<Vec<_>>();
+		rows.push(structures::Row { notes });
+
+		for _ in 0..extra_empty_rows_to_insert {
+			rows.push(structures::Row { notes: vec![] });
+		}
 	}
+
+	structures::Pattern { rows }
 }
