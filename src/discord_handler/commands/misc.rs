@@ -76,8 +76,8 @@ pub async fn lookup(
 	poise::say_reply(
 		ctx,
 		format!(
-			"Discord username: {}\nEO username: {}\nhttps://etternaonline.com/user/{}",
-			user.discord_username, user.eo_username, user.eo_username,
+			"Discord: **{}** (ID {})\nEtternaOnline: **{}** (ID {})\nhttps://etternaonline.com/user/{}",
+			user.discord_username, user.discord_id, user.eo_username, user.eo_id, user.eo_username,
 		),
 	)
 	.await?;
