@@ -189,7 +189,7 @@ pub async fn guild_member_update(
 		.lock_data()
 		.user_registry
 		.iter_mut()
-		.find(|user| user.discord_id == new.user.id.0)
+		.find(|user| user.discord_id == new.user.id)
 	{
 		user_entry.discord_username = new.user.name.clone();
 	} else {

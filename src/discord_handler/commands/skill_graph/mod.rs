@@ -121,7 +121,7 @@ pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
 	let rival = ctx
 		.data
 		.lock_data()
-		.rival(ctx.msg.author.id.0)
+		.rival(ctx.msg.author.id)
 		.map(|x| x.to_owned());
 	let you = match rival {
 		Some(rival) => rival,

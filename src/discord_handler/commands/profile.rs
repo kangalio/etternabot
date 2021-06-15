@@ -172,7 +172,7 @@ pub async fn rival(
 	let rival = ctx
 		.data()
 		.lock_data()
-		.rival(ctx.author().id.0)
+		.rival(ctx.author().id)
 		.map(|x| x.to_owned());
 	let you = match rival {
 		Some(rival) => rival,
@@ -216,7 +216,7 @@ pub async fn userset(
 	#[description = "Your EtternaOnline username"] username: String,
 ) -> Result<(), Error> {
 	let new_user_entry = super::config::UserRegistryEntry {
-		discord_id: ctx.author().id.0,
+		discord_id: ctx.author().id,
 		discord_username: ctx.author().name.to_owned(),
 		eo_id: ctx.data().web.user_details(&username).await?.user_id,
 		eo_username: username.to_owned(),
@@ -231,7 +231,7 @@ pub async fn userset(
 		match data
 			.user_registry
 			.iter_mut()
-			.find(|u| u.discord_id == ctx.author().id.0)
+			.find(|u| u.discord_id == ctx.author().id)
 		{
 			Some(existing_user_entry) => {
 				old_eo_username = Some(existing_user_entry.eo_username.clone());
@@ -273,7 +273,7 @@ pub async fn rivalset(
 	let response = match ctx
 		.data()
 		.lock_data()
-		.set_rival(ctx.author().id.0, rival.to_owned())
+		.set_rival(ctx.author().id, rival.to_owned())
 	{
 		Some(old_rival) => format!(
 			"Successfully updated your rival from `{}` to `{}`",

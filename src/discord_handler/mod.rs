@@ -396,7 +396,7 @@ impl State {
 			.lock_data()
 			.user_registry
 			.iter()
-			.find(|user| user.discord_id == discord_user.id.0)
+			.find(|user| user.discord_id == discord_user.id)
 		{
 			return Ok(user_entry.eo_username.to_owned());
 		}
@@ -409,7 +409,7 @@ impl State {
 				self.lock_data()
 					.user_registry
 					.push(config::UserRegistryEntry {
-						discord_id: discord_user.id.0,
+						discord_id: discord_user.id,
 						discord_username: discord_user.name.to_owned(),
 						eo_id: user_details.user_id,
 						eo_username: discord_user.name.to_owned(),

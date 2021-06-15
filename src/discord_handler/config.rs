@@ -50,7 +50,7 @@ impl Config {
 
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct UserRegistryEntry {
-	pub discord_id: u64,
+	pub discord_id: serenity::UserId,
 	pub discord_username: String,
 	pub eo_id: u32,
 	pub eo_username: String,
@@ -61,8 +61,8 @@ pub struct UserRegistryEntry {
 #[derive(Default, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Data {
 	pub user_registry: Vec<UserRegistryEntry>,
-	rival_mapping: HashMap<u64, String>, // discord username -> eo username
-	preferred_scroll: HashMap<u64, etterna::ScrollDirection>,
+	rival_mapping: HashMap<serenity::UserId, String>, // discord username -> eo username
+	preferred_scroll: HashMap<serenity::UserId, etterna::ScrollDirection>,
 }
 
 impl Data {
@@ -88,19 +88,19 @@ impl Data {
 		.expect("Couldn't deserialize data into a json");
 	}
 
-	pub fn set_scroll(&mut self, discord_user: u64, scroll: etterna::ScrollDirection) {
+	pub fn set_scroll(&mut self, discord_user: serenity::UserId, scroll: etterna::ScrollDirection) {
 		self.preferred_scroll.insert(discord_user, scroll);
 	}
 
-	pub fn scroll(&self, discord_user: u64) -> Option<etterna::ScrollDirection> {
+	pub fn scroll(&self, discord_user: serenity::UserId) -> Option<etterna::ScrollDirection> {
 		self.preferred_scroll.get(&discord_user).copied()
 	}
 
-	pub fn set_rival(&mut self, discord_user: u64, rival: String) -> Option<String> {
+	pub fn set_rival(&mut self, discord_user: serenity::UserId, rival: String) -> Option<String> {
 		self.rival_mapping.insert(discord_user, rival)
 	}
 
-	pub fn rival(&self, discord_user: u64) -> Option<&str> {
+	pub fn rival(&self, discord_user: serenity::UserId) -> Option<&str> {
 		self.rival_mapping.get(&discord_user).map(|x| x as _)
 	}
 }

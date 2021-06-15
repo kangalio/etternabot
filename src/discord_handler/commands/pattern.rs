@@ -114,7 +114,7 @@ pub async fn pattern(
 	let mut scroll_direction = ctx
 		.data()
 		.lock_data()
-		.scroll(ctx.author().id.0)
+		.scroll(ctx.author().id)
 		.unwrap_or(etterna::ScrollDirection::Upscroll);
 	let mut segments = Vec::new();
 
@@ -343,7 +343,7 @@ pub async fn scrollset(
 		_ => return Err(format!("No such scroll '{}'", scroll).into()),
 	};
 
-	ctx.data().lock_data().set_scroll(ctx.author().id.0, scroll);
+	ctx.data().lock_data().set_scroll(ctx.author().id, scroll);
 	poise::say_reply(ctx, format!("Your scroll type is now {:?}", scroll)).await?;
 
 	Ok(())
