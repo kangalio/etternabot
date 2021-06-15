@@ -12,7 +12,7 @@ impl std::fmt::Display for InvalidJudge {
 }
 impl std::error::Error for InvalidJudge {}
 
-pub struct Judge(&'static etterna::Judge);
+pub struct Judge(pub &'static etterna::Judge);
 impl std::str::FromStr for Judge {
 	type Err = InvalidJudge;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {

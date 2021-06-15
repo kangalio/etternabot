@@ -63,6 +63,7 @@ pub struct Data {
 	pub user_registry: Vec<UserRegistryEntry>,
 	rival_mapping: HashMap<serenity::UserId, String>, // discord username -> eo username
 	preferred_scroll: HashMap<serenity::UserId, etterna::ScrollDirection>,
+	pub last_scores_list: HashMap<serenity::ChannelId, Vec<etterna::Scorekey>>,
 }
 
 impl Data {

@@ -55,10 +55,8 @@ Here are my commands: (Descriptions by Fission)
 *Sometimes we take things too far*
 **+compare [user1] [user2] ["expanded"]**
 *One person is an objectively better person than the other, find out which one!*
-**+rival ["expanded"]**
+**+rival ["expanded"]** and **+rivalgraph**
 *But are you an objectively better person than gary oak?*
-**+rivalgraph**
-
 **+rivalset [username]**
 *Replace gary oak with a more suitable rival*
 **+userset [username]**
@@ -75,6 +73,8 @@ More commands:
 *Print one of various random quotes, phrases and memes from various rhythm gaming communities ([Credit](https://github.com/ca25nada/spawncamping-wallhack/blob/master/Scripts/Quotes.lua))*
 **+lastsession [username]**
 *Show the last 10 scores*
+**+details [number] [judge]**
+*Show more details about a score from +top or +lastsession*
 **+aroundme [username] [skillset] [amount]**
 *Show surrounding leaderboard entries*
 

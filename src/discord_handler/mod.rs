@@ -284,6 +284,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::top10);
 	framework.command(commands::aroundme);
 	framework.command(commands::leaderboard);
+	framework.command(commands::details);
 	framework
 }
 

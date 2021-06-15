@@ -105,26 +105,45 @@ async fn topscores(
 
 	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
 
+	let mut scorekeys = Vec::new();
+
 	let mut response = String::from("```");
-	for (i, entry) in top_scores.iter().enumerate() {
-		let (song_name, rate, ssr_overall, wifescore) = match entry {
+	let mut i: u32 = 1;
+	for entry in &top_scores {
+		let (song_name, rate, ssr_overall, wifescore, scorekey) = match entry {
 			Score::Web(s) => {
 				let more = match &s.validity_dependant {
 					Some(x) => x,
 					None => continue,
 				};
-				(&s.song_name, s.rate, more.ssr_overall_nerfed, s.wifescore)
+				(
+					&s.song_name,
+					s.rate,
+					more.ssr_overall_nerfed,
+					s.wifescore,
+					more.scorekey.clone(),
+				)
 			}
-			Score::V1(s) => (&s.song_name, s.rate, s.ssr_overall, s.wifescore),
+			Score::V1(s) => (
+				&s.song_name,
+				s.rate,
+				s.ssr_overall,
+				s.wifescore,
+				s.scorekey.clone(),
+			),
 		};
+
+		scorekeys.push(scorekey);
+
 		response += &format!(
 			"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
-			i + 1,
+			i,
 			song_name,
 			rate,
 			ssr_overall,
 			wifescore.as_percent(),
 		);
+		i += 1;
 	}
 	response += "```";
 
@@ -155,6 +174,11 @@ async fn topscores(
 	})
 	.await?;
 
+	ctx.data()
+		.lock_data()
+		.last_scores_list
+		.insert(ctx.channel_id(), scorekeys);
+
 	Ok(())
 }
 
@@ -169,7 +193,7 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx.data().v1.user_latest_10_scores(&username).await?;
+	let latest_scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
 
 	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
 
@@ -205,6 +229,52 @@ pub async fn lastsession(
 				})
 		})
 	})
+	.await?;
+
+	let scorekeys = latest_scores.into_iter().map(|s| s.scorekey).collect();
+	ctx.data()
+		.lock_data()
+		.last_scores_list
+		.insert(ctx.channel_id(), scorekeys);
+
+	Ok(())
+}
+
+/// Show details about a specific score from a previous score list
+#[poise::command(track_edits, slash_command)]
+pub async fn details(
+	ctx: Context<'_>,
+	#[description = "Number of the score"] position: usize,
+	#[description = "Specific judge to use for statistics"] judge: Option<
+		poise::Wrapper<super::Judge>,
+	>,
+) -> Result<(), Error> {
+	let scorekey = {
+		let data = ctx.data().lock_data();
+
+		let scores = data
+			.last_scores_list
+			.get(&ctx.channel_id())
+			.ok_or("No score list has been posted in this channel")?;
+
+		position
+			.checked_sub(1)
+			.and_then(|i| scores.get(i))
+			.ok_or_else(|| format!("Enter a number between 1-{}", scores.len()))?
+			.clone()
+	};
+
+	super::send_score_card(
+		ctx.data(),
+		ctx.discord(),
+		ctx.channel_id(),
+		super::ScoreCard {
+			alternative_judge: judge.map(|x| x.0 .0),
+			scorekey: &scorekey,
+			show_ssrs_and_judgements_and_modifiers: true,
+			user_id: None,
+		},
+	)
 	.await?;
 
 	Ok(())
