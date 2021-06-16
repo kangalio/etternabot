@@ -275,16 +275,13 @@ async fn score_card_inner(
 		})
 		// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 		.description(description)
+		.timestamp(score.datetime.as_str())
 		.footer(|f| {
-			f.text(format!(
-				"Played by {} on {}",
-				&score.user.username,
-				&score.datetime[..Ord::min(10, score.datetime.len())]
-			))
-			.icon_url(format!(
-				"https://etternaonline.com/avatars/{}",
-				score.user.avatar
-			))
+			f.text(format!("Played by {}", &score.user.username,))
+				.icon_url(format!(
+					"https://etternaonline.com/avatars/{}",
+					score.user.avatar
+				))
 		});
 
 	if let Some(analysis) = &replay_analysis {
