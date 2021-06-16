@@ -48,6 +48,63 @@ pub async fn top(
 	topscores(ctx, limit, skillset.map(|x| x.0), username).await
 }
 
+struct ScoreEntry {
+	song_name: String,
+	rate: etterna::Rate,
+	ssr_overall: f32,
+	wifescore: etterna::Wifescore,
+	scorekey: etterna::Scorekey,
+}
+
+async fn respond_score_list(
+	ctx: Context<'_>,
+	username: &str,
+	title: &str,
+	scores: Vec<ScoreEntry>,
+) -> Result<(), Error> {
+	let mut response = String::from("```c\n");
+	for (i, score) in scores.iter().enumerate() {
+		response += &format!(
+			"{}. {}\n   {:.2}  {}  {:.2}%\n",
+			i + 1,
+			&score.song_name,
+			score.ssr_overall,
+			score.rate,
+			score.wifescore.as_percent(),
+		);
+	}
+	response += "```";
+
+	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
+
+	poise::send_reply(ctx, |m| {
+		m.embed(|e| {
+			e.color(crate::ETTERNA_COLOR)
+				.description(&response)
+				.author(|a| {
+					a.name(title)
+						.url(format!(
+							"https://etternaonline.com/user/profile/{}",
+							username
+						))
+						.icon_url(format!(
+							"https://etternaonline.com/img/flags/{}.png",
+							country_code.as_deref().unwrap_or("")
+						))
+				})
+		})
+	})
+	.await?;
+
+	let scorekeys = scores.into_iter().map(|s| s.scorekey).collect();
+	ctx.data()
+		.lock_data()
+		.last_scores_list
+		.insert(ctx.channel_id(), scorekeys);
+
+	Ok(())
+}
+
 async fn topscores(
 	ctx: Context<'_>,
 	limit: u32,
@@ -66,86 +123,58 @@ async fn topscores(
 
 	let skillset = skillset.unwrap_or(SkillOrAcc::Skillset(etterna::Skillset8::Overall));
 
-	enum Score {
-		V1(etternaonline_api::v1::TopScore),
-		Web(etternaonline_api::web::UserScore),
-	}
-
 	// Download top scores, either via V1 or web API
-	let top_scores: Result<Vec<Score>, etternaonline_api::Error> = match skillset {
-		SkillOrAcc::Skillset(skillset) => {
-			let scores = ctx
-				.data()
-				.v1
-				.user_top_scores(&username, skillset, limit)
-				.await;
-			scores.map(|scores| scores.into_iter().map(Score::V1).collect::<Vec<_>>())
-		}
-		SkillOrAcc::Accuracy => {
-			let scores = ctx
-				.data()
-				.web
-				.user_scores(
-					ctx.data().get_eo_user_id(&username).await?,
-					0..limit,
-					None,
-					etternaonline_api::web::UserScoresSortBy::Wifescore,
-					etternaonline_api::web::SortDirection::Descending,
-					false,
-				)
-				.await;
-			scores.map(|s| s.scores.into_iter().map(Score::Web).collect::<Vec<_>>())
-		}
+	let scores: Result<Vec<ScoreEntry>, etternaonline_api::Error> = match skillset {
+		SkillOrAcc::Skillset(skillset) => ctx
+			.data()
+			.v1
+			.user_top_scores(&username, skillset, limit)
+			.await
+			.map(|scores| {
+				scores
+					.into_iter()
+					.map(|s| ScoreEntry {
+						rate: s.rate,
+						scorekey: s.scorekey,
+						song_name: s.song_name,
+						ssr_overall: s.ssr_overall,
+						wifescore: s.wifescore,
+					})
+					.collect::<Vec<_>>()
+			}),
+		SkillOrAcc::Accuracy => ctx
+			.data()
+			.web
+			.user_scores(
+				ctx.data().get_eo_user_id(&username).await?,
+				0..limit,
+				None,
+				etternaonline_api::web::UserScoresSortBy::Wifescore,
+				etternaonline_api::web::SortDirection::Descending,
+				false,
+			)
+			.await
+			.map(|s| {
+				s.scores
+					.into_iter()
+					.filter_map(|s| {
+						let validity_dependant = s.validity_dependant?;
+						Some(ScoreEntry {
+							rate: s.rate,
+							scorekey: validity_dependant.scorekey,
+							song_name: s.song_name,
+							ssr_overall: validity_dependant.ssr_overall_nerfed,
+							wifescore: s.wifescore,
+						})
+					})
+					.collect::<Vec<_>>()
+			}),
 	};
-	if let Err(etternaonline_api::Error::UserNotFound { name: _ }) = top_scores {
+	if let Err(etternaonline_api::Error::UserNotFound { name: _ }) = scores {
 		poise::say_reply(ctx, format!("No such user or skillset \"{}\"", username)).await?;
 		return Ok(());
 	}
-	let top_scores = top_scores?;
-
-	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
-
-	let mut scorekeys = Vec::new();
-
-	let mut response = String::from("```");
-	let mut i: u32 = 1;
-	for entry in &top_scores {
-		let (song_name, rate, ssr_overall, wifescore, scorekey) = match entry {
-			Score::Web(s) => {
-				let more = match &s.validity_dependant {
-					Some(x) => x,
-					None => continue,
-				};
-				(
-					&s.song_name,
-					s.rate,
-					more.ssr_overall_nerfed,
-					s.wifescore,
-					more.scorekey.clone(),
-				)
-			}
-			Score::V1(s) => (
-				&s.song_name,
-				s.rate,
-				s.ssr_overall,
-				s.wifescore,
-				s.scorekey.clone(),
-			),
-		};
-
-		scorekeys.push(scorekey);
-
-		response += &format!(
-			"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
-			i,
-			song_name,
-			rate,
-			ssr_overall,
-			wifescore.as_percent(),
-		);
-		i += 1;
-	}
-	response += "```";
+	let scores = scores?;
 
 	let title = match skillset {
 		SkillOrAcc::Skillset(etterna::Skillset8::Overall) => {
@@ -155,29 +184,7 @@ async fn topscores(
 		SkillOrAcc::Accuracy => format!("{}'s Top {} Accuracy", username, limit),
 	};
 
-	poise::send_reply(ctx, |m| {
-		m.embed(|e| {
-			e.color(crate::ETTERNA_COLOR)
-				.description(&response)
-				.author(|a| {
-					a.name(title)
-						.url(format!(
-							"https://etternaonline.com/user/profile/{}",
-							username
-						))
-						.icon_url(format!(
-							"https://etternaonline.com/img/flags/{}.png",
-							country_code.as_deref().unwrap_or("")
-						))
-				})
-		})
-	})
-	.await?;
-
-	ctx.data()
-		.lock_data()
-		.last_scores_list
-		.insert(ctx.channel_id(), scorekeys);
+	respond_score_list(ctx, &username, &title, scores).await?;
 
 	Ok(())
 }
@@ -193,49 +200,20 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let latest_scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
-
-	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
-
-	let mut response = String::from("```");
-	for (i, entry) in latest_scores.iter().enumerate() {
-		response += &format!(
-			"{}. {}: {}\n  ▸ Score: {:.2} Wife: {:.2}%\n",
-			i + 1,
-			&entry.song_name,
-			entry.rate,
-			entry.ssr_overall,
-			entry.wifescore.as_percent(),
-		);
-	}
-	response += "```";
-
-	let title = format!("{}'s Last 10 Scores", username);
-
-	poise::send_reply(ctx, |m| {
-		m.embed(|e| {
-			e.color(crate::ETTERNA_COLOR)
-				.description(&response)
-				.author(|a| {
-					a.name(title)
-						.url(format!(
-							"https://etternaonline.com/user/profile/{}",
-							username
-						))
-						.icon_url(format!(
-							"https://etternaonline.com/img/flags/{}.png",
-							country_code.as_deref().unwrap_or("")
-						))
-				})
+	let scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
+	let scores = scores
+		.into_iter()
+		.map(|s| ScoreEntry {
+			rate: s.rate,
+			scorekey: s.scorekey,
+			song_name: s.song_name,
+			ssr_overall: s.ssr_overall,
+			wifescore: s.wifescore,
 		})
-	})
-	.await?;
+		.collect();
 
-	let scorekeys = latest_scores.into_iter().map(|s| s.scorekey).collect();
-	ctx.data()
-		.lock_data()
-		.last_scores_list
-		.insert(ctx.channel_id(), scorekeys);
+	let title = &format!("{}'s Last 10 Scores", username);
+	respond_score_list(ctx, &username, &title, scores).await?;
 
 	Ok(())
 }
