@@ -241,7 +241,7 @@ pub async fn lastsession(
 }
 
 /// Show details about a specific score from a previous score list
-#[poise::command(track_edits, slash_command)]
+#[poise::command(aliases("detail"), track_edits, slash_command)]
 pub async fn details(
 	ctx: Context<'_>,
 	#[description = "Number of the score"] position: usize,
