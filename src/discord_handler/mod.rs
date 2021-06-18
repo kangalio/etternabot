@@ -47,6 +47,18 @@ fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 		.next()
 }
 
+/// Transforms an error by checking, if it's a User Not Found error. If yes,
+fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
+	println!("Got an error {}", error);
+	match error {
+		etternaonline_api::Error::UserNotFound {
+			name: Some(username),
+		} => format!("No such user or skillset \"{}\"", username).into(),
+		etternaonline_api::Error::UserNotFound { name: None } => "No such user or skillset".into(),
+		other => other.into(),
+	}
+}
+
 // Returns None if msg was sent in DMs
 async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, serenity::Error> {
 	match ctx.guild_id() {

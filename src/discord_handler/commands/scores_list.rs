@@ -124,24 +124,22 @@ async fn topscores(
 	let skillset = skillset.unwrap_or(SkillOrAcc::Skillset(etterna::Skillset8::Overall));
 
 	// Download top scores, either via V1 or web API
-	let scores: Result<Vec<ScoreEntry>, etternaonline_api::Error> = match skillset {
+	let scores = match skillset {
 		SkillOrAcc::Skillset(skillset) => ctx
 			.data()
 			.v1
 			.user_top_scores(&username, skillset, limit)
 			.await
-			.map(|scores| {
-				scores
-					.into_iter()
-					.map(|s| ScoreEntry {
-						rate: s.rate,
-						scorekey: s.scorekey,
-						song_name: s.song_name,
-						ssr_overall: s.ssr_overall,
-						wifescore: s.wifescore,
-					})
-					.collect::<Vec<_>>()
-			}),
+			.map_err(super::no_such_user_or_skillset)?
+			.into_iter()
+			.map(|s| ScoreEntry {
+				rate: s.rate,
+				scorekey: s.scorekey,
+				song_name: s.song_name,
+				ssr_overall: s.ssr_overall,
+				wifescore: s.wifescore,
+			})
+			.collect::<Vec<_>>(),
 		SkillOrAcc::Accuracy => ctx
 			.data()
 			.web
@@ -154,27 +152,21 @@ async fn topscores(
 				false,
 			)
 			.await
-			.map(|s| {
-				s.scores
-					.into_iter()
-					.filter_map(|s| {
-						let validity_dependant = s.validity_dependant?;
-						Some(ScoreEntry {
-							rate: s.rate,
-							scorekey: validity_dependant.scorekey,
-							song_name: s.song_name,
-							ssr_overall: validity_dependant.ssr_overall_nerfed,
-							wifescore: s.wifescore,
-						})
-					})
-					.collect::<Vec<_>>()
-			}),
+			.map_err(super::no_such_user_or_skillset)?
+			.scores
+			.into_iter()
+			.filter_map(|s| {
+				let validity_dependant = s.validity_dependant?;
+				Some(ScoreEntry {
+					rate: s.rate,
+					scorekey: validity_dependant.scorekey,
+					song_name: s.song_name,
+					ssr_overall: validity_dependant.ssr_overall_nerfed,
+					wifescore: s.wifescore,
+				})
+			})
+			.collect::<Vec<_>>(),
 	};
-	if let Err(etternaonline_api::Error::UserNotFound { name: _ }) = scores {
-		poise::say_reply(ctx, format!("No such user or skillset \"{}\"", username)).await?;
-		return Ok(());
-	}
-	let scores = scores?;
 
 	let title = match skillset {
 		SkillOrAcc::Skillset(etterna::Skillset8::Overall) => {

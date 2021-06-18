@@ -459,7 +459,8 @@ pub async fn aroundme(
 			etternaonline_api::web::LeaderboardSortBy::Rating(skillset),
 			etternaonline_api::web::SortDirection::Descending,
 		)
-		.await?;
+		.await
+		.map_err(super::no_such_user_or_skillset)?;
 
 	// Detect if user doesn't exist (EO doesn't actually tell us this, it just returns garbage
 	// results)
@@ -477,10 +478,11 @@ pub async fn aroundme(
 		.iter()
 		.any(|entry| entry.username.eq_ignore_ascii_case(&username));
 	if ranks == all_ones && !username_present_in_results {
-		return Err(etternaonline_api::Error::UserNotFound {
-			name: Some(username),
-		}
-		.into());
+		return Err(super::no_such_user_or_skillset(
+			etternaonline_api::Error::UserNotFound {
+				name: Some(username),
+			},
+		));
 	}
 
 	let self_entry = entries
