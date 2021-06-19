@@ -332,7 +332,7 @@ pub async fn pattern(
 /// Change the scroll direction in subsequent pattern command calls
 ///
 /// Call this command with `+scrollset [down/up]`
-#[poise::command(track_edits, slash_command)]
+#[poise::command(aliases("setscroll"), track_edits, slash_command)]
 pub async fn scrollset(
 	ctx: Context<'_>,
 	#[description = "Scroll direction"] scroll: String,

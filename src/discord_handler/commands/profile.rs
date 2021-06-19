@@ -210,7 +210,7 @@ pub async fn compare(
 /// Save your EtternaOnline username in the bot
 ///
 /// Call this command with `+userset YOUR_EO_USERNAME`
-#[poise::command(track_edits, slash_command)]
+#[poise::command(aliases("setuser"), track_edits, slash_command)]
 pub async fn userset(
 	ctx: Context<'_>,
 	#[description = "Your EtternaOnline username"] username: String,
@@ -260,7 +260,7 @@ pub async fn userset(
 /// Set a rival to compete against!
 ///
 /// Call this command with `+rivalset YOUR_EO_USERNAME`
-#[poise::command(track_edits, slash_command)]
+#[poise::command(aliases("setrival"), track_edits, slash_command)]
 pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
