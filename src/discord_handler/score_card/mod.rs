@@ -7,7 +7,8 @@ use crate::{serenity, Error};
 
 pub struct ScoreCard<'a> {
 	pub scorekey: &'a etterna::Scorekey,
-	pub user_id: Option<u32>, // pass None if score link shouldn't be shown
+	pub user_id: Option<u32>,      // pass None if score link shouldn't be shown
+	pub username: Option<&'a str>, // used to detect scorekey collision
 	pub show_ssrs_and_judgements_and_modifiers: bool,
 	pub alternative_judge: Option<&'a etterna::Judge>,
 }
@@ -50,6 +51,13 @@ async fn score_card_inner(
 	};
 
 	let mut description = String::new();
+
+	if let Some(expected_username) = info.username {
+		if !score.user.username.eq_ignore_ascii_case(expected_username) {
+			description += "**_Multiple scores were assigned the same unique identifier (scorekey), so you are seeing the wrong score here. Sorry!_**";
+		}
+	}
+
 	if let Some(user_id) = info.user_id {
 		description += &format!(
 			"https://etternaonline.com/score/view/{}{}\n",

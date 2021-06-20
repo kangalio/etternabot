@@ -59,11 +59,17 @@ pub struct UserRegistryEntry {
 }
 
 #[derive(Default, Clone, PartialEq, Deserialize, Serialize)]
+pub struct ScoresList {
+	pub scorekeys: Vec<etterna::Scorekey>,
+	pub username: String,
+}
+
+#[derive(Default, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Data {
 	pub user_registry: Vec<UserRegistryEntry>,
 	rival_mapping: HashMap<serenity::UserId, String>, // discord username -> eo username
 	preferred_scroll: HashMap<serenity::UserId, etterna::ScrollDirection>,
-	pub last_scores_list: HashMap<serenity::ChannelId, Vec<etterna::Scorekey>>,
+	pub last_scores_list: HashMap<serenity::ChannelId, ScoresList>,
 }
 
 impl Data {

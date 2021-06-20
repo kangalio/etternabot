@@ -60,20 +60,15 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 }
 
 // Returns None if msg was sent in DMs
-async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, serenity::Error> {
-	match ctx.guild_id() {
-		Some(guild_id) => guild_id
-			.member(ctx.discord(), ctx.author().id)
-			.await
-			.map(Some),
-		None => Ok(None),
-	}
+async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, Error> {
+	Ok(match ctx.guild_id() {
+		Some(guild_id) => Some(guild_id.member(ctx.discord(), ctx.try_author()?).await?),
+		None => None,
+	})
 }
 
 // My Fucking GODDDDDDD WHY DOES SERENITY NOT PROVIDE THIS BASIC STUFF
-async fn get_guild_permissions(
-	ctx: Context<'_>,
-) -> Result<Option<serenity::Permissions>, serenity::Error> {
+async fn get_guild_permissions(ctx: Context<'_>) -> Result<Option<serenity::Permissions>, Error> {
 	fn aggregate_role_permissions(
 		guild_member: &serenity::Member,
 		guild_owner_id: serenity::UserId,
@@ -228,7 +223,14 @@ async fn listener(
 }
 
 async fn pre_command(ctx: poise::Context<'_, State, Error>) {
-	let author = ctx.author();
+	let author = match ctx.author() {
+		Some(x) => x,
+		None => {
+			println!("Unknown interaction received on {:?}", ctx.created_at());
+			return;
+		}
+	};
+
 	match ctx {
 		poise::Context::Slash(ctx) => {
 			let command_name = match &ctx.interaction.data {
@@ -270,7 +272,8 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 			defer_response: true,
 			..Default::default()
 		},
-		pre_command: |ctx| Box::pin(pre_command(ctx)), // ..Default::default()
+		pre_command: |ctx| Box::pin(pre_command(ctx)),
+		..Default::default()
 	};
 	framework.command(commands::compare);
 	framework.command(commands::help);

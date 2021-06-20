@@ -60,10 +60,10 @@ async fn respond_score_list(
 	ctx: Context<'_>,
 	username: &str,
 	title: &str,
-	scores: Vec<ScoreEntry>,
+	scorekeys: Vec<ScoreEntry>,
 ) -> Result<(), Error> {
 	let mut response = String::from("```c\n");
-	for (i, score) in scores.iter().enumerate() {
+	for (i, score) in scorekeys.iter().enumerate() {
 		response += &format!(
 			"{}. {}\n   {:.2}  {}  {:.2}%\n",
 			i + 1,
@@ -96,11 +96,14 @@ async fn respond_score_list(
 	})
 	.await?;
 
-	let scorekeys = scores.into_iter().map(|s| s.scorekey).collect();
-	ctx.data()
-		.lock_data()
-		.last_scores_list
-		.insert(ctx.channel_id(), scorekeys);
+	let scorekeys = scorekeys.into_iter().map(|s| s.scorekey).collect();
+	ctx.data().lock_data().last_scores_list.insert(
+		ctx.channel_id(),
+		super::config::ScoresList {
+			scorekeys,
+			username: username.to_owned(),
+		},
+	);
 
 	Ok(())
 }
@@ -113,7 +116,7 @@ async fn topscores(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author()).await?,
+		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
 	};
 
 	if !(1..=30).contains(&limit) {
@@ -189,7 +192,7 @@ pub async fn lastsession(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author()).await?,
+		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
 	};
 
 	let scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
@@ -219,19 +222,19 @@ pub async fn details(
 		poise::Wrapper<super::Judge>,
 	>,
 ) -> Result<(), Error> {
-	let scorekey = {
+	let (scorekey, username) = {
 		let data = ctx.data().lock_data();
 
-		let scores = data
+		let scores_list = data
 			.last_scores_list
 			.get(&ctx.channel_id())
 			.ok_or("No score list has been posted in this channel")?;
 
-		position
+		let scorekey = position
 			.checked_sub(1)
-			.and_then(|i| scores.get(i))
-			.ok_or_else(|| format!("Enter a number between 1-{}", scores.len()))?
-			.clone()
+			.and_then(|i| scores_list.scorekeys.get(i))
+			.ok_or_else(|| format!("Enter a number between 1-{}", scores_list.scorekeys.len()))?;
+		(scorekey.clone(), scores_list.username.clone())
 	};
 
 	super::send_score_card(
@@ -243,6 +246,7 @@ pub async fn details(
 			scorekey: &scorekey,
 			show_ssrs_and_judgements_and_modifiers: true,
 			user_id: None,
+			username: Some(&username),
 		},
 	)
 	.await?;

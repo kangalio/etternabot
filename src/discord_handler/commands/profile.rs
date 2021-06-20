@@ -167,12 +167,12 @@ pub async fn rival(
 	#[flag]
 	expanded: bool,
 ) -> Result<(), Error> {
-	let me = &ctx.data().get_eo_username(ctx.author()).await?;
+	let me = &ctx.data().get_eo_username(ctx.try_author()?).await?;
 
 	let rival = ctx
 		.data()
 		.lock_data()
-		.rival(ctx.author().id)
+		.rival(ctx.try_author()?.id)
 		.map(|x| x.to_owned());
 	let you = match rival {
 		Some(rival) => rival,
@@ -201,7 +201,7 @@ pub async fn compare(
 ) -> Result<(), Error> {
 	let left = match left {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.author()).await?,
+		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
 	};
 
 	profile_compare(ctx, &left, &right, expanded).await
@@ -216,8 +216,8 @@ pub async fn userset(
 	#[description = "Your EtternaOnline username"] username: String,
 ) -> Result<(), Error> {
 	let new_user_entry = super::config::UserRegistryEntry {
-		discord_id: ctx.author().id,
-		discord_username: ctx.author().name.to_owned(),
+		discord_id: ctx.try_author()?.id,
+		discord_username: ctx.try_author()?.name.to_owned(),
 		eo_id: ctx.data().web.user_details(&username).await?.user_id,
 		eo_username: username.to_owned(),
 		last_known_num_scores: None,
@@ -227,11 +227,12 @@ pub async fn userset(
 
 	let old_eo_username;
 	{
+		let author_id = ctx.try_author()?.id;
 		let mut data = ctx.data().lock_data();
 		match data
 			.user_registry
 			.iter_mut()
-			.find(|u| u.discord_id == ctx.author().id)
+			.find(|u| u.discord_id == author_id)
 		{
 			Some(existing_user_entry) => {
 				old_eo_username = Some(existing_user_entry.eo_username.clone());
@@ -273,7 +274,7 @@ pub async fn rivalset(
 	let response = match ctx
 		.data()
 		.lock_data()
-		.set_rival(ctx.author().id, rival.to_owned())
+		.set_rival(ctx.try_author()?.id, rival.to_owned())
 	{
 		Some(old_rival) => format!(
 			"Successfully updated your rival from `{}` to `{}`",
@@ -314,7 +315,7 @@ pub async fn profile(
 ) -> Result<(), Error> {
 	let (eo_username, overwrite_prev_ratings) = match eo_username {
 		Some(eo_username) => (eo_username, false),
-		None => (ctx.data().get_eo_username(ctx.author()).await?, true),
+		None => (ctx.data().get_eo_username(ctx.try_author()?).await?, true),
 	};
 
 	let details = ctx.data().v1.user_data(&eo_username).await?;
@@ -437,7 +438,7 @@ pub async fn aroundme(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x.to_owned(),
-		None => ctx.data().get_eo_username(ctx.author()).await?,
+		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
 	};
 
 	let skillset = match skillset {

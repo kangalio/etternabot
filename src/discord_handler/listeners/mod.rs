@@ -63,6 +63,7 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 			super::ScoreCard {
 				scorekey: &scorekey,
 				user_id: None,
+				username: None,
 				show_ssrs_and_judgements_and_modifiers: true,
 				alternative_judge,
 			},

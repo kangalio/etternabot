@@ -64,6 +64,7 @@ pub async fn rs(
 		super::ScoreCard {
 			scorekey,
 			user_id: Some(user_id),
+			username: Some(&eo_username),
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge,
 		},
@@ -166,6 +167,7 @@ pub async fn randomscore(
 		super::ScoreCard {
 			scorekey: &scorekey,
 			user_id: Some(user_eo_id),
+			username: Some(&username),
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge: judge.map(|x| x.0 .0),
 		},
