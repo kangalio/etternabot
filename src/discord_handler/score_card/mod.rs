@@ -54,7 +54,7 @@ async fn score_card_inner(
 
 	if let Some(expected_username) = info.username {
 		if !score.user.username.eq_ignore_ascii_case(expected_username) {
-			description += "**_Multiple scores were assigned the same unique identifier (scorekey), so you are seeing the wrong score here. Sorry!_**";
+			description += "**_Multiple scores were assigned the same unique identifier (scorekey), so you are seeing the wrong score here. Sorry!_**\n";
 		}
 	}
 
