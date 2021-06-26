@@ -342,7 +342,7 @@ pub async fn profile(
 
 	let rating_string = {
 		let mut data = ctx.data().lock_data();
-		// None if user is not in registry, None(None) if user is in registry but no prev rating
+		// None if user is not in registry, Some(None) if user is in registry but no prev rating
 		let previous_ratings = data
 			.user_registry
 			.iter_mut()
