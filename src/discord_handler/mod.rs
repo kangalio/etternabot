@@ -300,6 +300,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 	framework.command(commands::aroundme);
 	framework.command(commands::leaderboard);
 	framework.command(commands::details);
+	framework.command(commands::scoregraph);
 	framework
 }
 

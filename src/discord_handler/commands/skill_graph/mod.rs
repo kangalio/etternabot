@@ -208,47 +208,9 @@ pub async fn rivalgraph(ctx: PrefixContext<'_>, mode: SkillgraphConfig) -> Resul
 	Ok(())
 }
 
-pub struct AccuracygraphConfig {
-	mode: AccuracygraphMode,
-}
-
-#[derive(Clone, Copy)]
-pub enum AccuracygraphMode {
-	Skill,
-	Amount,
-}
-
-impl<'a> poise::PopArgument<'a> for AccuracygraphConfig {
-	type Err = StringError;
-
-	fn pop_from(args: &poise::ArgString<'a>) -> Result<(poise::ArgString<'a>, Self), Self::Err> {
-		let (args, params) = match poise::KeyValueArgs::pop_from(args) {
-			Ok(x) => x,
-			Err(e) => match e {},
-		};
-
-		let mode = match params.get("mode") {
-			Some(string) => match &*string.to_ascii_lowercase() {
-				"amount" | "count" | "number" => AccuracygraphMode::Amount,
-				"skill" | "msd" | "rating" => AccuracygraphMode::Skill,
-				_ => return Err(StringError(format!("Unknown mode `{}`", string))),
-			},
-			None => AccuracygraphMode::Skill,
-		};
-
-		Ok((args, Self { mode }))
-	}
-}
-
 // TODO: integrate into skillgraph_inner to not duplicate logic
 #[poise::command(aliases("accgraph"))]
-pub async fn accuracygraph(
-	ctx: PrefixContext<'_>,
-	config: AccuracygraphConfig,
-	username: Option<String>,
-) -> Result<(), Error> {
-	// TODO: actually use `mode`
-
+pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
 		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
@@ -278,62 +240,100 @@ pub async fn accuracygraph(
 	fn calculate_skill_timeline(
 		scores: &etternaonline_api::web::UserScores,
 		threshold: Option<etterna::Wifescore>,
-		mode: AccuracygraphMode,
 	) -> etterna::SkillTimeline<&str> {
-		// Filter scores by threshold
-		let scores = scores.scores.iter().filter(|score| {
-			if let Some(threshold) = threshold {
-				if score.wifescore < threshold {
-					return false;
+		etterna::SkillTimeline::calculate(
+			scores.scores.iter().filter_map(|score| {
+				if let Some(threshold) = threshold {
+					if score.wifescore < threshold {
+						return None;
+					}
 				}
-			}
-			return true;
-		});
-
-		// Calculate desired graph values
-		match mode {
-			AccuracygraphMode::Skill => etterna::SkillTimeline::calculate(
-				scores.filter_map(|s| {
-					Some((
-						s.date.as_str(),
-						s.validity_dependant.as_ref()?.ssr.to_skillsets7(),
-					))
-				}),
-				false,
-			),
-			AccuracygraphMode::Amount => {
-				use itertools::Itertools;
-				let mut num_total_scores = 0;
-
-				etterna::SkillTimeline {
-					changes: scores
-						.group_by(|s| s.date.as_str())
-						.into_iter()
-						.map(|(day, scores)| {
-							num_total_scores += scores.count();
-							let num_total_scores_pretending_to_be_a_rating =
-								etterna::Skillsets8::generate(|_| num_total_scores as _);
-							(day, num_total_scores_pretending_to_be_a_rating)
-						})
-						.collect(),
-				}
-			}
-		}
+				Some((
+					score.date.as_str(),
+					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
+				))
+			}),
+			false,
+		)
 	}
 
-	let full_timeline = calculate_skill_timeline(&scores, None, config.mode);
-	let aaa_timeline = calculate_skill_timeline(
-		&scores,
-		Some(etterna::Wifescore::AAA_THRESHOLD),
-		config.mode,
-	);
-	let aaaa_timeline = calculate_skill_timeline(
-		&scores,
-		Some(etterna::Wifescore::AAAA_THRESHOLD),
-		config.mode,
-	);
+	let full_timeline = calculate_skill_timeline(&scores, None);
+	let aaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAA_THRESHOLD));
+	let aaaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAAA_THRESHOLD));
 
 	render::draw_accuracy_graph(&full_timeline, &aaa_timeline, &aaaa_timeline, "output.png")
+		.map_err(|e| e.to_string())?;
+
+	ctx.msg
+		.channel_id
+		.send_files(ctx.discord, vec!["output.png"], |m| m)
+		.await?;
+
+	Ok(())
+}
+
+#[poise::command]
+pub async fn scoregraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
+	let username = match username {
+		Some(x) => x,
+		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
+	};
+
+	ctx.msg
+		.channel_id
+		.say(
+			ctx.discord,
+			format!("Requesting data for {} (this may take a while)", username),
+		)
+		.await?;
+
+	let scores = ctx
+		.data
+		.web
+		.user_scores(
+			ctx.data.web.user_details(&username).await?.user_id,
+			..,
+			None,
+			etternaonline_api::web::UserScoresSortBy::Date,
+			etternaonline_api::web::SortDirection::Ascending,
+			false, // exclude invalid
+		)
+		.await?;
+
+	fn calculate_timeline(
+		scores: &etternaonline_api::web::UserScores,
+		range: std::ops::Range<etterna::Wifescore>,
+	) -> Vec<(&str, u32)> {
+		use itertools::Itertools;
+
+		let mut num_total_scores = 0;
+		scores
+			.scores
+			.iter()
+			.filter(|s| range.contains(&s.wifescore))
+			.group_by(|s| s.date.as_str())
+			.into_iter()
+			.map(|(day, scores)| {
+				num_total_scores += scores.count() as u32;
+				(day, num_total_scores)
+			})
+			.collect()
+	}
+
+	let aa_timeline = calculate_timeline(
+		&scores,
+		etterna::Wifescore::AA_THRESHOLD..etterna::Wifescore::AAA_THRESHOLD,
+	);
+	let aaa_timeline = calculate_timeline(
+		&scores,
+		etterna::Wifescore::AAA_THRESHOLD..etterna::Wifescore::AAAA_THRESHOLD,
+	);
+	let aaaa_timeline = calculate_timeline(
+		&scores,
+		etterna::Wifescore::AAAA_THRESHOLD..etterna::Wifescore::AAAAA_THRESHOLD,
+	);
+
+	render::draw_score_graph(&aa_timeline, &aaa_timeline, &aaaa_timeline, "output.png")
 		.map_err(|e| e.to_string())?;
 
 	ctx.msg

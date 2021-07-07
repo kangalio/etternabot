@@ -221,3 +221,28 @@ pub fn draw_accuracy_graph(
 
 	generic_lines_over_time(&lines, output_path)
 }
+
+pub fn draw_score_graph(
+	aa_timeline: &[(&str, u32)],
+	aaa_timeline: &[(&str, u32)],
+	aaaa_timeline: &[(&str, u32)],
+	output_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+	let mut lines = Vec::new();
+	for (timeline, name, color) in &[
+		(aa_timeline, "# of AAs", RGBColor(0x66, 0xCC, 0x66)),
+		(aaa_timeline, "# of AAAs", RGBColor(0xEE, 0xBB, 0x00)),
+		(aaaa_timeline, "# of AAAAs", RGBColor(0x66, 0xCC, 0xFF)),
+	] {
+		lines.push(LineSpec {
+			color: color.to_rgba(),
+			stroke_width: 2,
+			label: name.to_string(),
+			points: timeline
+				.iter()
+				.map(|&(date, amount)| (parsedate(date), amount as f32)),
+		});
+	}
+
+	generic_lines_over_time(&lines, output_path)
+}
