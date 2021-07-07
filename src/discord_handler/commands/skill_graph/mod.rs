@@ -3,9 +3,63 @@ mod render;
 use super::PrefixContext;
 use crate::Error;
 
+#[derive(Debug)]
+pub struct StringError(String);
+impl std::fmt::Display for StringError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(&self.0)
+	}
+}
+impl std::error::Error for StringError {}
+impl From<String> for StringError {
+	fn from(s: String) -> Self {
+		Self(s)
+	}
+}
+
+fn parse_wifescore_or_grade(string: &str) -> Option<etterna::Wifescore> {
+	match &*string.to_ascii_lowercase() {
+		"aaaa" => return Some(etterna::Wifescore::AAAA_THRESHOLD),
+		"aaa" => return Some(etterna::Wifescore::AAA_THRESHOLD),
+		"aa" => return Some(etterna::Wifescore::AA_THRESHOLD),
+		"a" => return Some(etterna::Wifescore::A_THRESHOLD),
+		"b" => return Some(etterna::Wifescore::B_THRESHOLD),
+		"c" => return Some(etterna::Wifescore::C_THRESHOLD),
+		_ => {}
+	};
+
+	etterna::Wifescore::from_percent(string.trim_end_matches('%').parse().ok()?)
+}
+
+pub struct SkillgraphConfig {
+	threshold: Option<etterna::Wifescore>,
+}
+
+impl<'a> poise::PopArgument<'a> for SkillgraphConfig {
+	type Err = StringError;
+
+	fn pop_from(args: &poise::ArgString<'a>) -> Result<(poise::ArgString<'a>, Self), Self::Err> {
+		let (args, params) = match poise::KeyValueArgs::pop_from(args) {
+			Ok(x) => x,
+			Err(e) => match e {},
+		};
+
+		let threshold = match params.get("threshold") {
+			Some(string) => Some(
+				parse_wifescore_or_grade(string)
+					.ok_or_else(|| format!("Unknown wifescore or grade `{}`", string))?,
+			),
+			None => None,
+		};
+
+		Ok((args, Self { threshold }))
+	}
+}
+
 // usernames slice must contain at least one element!
 async fn skillgraph_inner(
 	ctx: PrefixContext<'_>,
+	mode: SkillgraphConfig,
 	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
 ) -> Result<(), Error> {
 	assert!(usernames.len() >= 1);
@@ -46,6 +100,7 @@ async fn skillgraph_inner(
 		username: &str,
 		web_session: &etternaonline_api::web::Session,
 		storage: &'a mut Option<etternaonline_api::web::UserScores>,
+		threshold: Option<etterna::Wifescore>,
 	) -> Result<etterna::SkillTimeline<&'a str>, Error> {
 		let user_id = web_session.user_details(&username).await?.user_id;
 		let scores = web_session
@@ -64,6 +119,12 @@ async fn skillgraph_inner(
 
 		Ok(etterna::SkillTimeline::calculate(
 			scores.scores.iter().filter_map(|score| {
+				if let Some(threshold) = threshold {
+					if score.wifescore < threshold {
+						return None;
+					}
+				}
+
 				Some((
 					score.date.as_str(),
 					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
@@ -78,7 +139,9 @@ async fn skillgraph_inner(
 	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
 		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
 	let skill_timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
-		.then(|(username, storage)| download_skill_timeline(username, &ctx.data.web, storage))
+		.then(|(username, storage)| {
+			download_skill_timeline(username, &ctx.data.web, storage, mode.threshold)
+		})
 		// uncommenting this borks Rust's async :/
 		// .buffered(3) // have up to three parallel connections
 		.try_collect::<Vec<_>>()
@@ -106,17 +169,26 @@ async fn skillgraph_inner(
 }
 
 #[poise::command]
-pub async fn skillgraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Result<(), Error> {
+pub async fn skillgraph(
+	ctx: PrefixContext<'_>,
+	mode: SkillgraphConfig,
+	usernames: Vec<String>,
+) -> Result<(), Error> {
 	if usernames.len() == 0 {
-		skillgraph_inner(ctx, &[&ctx.data.get_eo_username(&ctx.msg.author).await?]).await
+		skillgraph_inner(
+			ctx,
+			mode,
+			&[&ctx.data.get_eo_username(&ctx.msg.author).await?],
+		)
+		.await
 	} else {
 		let usernames = usernames.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-		skillgraph_inner(ctx, &usernames).await
+		skillgraph_inner(ctx, mode, &usernames).await
 	}
 }
 
 #[poise::command]
-pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
+pub async fn rivalgraph(ctx: PrefixContext<'_>, mode: SkillgraphConfig) -> Result<(), Error> {
 	let me = ctx.data.get_eo_username(&ctx.msg.author).await?;
 	let rival = ctx
 		.data
@@ -131,7 +203,7 @@ pub async fn rivalgraph(ctx: PrefixContext<'_>) -> Result<(), Error> {
 			return Ok(());
 		}
 	};
-	skillgraph_inner(ctx, &[&me, &you]).await?;
+	skillgraph_inner(ctx, mode, &[&me, &you]).await?;
 
 	Ok(())
 }
