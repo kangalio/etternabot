@@ -223,6 +223,7 @@ pub fn draw_accuracy_graph(
 }
 
 pub fn draw_score_graph(
+	sub_aa_timeline: &[(&str, u32)],
 	aa_timeline: &[(&str, u32)],
 	aaa_timeline: &[(&str, u32)],
 	aaaa_timeline: &[(&str, u32)],
@@ -230,6 +231,7 @@ pub fn draw_score_graph(
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let mut lines = Vec::new();
 	for (timeline, name, color) in &[
+		(sub_aa_timeline, "# of sub-AAs", RGBColor(0xDA, 0x57, 0x57)),
 		(aa_timeline, "# of AAs", RGBColor(0x66, 0xCC, 0x66)),
 		(aaa_timeline, "# of AAAs", RGBColor(0xEE, 0xBB, 0x00)),
 		(aaaa_timeline, "# of AAAAs", RGBColor(0x66, 0xCC, 0xFF)),

@@ -319,7 +319,10 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, username: Option<String>) -> Res
 			})
 			.collect()
 	}
-
+	let sub_aa_timeline = calculate_timeline(
+		&scores,
+		etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
+	);
 	let aa_timeline = calculate_timeline(
 		&scores,
 		etterna::Wifescore::AA_THRESHOLD..etterna::Wifescore::AAA_THRESHOLD,
@@ -333,12 +336,26 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, username: Option<String>) -> Res
 		etterna::Wifescore::AAAA_THRESHOLD..etterna::Wifescore::AAAAA_THRESHOLD,
 	);
 
-	render::draw_score_graph(&aa_timeline, &aaa_timeline, &aaaa_timeline, "output.png")
-		.map_err(|e| e.to_string())?;
+	render::draw_score_graph(
+		&sub_aa_timeline,
+		&aa_timeline,
+		&aaa_timeline,
+		&aaaa_timeline,
+		"output.png",
+	)
+	.map_err(|e| e.to_string())?;
 
 	ctx.msg
 		.channel_id
-		.send_files(ctx.discord, vec!["output.png"], |m| m)
+		.send_files(ctx.discord, vec!["output.png"], |f| {
+			f.content(format!(
+				"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**",
+				sub_aa_timeline.last().map_or(0, |&(_, total)| total),
+				aa_timeline.last().map_or(0, |&(_, total)| total),
+				aaa_timeline.last().map_or(0, |&(_, total)| total),
+				aaaa_timeline.last().map_or(0, |&(_, total)| total),
+			))
+		})
 		.await?;
 
 	Ok(())
