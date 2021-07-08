@@ -245,9 +245,13 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 			);
 		}
 		poise::Context::Prefix(ctx) => {
+			let guild_name = match ctx.msg.guild(ctx.discord).await {
+				Some(guild) => guild.name,
+				None => "<unknown>".into(),
+			};
 			println!(
-				"{} sent message {:?} on {:?}",
-				&author.name, &ctx.msg.content, &ctx.msg.timestamp
+				"{} sent message {:?} on {:?} in {}",
+				&author.name, &ctx.msg.content, &ctx.msg.timestamp, guild_name,
 			);
 		}
 	}
