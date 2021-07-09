@@ -41,6 +41,7 @@ struct LineSpec<I> {
 
 fn generic_lines_over_time(
 	lines: &[LineSpec<impl IntoIterator<Item = (chrono::Date<chrono::Utc>, f32)> + Clone>],
+	series_label_position: SeriesLabelPosition,
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	assert!(lines.len() >= 1);
@@ -119,7 +120,8 @@ fn generic_lines_over_time(
 
 	chart
 		.configure_series_labels()
-		.background_style(&RGBColor(10, 10, 10))
+		.position(series_label_position)
+		.background_style(&RGBColor(10, 10, 10).mix(0.8))
 		.label_font(TextStyle {
 			color: BackendColor {
 				rgb: (255, 255, 255),
@@ -134,7 +136,7 @@ fn generic_lines_over_time(
 }
 
 pub fn draw_skillsets_graph(
-	skill_timeline: &etterna::SkillTimeline<&str>,
+	skill_timeline: &etterna::SkillTimeline<chrono::Date<chrono::Utc>>,
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let mut lines = Vec::new();
@@ -150,15 +152,15 @@ pub fn draw_skillsets_graph(
 			points: skill_timeline
 				.changes
 				.iter()
-				.map(move |(date, rating)| (parsedate(date), rating.get(ss))),
+				.map(move |(date, rating)| (*date, rating.get(ss))),
 		});
 	}
 
-	generic_lines_over_time(&lines, output_path)
+	generic_lines_over_time(&lines, SeriesLabelPosition::MiddleRight, output_path)
 }
 
 pub fn draw_user_overalls_graph(
-	skill_timelines: &[etterna::SkillTimeline<&str>],
+	skill_timelines: &[etterna::SkillTimeline<chrono::Date<chrono::Utc>>],
 	usernames: &[&str],
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -189,11 +191,11 @@ pub fn draw_user_overalls_graph(
 			points: skill_timeline
 				.changes
 				.iter()
-				.map(move |(date, rating)| (parsedate(date), rating.overall)),
+				.map(move |(date, rating)| (*date, rating.overall)),
 		});
 	}
 
-	generic_lines_over_time(&lines, output_path)
+	generic_lines_over_time(&lines, SeriesLabelPosition::MiddleRight, output_path)
 }
 
 pub fn draw_accuracy_graph(
@@ -219,32 +221,95 @@ pub fn draw_accuracy_graph(
 		});
 	}
 
-	generic_lines_over_time(&lines, output_path)
+	generic_lines_over_time(&lines, SeriesLabelPosition::MiddleRight, output_path)
+}
+
+pub struct ScoreGraphUser {
+	pub sub_aa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub aa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub aaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub aaaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub username: String,
+}
+
+fn lerp_color(a: RGBColor, b: RGBColor, t: f32) -> RGBColor {
+	RGBColor(
+		(a.0 as f32 + (b.0 as f32 - a.0 as f32) * t) as u8,
+		(a.1 as f32 + (b.1 as f32 - a.1 as f32) * t) as u8,
+		(a.2 as f32 + (b.2 as f32 - a.2 as f32) * t) as u8,
+	)
 }
 
 pub fn draw_score_graph(
-	sub_aa_timeline: &[(&str, u32)],
-	aa_timeline: &[(&str, u32)],
-	aaa_timeline: &[(&str, u32)],
-	aaaa_timeline: &[(&str, u32)],
+	users: &[ScoreGraphUser],
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+	assert!(!users.is_empty());
+
+	const COLOR_MAP: &[RGBColor] = &[
+		RGBColor(0x1F, 0x77, 0xB4),
+		RGBColor(0xFF, 0x7F, 0x0E),
+		RGBColor(0x2C, 0xA0, 0x2C),
+		RGBColor(0xD6, 0x27, 0x28),
+		RGBColor(0x94, 0x67, 0xBD),
+		RGBColor(0x8C, 0x56, 0x4B),
+		RGBColor(0xE3, 0x77, 0xC2),
+		RGBColor(0x7F, 0x7F, 0x7F),
+		RGBColor(0xBC, 0xBD, 0x22),
+		RGBColor(0x17, 0xBE, 0xCF),
+	];
+
 	let mut lines = Vec::new();
-	for (timeline, name, color) in &[
-		(sub_aa_timeline, "# of sub-AAs", RGBColor(0xDA, 0x57, 0x57)),
-		(aa_timeline, "# of AAs", RGBColor(0x66, 0xCC, 0x66)),
-		(aaa_timeline, "# of AAAs", RGBColor(0xEE, 0xBB, 0x00)),
-		(aaaa_timeline, "# of AAAAs", RGBColor(0x66, 0xCC, 0xFF)),
-	] {
-		lines.push(LineSpec {
-			color: color.to_rgba(),
-			stroke_width: 2,
-			label: name.to_string(),
-			points: timeline
-				.iter()
-				.map(|&(date, amount)| (parsedate(date), amount as f32)),
-		});
+	for (user_i, user) in users.iter().enumerate() {
+		let user_timelines = &[
+			(
+				&user.sub_aa_timeline,
+				"# of sub-AAs",
+				RGBColor(0xDA, 0x57, 0x57),
+				(0.0, 0.4),
+			),
+			(
+				&user.aa_timeline,
+				"# of AAs",
+				RGBColor(0x66, 0xCC, 0x66),
+				(0.0, 0.0),
+			),
+			(
+				&user.aaa_timeline,
+				"# of AAAs",
+				RGBColor(0xEE, 0xBB, 0x00),
+				(0.2, 0.0),
+			),
+			(
+				&user.aaaa_timeline,
+				"# of AAAAs",
+				RGBColor(0x66, 0xCC, 0xFF),
+				(0.4, 0.0),
+			),
+		];
+		for &(timeline, base_name, grade_color, (lightness, darkness)) in user_timelines {
+			let name = if users.len() == 1 {
+				base_name.to_owned()
+			} else {
+				format!("{} ({})", base_name, user.username)
+			};
+
+			let color = if users.len() == 1 {
+				grade_color
+			} else {
+				let base_color = *COLOR_MAP.get(user_i).unwrap_or(&RGBColor(0x00, 0xFF, 0x00));
+				let (white, black) = (RGBColor(0xFF, 0xFF, 0xFF), RGBColor(0, 0, 0));
+				lerp_color(lerp_color(base_color, white, lightness), black, darkness)
+			};
+
+			lines.push(LineSpec {
+				color: color.to_rgba(),
+				stroke_width: 2,
+				label: name.to_string(),
+				points: timeline.iter().map(|&(date, amount)| (date, amount as f32)),
+			});
+		}
 	}
 
-	generic_lines_over_time(&lines, output_path)
+	generic_lines_over_time(&lines, SeriesLabelPosition::MiddleLeft, output_path)
 }

@@ -3,6 +3,13 @@ mod render;
 use super::PrefixContext;
 use crate::Error;
 
+fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
+	chrono::Date::from_utc(
+		chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO"),
+		chrono::Utc,
+	)
+}
+
 #[derive(Debug)]
 pub struct StringError(String);
 impl std::fmt::Display for StringError {
@@ -56,21 +63,15 @@ impl<'a> poise::PopArgument<'a> for SkillgraphConfig {
 	}
 }
 
-// usernames slice must contain at least one element!
-async fn skillgraph_inner(
+async fn generic_download_timelines<T>(
 	ctx: PrefixContext<'_>,
-	mode: SkillgraphConfig,
-	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
-) -> Result<(), Error> {
+	usernames: &[&str],
+	f: impl Fn(&str, &[etternaonline_api::web::UserScore]) -> T,
+) -> Result<Vec<T>, Error> {
 	assert!(usernames.len() >= 1);
 
 	if usernames.len() > 20 {
-		poise::say_prefix_reply(
-			ctx,
-			"Relax, now. 20 simultaneous skillgraphs ought to be enough".into(),
-		)
-		.await?;
-		return Ok(());
+		return Err("Relax, now. 20 users ought to be enough".into());
 	}
 
 	match usernames {
@@ -96,12 +97,12 @@ async fn skillgraph_inner(
 	};
 
 	#[allow(clippy::needless_lifetimes)] // false positive
-	async fn download_skill_timeline<'a>(
+	async fn download_timeline<'a, T>(
 		username: &str,
 		web_session: &etternaonline_api::web::Session,
 		storage: &'a mut Option<etternaonline_api::web::UserScores>,
-		threshold: Option<etterna::Wifescore>,
-	) -> Result<etterna::SkillTimeline<&'a str>, Error> {
+		f: impl Fn(&str, &[etternaonline_api::web::UserScore]) -> T,
+	) -> Result<T, Error> {
 		let user_id = web_session.user_details(&username).await?.user_id;
 		let scores = web_session
 			.user_scores(
@@ -117,35 +118,49 @@ async fn skillgraph_inner(
 		*storage = Some(scores);
 		let scores = storage.as_ref().expect("impossible");
 
-		Ok(etterna::SkillTimeline::calculate(
-			scores.scores.iter().filter_map(|score| {
-				if let Some(threshold) = threshold {
-					if score.wifescore < threshold {
-						return None;
-					}
-				}
-
-				Some((
-					score.date.as_str(),
-					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
-				))
-			}),
-			false,
-		))
+		Ok(f(username, &scores.scores))
 	}
 
 	use futures::{StreamExt, TryStreamExt};
 
 	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
 		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
-	let skill_timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
-		.then(|(username, storage)| {
-			download_skill_timeline(username, &ctx.data.web, storage, mode.threshold)
-		})
+	let timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
+		.then(|(username, storage)| download_timeline(username, &ctx.data.web, storage, &f))
 		// uncommenting this borks Rust's async :/
 		// .buffered(3) // have up to three parallel connections
 		.try_collect::<Vec<_>>()
 		.await?;
+
+	Ok(timelines)
+}
+
+// usernames slice must contain at least one element!
+async fn skillgraph_inner(
+	ctx: PrefixContext<'_>,
+	mode: SkillgraphConfig,
+	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
+) -> Result<(), Error> {
+	assert!(usernames.len() >= 1);
+
+	let skill_timelines = generic_download_timelines(ctx, usernames, |_, scores| {
+		etterna::SkillTimeline::calculate(
+			scores.iter().filter_map(|score| {
+				if let Some(threshold) = mode.threshold {
+					if score.wifescore < threshold {
+						return None;
+					}
+				}
+
+				Some((
+					parsedate(&score.date),
+					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
+				))
+			}),
+			false,
+		)
+	})
+	.await?;
 
 	if skill_timelines.len() == 1 {
 		render::draw_skillsets_graph(&skill_timelines[0], "output.png")
@@ -273,88 +288,71 @@ pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> 
 }
 
 #[poise::command]
-pub async fn scoregraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
-	let username = match username {
-		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
+pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Result<(), Error> {
+	let usernames: Vec<String> = if usernames.is_empty() {
+		vec![ctx.data.get_eo_username(&ctx.msg.author).await?]
+	} else {
+		usernames
 	};
-
-	ctx.msg
-		.channel_id
-		.say(
-			ctx.discord,
-			format!("Requesting data for {} (this may take a while)", username),
-		)
-		.await?;
-
-	let scores = ctx
-		.data
-		.web
-		.user_scores(
-			ctx.data.web.user_details(&username).await?.user_id,
-			..,
-			None,
-			etternaonline_api::web::UserScoresSortBy::Date,
-			etternaonline_api::web::SortDirection::Ascending,
-			false, // exclude invalid
-		)
-		.await?;
+	let usernames: Vec<&str> = usernames.iter().map(|x| x.as_str()).collect();
 
 	fn calculate_timeline(
-		scores: &etternaonline_api::web::UserScores,
+		scores: &[etternaonline_api::web::UserScore],
 		range: std::ops::Range<etterna::Wifescore>,
-	) -> Vec<(&str, u32)> {
+	) -> Vec<(chrono::Date<chrono::Utc>, u32)> {
 		use itertools::Itertools;
 
 		let mut num_total_scores = 0;
 		scores
-			.scores
 			.iter()
 			.filter(|s| range.contains(&s.wifescore))
 			.group_by(|s| s.date.as_str())
 			.into_iter()
 			.map(|(day, scores)| {
 				num_total_scores += scores.count() as u32;
-				(day, num_total_scores)
+				(parsedate(day), num_total_scores)
 			})
 			.collect()
 	}
-	let sub_aa_timeline = calculate_timeline(
-		&scores,
-		etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
-	);
-	let aa_timeline = calculate_timeline(
-		&scores,
-		etterna::Wifescore::AA_THRESHOLD..etterna::Wifescore::AAA_THRESHOLD,
-	);
-	let aaa_timeline = calculate_timeline(
-		&scores,
-		etterna::Wifescore::AAA_THRESHOLD..etterna::Wifescore::AAAA_THRESHOLD,
-	);
-	let aaaa_timeline = calculate_timeline(
-		&scores,
-		etterna::Wifescore::AAAA_THRESHOLD..etterna::Wifescore::AAAAA_THRESHOLD,
-	);
 
-	render::draw_score_graph(
-		&sub_aa_timeline,
-		&aa_timeline,
-		&aaa_timeline,
-		&aaaa_timeline,
-		"output.png",
-	)
-	.map_err(|e| e.to_string())?;
+	let score_timelines =
+		generic_download_timelines(ctx, &usernames, |username, scores| render::ScoreGraphUser {
+			username: username.to_owned(),
+			sub_aa_timeline: calculate_timeline(
+				&scores,
+				etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
+			),
+			aa_timeline: calculate_timeline(
+				&scores,
+				etterna::Wifescore::AA_THRESHOLD..etterna::Wifescore::AAA_THRESHOLD,
+			),
+			aaa_timeline: calculate_timeline(
+				&scores,
+				etterna::Wifescore::AAA_THRESHOLD..etterna::Wifescore::AAAA_THRESHOLD,
+			),
+			aaaa_timeline: calculate_timeline(
+				&scores,
+				etterna::Wifescore::AAAA_THRESHOLD..etterna::Wifescore::AAAAA_THRESHOLD,
+			),
+		})
+		.await?;
+
+	render::draw_score_graph(&score_timelines, "output.png").map_err(|e| e.to_string())?;
 
 	ctx.msg
 		.channel_id
 		.send_files(ctx.discord, vec!["output.png"], |f| {
-			f.content(format!(
-				"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**",
-				sub_aa_timeline.last().map_or(0, |&(_, total)| total),
-				aa_timeline.last().map_or(0, |&(_, total)| total),
-				aaa_timeline.last().map_or(0, |&(_, total)| total),
-				aaaa_timeline.last().map_or(0, |&(_, total)| total),
-			))
+			// Only add that text if a single user was selected
+			if let [user] = &*score_timelines {
+				f.content(format!(
+					"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**",
+					user.sub_aa_timeline.last().map_or(0, |&(_, total)| total),
+					user.aa_timeline.last().map_or(0, |&(_, total)| total),
+					user.aaa_timeline.last().map_or(0, |&(_, total)| total),
+					user.aaaa_timeline.last().map_or(0, |&(_, total)| total),
+				));
+			}
+			f
 		})
 		.await?;
 
