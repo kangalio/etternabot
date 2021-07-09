@@ -108,7 +108,7 @@ pub fn draw_pattern(recipe: PatternRecipe<'_>) -> Result<image::RgbaImage, Error
 
 	let mut rows = Vec::new();
 	let mut row_number = 0;
-	for &(ref pattern, snap) in pattern {
+	for (pattern, snap) in pattern {
 		let mut snap_192nd_intervals = snap.iter_192nd_intervals();
 
 		for row_data in &pattern.rows {
