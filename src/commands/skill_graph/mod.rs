@@ -111,7 +111,7 @@ async fn generic_download_timelines<T>(
 				None,
 				etternaonline_api::web::UserScoresSortBy::Date,
 				etternaonline_api::web::SortDirection::Ascending,
-				false, // exclude invalid
+				true,
 			)
 			.await?;
 

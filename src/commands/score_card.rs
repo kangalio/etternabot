@@ -46,7 +46,7 @@ pub async fn rs(
 			None,
 			etternaonline_api::web::UserScoresSortBy::Date,
 			etternaonline_api::web::SortDirection::Descending,
-			false,
+			true,
 		)
 		.await?
 		.scores;
