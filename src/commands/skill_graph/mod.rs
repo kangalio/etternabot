@@ -318,10 +318,14 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 	let score_timelines =
 		generic_download_timelines(ctx, &usernames, |username, scores| render::ScoreGraphUser {
 			username: username.to_owned(),
-			sub_aa_timeline: calculate_timeline(
-				&scores,
-				etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
-			),
+			sub_aa_timeline: if usernames.len() == 1 {
+				Some(calculate_timeline(
+					&scores,
+					etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
+				))
+			} else {
+				None
+			},
 			aa_timeline: calculate_timeline(
 				&scores,
 				etterna::Wifescore::AA_THRESHOLD..etterna::Wifescore::AAA_THRESHOLD,
@@ -346,7 +350,10 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 			if let [user] = &*score_timelines {
 				f.content(format!(
 					"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**",
-					user.sub_aa_timeline.last().map_or(0, |&(_, total)| total),
+					match &user.sub_aa_timeline {
+						Some(x) => x.last().map_or(0, |&(_, total)| total),
+						None => 0, // shouldn't happen
+					},
 					user.aa_timeline.last().map_or(0, |&(_, total)| total),
 					user.aaa_timeline.last().map_or(0, |&(_, total)| total),
 					user.aaaa_timeline.last().map_or(0, |&(_, total)| total),

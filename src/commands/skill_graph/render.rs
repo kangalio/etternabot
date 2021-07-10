@@ -225,7 +225,7 @@ pub fn draw_accuracy_graph(
 }
 
 pub struct ScoreGraphUser {
-	pub sub_aa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub sub_aa_timeline: Option<Vec<(chrono::Date<chrono::Utc>, u32)>>,
 	pub aa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
 	pub aaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
 	pub aaaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
@@ -263,35 +263,40 @@ pub fn draw_score_graph(
 	for (user_i, user) in users.iter().enumerate() {
 		let user_timelines = &[
 			(
-				&user.sub_aa_timeline,
+				user.sub_aa_timeline.as_ref(),
 				"# of sub-AAs",
 				RGBColor(0xDA, 0x57, 0x57),
 				(0.0, 0.4),
 			),
 			(
-				&user.aa_timeline,
+				Some(&user.aa_timeline),
 				"# of AAs",
 				RGBColor(0x66, 0xCC, 0x66),
 				(0.0, 0.0),
 			),
 			(
-				&user.aaa_timeline,
+				Some(&user.aaa_timeline),
 				"# of AAAs",
 				RGBColor(0xEE, 0xBB, 0x00),
 				(0.2, 0.0),
 			),
 			(
-				&user.aaaa_timeline,
+				Some(&user.aaaa_timeline),
 				"# of AAAAs",
 				RGBColor(0x66, 0xCC, 0xFF),
 				(0.4, 0.0),
 			),
 		];
 		for &(timeline, base_name, grade_color, (lightness, darkness)) in user_timelines {
+			let timeline = match timeline {
+				Some(x) => x,
+				None => continue,
+			};
+
 			let name = if users.len() == 1 {
 				base_name.to_owned()
 			} else {
-				format!("{} ({})", base_name, user.username)
+				format!("{}: {}", user.username, base_name)
 			};
 
 			let color = if users.len() == 1 {
