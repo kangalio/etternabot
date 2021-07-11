@@ -276,9 +276,17 @@ pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> 
 	let full_timeline = calculate_skill_timeline(&scores, None);
 	let aaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAA_THRESHOLD));
 	let aaaa_timeline = calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAAA_THRESHOLD));
+	let aaaaa_timeline =
+		calculate_skill_timeline(&scores, Some(etterna::Wifescore::AAAAA_THRESHOLD));
 
-	render::draw_accuracy_graph(&full_timeline, &aaa_timeline, &aaaa_timeline, "output.png")
-		.map_err(|e| e.to_string())?;
+	render::draw_accuracy_graph(
+		&full_timeline,
+		&aaa_timeline,
+		&aaaa_timeline,
+		&aaaaa_timeline,
+		"output.png",
+	)
+	.map_err(|e| e.to_string())?;
 
 	ctx.msg
 		.channel_id

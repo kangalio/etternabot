@@ -202,13 +202,15 @@ pub fn draw_accuracy_graph(
 	full_timeline: &etterna::SkillTimeline<&str>,
 	aaa_timeline: &etterna::SkillTimeline<&str>,
 	aaaa_timeline: &etterna::SkillTimeline<&str>,
+	aaaaa_timeline: &etterna::SkillTimeline<&str>,
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let mut lines = Vec::new();
 	for (skill_timeline, name, color) in &[
-		(full_timeline, "All scores", RGBColor(0xFF, 0xFF, 0xFF)),
+		(full_timeline, "All scores", RGBColor(0x66, 0xCC, 0x66)),
 		(aaa_timeline, "Only AAA+", RGBColor(0xEE, 0xBB, 0x00)),
 		(aaaa_timeline, "Only AAAA+", RGBColor(0x66, 0xCC, 0xFF)),
+		(aaaaa_timeline, "Only AAAAA+", RGBColor(0xFF, 0xFF, 0xFF)),
 	] {
 		if skill_timeline.changes.is_empty() {
 			continue;
