@@ -338,6 +338,10 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 				&scores,
 				etterna::Wifescore::AAAA_THRESHOLD..etterna::Wifescore::AAAAA_THRESHOLD,
 			),
+			aaaaa_timeline: calculate_timeline(
+				&scores,
+				etterna::Wifescore::AAAAA_THRESHOLD..etterna::Wifescore::HUNDRED_PERCENT,
+			),
 		})
 		.await?;
 
@@ -348,8 +352,8 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 		.send_files(ctx.discord, vec!["output.png"], |f| {
 			// Only add that text if a single user was selected
 			if let [user] = &*score_timelines {
-				f.content(format!(
-					"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**",
+				let mut content = format!(
+					"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**\n",
 					match &user.sub_aa_timeline {
 						Some(x) => x.last().map_or(0, |&(_, total)| total),
 						None => 0, // shouldn't happen
@@ -357,7 +361,11 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 					user.aa_timeline.last().map_or(0, |&(_, total)| total),
 					user.aaa_timeline.last().map_or(0, |&(_, total)| total),
 					user.aaaa_timeline.last().map_or(0, |&(_, total)| total),
-				));
+				);
+				if let Some((_, num_aaaaas)) = user.aaaaa_timeline.last() {
+					content += &format!("Number of AAAAAs: **{}**\n", num_aaaaas);
+				}
+				f.content(content);
 			}
 			f
 		})
