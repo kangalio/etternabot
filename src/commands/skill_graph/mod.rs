@@ -26,6 +26,7 @@ impl From<String> for StringError {
 
 fn parse_wifescore_or_grade(string: &str) -> Option<etterna::Wifescore> {
 	match &*string.to_ascii_lowercase() {
+		"aaaaa" => return Some(etterna::Wifescore::AAAAA_THRESHOLD),
 		"aaaa" => return Some(etterna::Wifescore::AAAA_THRESHOLD),
 		"aaa" => return Some(etterna::Wifescore::AAA_THRESHOLD),
 		"aa" => return Some(etterna::Wifescore::AA_THRESHOLD),
