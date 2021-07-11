@@ -210,6 +210,10 @@ pub fn draw_accuracy_graph(
 		(aaa_timeline, "Only AAA+", RGBColor(0xEE, 0xBB, 0x00)),
 		(aaaa_timeline, "Only AAAA+", RGBColor(0x66, 0xCC, 0xFF)),
 	] {
+		if skill_timeline.changes.is_empty() {
+			continue;
+		}
+
 		lines.push(LineSpec {
 			color: color.to_rgba(),
 			stroke_width: 2,
@@ -263,41 +267,36 @@ pub fn draw_score_graph(
 
 	let mut lines = Vec::new();
 	for (user_i, user) in users.iter().enumerate() {
-		for &(timeline, base_name, grade_color, (lightness, darkness), dont_show_if_empty) in &[
+		for &(timeline, base_name, grade_color, (lightness, darkness)) in &[
 			(
 				user.sub_aa_timeline.as_ref(),
 				"# of sub-AAs",
 				RGBColor(0xDA, 0x57, 0x57),
 				(0.0, 0.4),
-				false,
 			),
 			(
 				Some(&user.aa_timeline),
 				"# of AAs",
 				RGBColor(0x66, 0xCC, 0x66),
 				(0.0, 0.0),
-				false,
 			),
 			(
 				Some(&user.aaa_timeline),
 				"# of AAAs",
 				RGBColor(0xEE, 0xBB, 0x00),
 				(0.2, 0.0),
-				false,
 			),
 			(
 				Some(&user.aaaa_timeline),
 				"# of AAAAs",
 				RGBColor(0x66, 0xCC, 0xFF),
 				(0.4, 0.0),
-				false,
 			),
 			(
 				Some(&user.aaaaa_timeline),
 				"# of AAAAAs",
 				RGBColor(0xFF, 0xFF, 0xFF),
 				(0.6, 0.0),
-				true,
 			),
 		] {
 			let timeline = match timeline {
@@ -305,7 +304,7 @@ pub fn draw_score_graph(
 				None => continue,
 			};
 
-			if timeline.is_empty() && dont_show_if_empty {
+			if timeline.is_empty() {
 				continue;
 			}
 
