@@ -27,7 +27,6 @@ poise = { path = "../poise" }
 # poise = { git = "https://github.com/kangalioo/poise" }
 futures = "0.3.13"
 tokio = { version = "1.4.0", features = ["rt", "rt-multi-thread"] }
-reqwest = { version = "0.11.3", features = ["json"] } # to call ImgBB API to upload pattern images
 base64 = "0.13"
 itertools = "0.10"
 

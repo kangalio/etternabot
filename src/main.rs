@@ -31,7 +31,6 @@ pub struct Auth {
 	eo_password: String,
 	eo_v1_api_key: String,
 	eo_v2_client_data: String,
-	imgbb_api_key: String,
 }
 
 use config::{Config, Data};
@@ -494,7 +493,6 @@ async fn main() -> Result<(), Error> {
 		eo_password: env_var("EO_PASSWORD")?,
 		eo_v1_api_key: env_var("EO_API_KEY")?,
 		eo_v2_client_data: env_var("EO_CLIENT_DATA")?,
-		imgbb_api_key: env_var("IMGBB_API_KEY")?,
 	};
 	let discord_bot_token: String = env_var("DISCORD_BOT_TOKEN")?;
 	let application_id = env_var("APPLICATION_ID")?;
