@@ -238,9 +238,7 @@ pub async fn details(
 	};
 
 	super::send_score_card(
-		ctx.data(),
-		ctx.discord(),
-		ctx.channel_id(),
+		ctx,
 		super::ScoreCard {
 			alternative_judge: judge.map(|x| x.0 .0),
 			scorekey: &scorekey,

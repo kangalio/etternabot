@@ -1,6 +1,6 @@
 //! All commands that spawn a score card
 
-use super::PrefixContext;
+use super::Context;
 use crate::Error;
 
 #[derive(Debug)]
@@ -23,22 +23,24 @@ impl std::str::FromStr for Judge {
 }
 
 /// Call this command with `+rs [username] [judge]`
-#[poise::command] // can't make slash command because it shows a score card
+#[poise::command(slash_command)]
 pub async fn rs(
-	ctx: PrefixContext<'_>,
-	#[lazy] eo_username: Option<String>,
-	alternative_judge: Option<poise::Wrapper<Judge>>,
+	ctx: Context<'_>,
+	#[lazy]
+	#[description = "EtternaOnline username"]
+	eo_username: Option<String>,
+	#[description = "Judge to show info about"] alternative_judge: Option<poise::Wrapper<Judge>>,
 ) -> Result<(), Error> {
 	let eo_username = match eo_username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 	let alternative_judge = alternative_judge.map(|j| j.0 .0);
 
-	let user_id = ctx.data.get_eo_user_id(&eo_username).await?;
+	let user_id = ctx.data().get_eo_user_id(&eo_username).await?;
 
 	let latest_scores = ctx
-		.data
+		.data()
 		.web
 		.user_scores(
 			user_id,
@@ -58,9 +60,7 @@ pub async fn rs(
 		.scorekey;
 
 	super::send_score_card(
-		ctx.data,
-		ctx.discord,
-		ctx.msg.channel_id,
+		ctx,
 		super::ScoreCard {
 			scorekey,
 			user_id: Some(user_id),
@@ -141,29 +141,30 @@ async fn get_random_score(
 		.ok_or_else(|| "A score was requested from EO but none was sent".into())
 }
 
-#[poise::command]
+/// Show a random score
+#[poise::command(slash_command)]
 pub async fn randomscore(
-	ctx: PrefixContext<'_>,
-	#[lazy] username: Option<String>,
-	judge: Option<poise::Wrapper<Judge>>,
+	ctx: Context<'_>,
+	#[lazy]
+	#[description = "EtternaOnline username"]
+	username: Option<String>,
+	#[description = "Judge to show info about"] judge: Option<poise::Wrapper<Judge>>,
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
 	// find a random score. If it's invalid, find another one
 	let (user_eo_id, scorekey) = loop {
-		let score = get_random_score(ctx.data, &username, &ctx.data.web).await?;
+		let score = get_random_score(ctx.data(), &username, &ctx.data().web).await?;
 		if let Some(validity_dependant) = score.validity_dependant {
 			break (validity_dependant.user_id, validity_dependant.scorekey);
 		}
 	};
 
 	super::send_score_card(
-		ctx.data,
-		ctx.discord,
-		ctx.msg.channel_id,
+		ctx,
 		super::ScoreCard {
 			scorekey: &scorekey,
 			user_id: Some(user_eo_id),

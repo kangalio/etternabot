@@ -2,7 +2,7 @@
 
 mod replay_graph;
 
-use super::State;
+use super::Context;
 use crate::{serenity, Error};
 
 pub struct ScoreCard<'a> {
@@ -13,27 +13,8 @@ pub struct ScoreCard<'a> {
 	pub alternative_judge: Option<&'a etterna::Judge>,
 }
 
-pub async fn send_score_card(
-	state: &State,
-	ctx: &serenity::Context,
-	channel: serenity::ChannelId,
-	info: ScoreCard<'_>,
-) -> Result<(), Error> {
-	let message = score_card_inner(state, info).await?;
-	channel
-		.send_message(ctx, |m| {
-			*m = message;
-			m
-		})
-		.await?;
-	Ok(())
-}
-
-async fn score_card_inner(
-	state: &State,
-	info: ScoreCard<'_>,
-) -> Result<serenity::CreateMessage<'static>, Error> {
-	let score = state.v1.score_data(info.scorekey).await?;
+pub async fn send_score_card(ctx: Context<'_>, info: ScoreCard<'_>) -> Result<(), Error> {
+	let score = ctx.data().v1.score_data(info.scorekey).await?;
 
 	let alternative_judge_wifescore = if let Some(alternative_judge) = info.alternative_judge {
 		if let Some(replay) = &score.replay {
@@ -398,14 +379,16 @@ async fn score_card_inner(
 			);
 	}
 
-	let mut message = serenity::CreateMessage::default();
-	message.embed(|e| {
-		*e = embed;
-		e
-	});
-	if let Some(analysis) = &replay_analysis {
-		message.add_file(analysis.replay_graph_path);
-	}
-
-	Ok(message)
+	poise::send_reply(ctx, |f: &mut poise::CreateReply<'_>| {
+		f.embed(|e| {
+			*e = embed;
+			e
+		});
+		if let Some(analysis) = &replay_analysis {
+			f.attachment(analysis.replay_graph_path.into());
+		}
+		f
+	})
+	.await?;
+	Ok(())
 }

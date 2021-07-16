@@ -57,9 +57,7 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 			scorekey, user_id
 		);
 		if let Err(e) = super::send_score_card(
-			ctx.data,
-			ctx.discord,
-			ctx.msg.channel_id,
+			poise::Context::Prefix(ctx),
 			super::ScoreCard {
 				scorekey: &scorekey,
 				user_id: None,
