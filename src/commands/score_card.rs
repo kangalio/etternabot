@@ -23,7 +23,7 @@ impl std::str::FromStr for Judge {
 }
 
 /// Call this command with `+rs [username] [judge]`
-#[poise::command(slash_command)]
+#[poise::command(slash_command, track_edits)]
 pub async fn rs(
 	ctx: Context<'_>,
 	#[lazy]
@@ -142,7 +142,7 @@ async fn get_random_score(
 }
 
 /// Show a random score
-#[poise::command(slash_command)]
+#[poise::command(slash_command, track_edits)]
 pub async fn randomscore(
 	ctx: Context<'_>,
 	#[lazy]
