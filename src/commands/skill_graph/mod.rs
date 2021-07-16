@@ -1,6 +1,8 @@
 mod render;
 
-use super::PrefixContext;
+use poise::serenity_prelude as serenity;
+
+use super::Context;
 use crate::Error;
 
 fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
@@ -11,7 +13,7 @@ fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
 }
 
 #[derive(Debug)]
-pub struct StringError(String);
+pub struct StringError(std::borrow::Cow<'static, str>);
 impl std::fmt::Display for StringError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str(&self.0)
@@ -20,7 +22,12 @@ impl std::fmt::Display for StringError {
 impl std::error::Error for StringError {}
 impl From<String> for StringError {
 	fn from(s: String) -> Self {
-		Self(s)
+		Self(std::borrow::Cow::Owned(s))
+	}
+}
+impl From<&'static str> for StringError {
+	fn from(s: &'static str) -> Self {
+		Self(std::borrow::Cow::Borrowed(s))
 	}
 }
 
@@ -39,11 +46,10 @@ fn parse_wifescore_or_grade(string: &str) -> Option<etterna::Wifescore> {
 	etterna::Wifescore::from_percent(string.trim_end_matches('%').parse().ok()?)
 }
 
-pub struct SkillgraphConfig {
-	threshold: Option<etterna::Wifescore>,
-}
+#[derive(Clone, Copy)]
+pub struct SkillgraphThreshold(etterna::Wifescore);
 
-impl<'a> poise::PopArgument<'a> for SkillgraphConfig {
+impl<'a> poise::PopArgument<'a> for SkillgraphThreshold {
 	type Err = StringError;
 
 	fn pop_from(args: &poise::ArgString<'a>) -> Result<(poise::ArgString<'a>, Self), Self::Err> {
@@ -52,20 +58,56 @@ impl<'a> poise::PopArgument<'a> for SkillgraphConfig {
 			Err(e) => match e {},
 		};
 
-		let threshold = match params.get("threshold") {
-			Some(string) => Some(
-				parse_wifescore_or_grade(string)
-					.ok_or_else(|| format!("Unknown wifescore or grade `{}`", string))?,
-			),
-			None => None,
-		};
+		let threshold_str = params
+			.get("threshold")
+			.ok_or("No threshold argument found")?;
+		let threshold = parse_wifescore_or_grade(threshold_str)
+			.ok_or_else(|| format!("Unknown wifescore or grade `{}`", threshold_str))?;
 
-		Ok((args, Self { threshold }))
+		Ok((args, Self(threshold)))
+	}
+}
+
+#[serenity::async_trait]
+impl poise::SlashArgument for SkillgraphThreshold {
+	async fn extract(
+		ctx: &serenity::Context,
+		guild: Option<serenity::GuildId>,
+		channel: Option<serenity::ChannelId>,
+		value: &serde_json::Value,
+	) -> Result<Self, poise::SlashArgError> {
+		use poise::SlashArgumentHack as _;
+
+		let threshold_str = (&&&&&std::marker::PhantomData::<String>)
+			.extract(ctx, guild, channel, value)
+			.await?;
+		let threshold = parse_wifescore_or_grade(&threshold_str)
+			.ok_or_else(|| format!("Unknown wifescore or grade `{}`", threshold_str))
+			.map_err(|e| poise::SlashArgError::Parse(e.into()))?;
+
+		Ok(Self(threshold))
+	}
+
+	fn create(
+		builder: &mut serenity::CreateApplicationCommandOption,
+	) -> &mut serenity::CreateApplicationCommandOption {
+		use poise::SlashArgumentHack as _;
+
+		(&&&&&std::marker::PhantomData::<String>).create(builder)
+	}
+}
+
+// Format multiple strings ["a", "b", "c"] into a single string "a, b and c"
+fn format_name_list(names: &[&str]) -> String {
+	match names {
+		[] => String::new(),
+		[name] => name.to_string(),
+		[names @ .., last_name] => format!("{} and {}", names.join(", "), last_name),
 	}
 }
 
 async fn generic_download_timelines<T>(
-	ctx: PrefixContext<'_>,
+	ctx: Context<'_>,
 	usernames: &[&str],
 	f: impl Fn(&str, &[etternaonline_api::web::UserScore]) -> T,
 ) -> Result<Vec<T>, Error> {
@@ -75,27 +117,11 @@ async fn generic_download_timelines<T>(
 		return Err("Relax, now. 20 users ought to be enough".into());
 	}
 
-	match usernames {
-		[username] => {
-			poise::say_prefix_reply(
-				ctx,
-				format!("Requesting data for {} (this may take a while)", username,),
-			)
-			.await?;
-		}
-		[usernames @ .., last] => {
-			poise::say_prefix_reply(
-				ctx,
-				format!(
-					"Requesting data for {} and {} (this may take a while)",
-					usernames.join(", "),
-					last,
-				),
-			)
-			.await?
-		}
-		[] => unreachable!(),
-	};
+	let wait_msg = format!(
+		"Requesting data for {} (this may take a while)",
+		format_name_list(usernames)
+	);
+	poise::say_reply(ctx, wait_msg).await?;
 
 	#[allow(clippy::needless_lifetimes)] // false positive
 	async fn download_timeline<'a, T>(
@@ -127,7 +153,7 @@ async fn generic_download_timelines<T>(
 	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
 		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
 	let timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
-		.then(|(username, storage)| download_timeline(username, &ctx.data.web, storage, &f))
+		.then(|(username, storage)| download_timeline(username, &ctx.data().web, storage, &f))
 		// uncommenting this borks Rust's async :/
 		// .buffered(3) // have up to three parallel connections
 		.try_collect::<Vec<_>>()
@@ -138,8 +164,8 @@ async fn generic_download_timelines<T>(
 
 // usernames slice must contain at least one element!
 async fn skillgraph_inner(
-	ctx: PrefixContext<'_>,
-	mode: SkillgraphConfig,
+	ctx: Context<'_>,
+	threshold: Option<SkillgraphThreshold>,
 	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
 ) -> Result<(), Error> {
 	assert!(usernames.len() >= 1);
@@ -147,8 +173,8 @@ async fn skillgraph_inner(
 	let skill_timelines = generic_download_timelines(ctx, usernames, |_, scores| {
 		etterna::SkillTimeline::calculate(
 			scores.iter().filter_map(|score| {
-				if let Some(threshold) = mode.threshold {
-					if score.wifescore < threshold {
+				if let Some(threshold) = threshold {
+					if score.wifescore < threshold.0 {
 						return None;
 					}
 				}
@@ -171,80 +197,82 @@ async fn skillgraph_inner(
 			.map_err(|e| e.to_string())?;
 	}
 
-	// TODO, THE PROBLEM: we need some command type agnostic way of sending a message that _also_
-	// supports file attachments. This needs to somehow be separate from the
-	// edit-tracking-supportive message send, because edit-tracking and file attachments are not
-	// compatible... Maybe a `say` variant (instead of `say_reply`) that doesn't do edit tracking
-	// but in turn supports attachments etc?
-	ctx.msg
-		.channel_id
-		.send_files(ctx.discord, vec!["output.png"], |m| m)
-		.await?;
+	poise::send_reply(ctx, |f| f.attachment("output.png".into())).await?;
 
 	Ok(())
 }
 
-#[poise::command]
+/// Show a graph of your profile rating over time
+#[poise::command(slash_command, track_edits)]
 pub async fn skillgraph(
-	ctx: PrefixContext<'_>,
-	mode: SkillgraphConfig,
-	usernames: Vec<String>,
+	ctx: Context<'_>,
+	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
+		SkillgraphThreshold,
+	>,
+	#[description = "Which user to show"] usernames: Vec<String>,
 ) -> Result<(), Error> {
 	if usernames.len() == 0 {
 		skillgraph_inner(
 			ctx,
-			mode,
-			&[&ctx.data.get_eo_username(&ctx.msg.author).await?],
+			threshold,
+			&[&ctx.data().get_eo_username(ctx.author()).await?],
 		)
 		.await
 	} else {
 		let usernames = usernames.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-		skillgraph_inner(ctx, mode, &usernames).await
+		skillgraph_inner(ctx, threshold, &usernames).await
 	}
 }
 
-#[poise::command]
-pub async fn rivalgraph(ctx: PrefixContext<'_>, mode: SkillgraphConfig) -> Result<(), Error> {
-	let me = ctx.data.get_eo_username(&ctx.msg.author).await?;
+/// Show a graph of your profile versus your rival's profile rating over time
+#[poise::command(slash_command, track_edits)]
+pub async fn rivalgraph(
+	ctx: Context<'_>,
+	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
+		SkillgraphThreshold,
+	>,
+) -> Result<(), Error> {
+	let me = ctx.data().get_eo_username(ctx.author()).await?;
 	let rival = ctx
-		.data
+		.data()
 		.lock_data()
-		.rival(ctx.msg.author.id)
+		.rival(ctx.author().id)
 		.map(|x| x.to_owned());
 	let you = match rival {
 		Some(rival) => rival,
 		None => {
-			poise::say_prefix_reply(ctx, "Set your rival first with `+rivalset USERNAME`".into())
-				.await?;
+			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`".into()).await?;
 			return Ok(());
 		}
 	};
-	skillgraph_inner(ctx, mode, &[&me, &you]).await?;
+	skillgraph_inner(ctx, threshold, &[&me, &you]).await?;
 
 	Ok(())
 }
 
 // TODO: integrate into skillgraph_inner to not duplicate logic
-#[poise::command(aliases("accgraph"))]
-pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> Result<(), Error> {
+/// Calculate your profile rating over time, considering only scores above a certain threshold
+#[poise::command(slash_command, track_edits, aliases("accgraph"))]
+pub async fn accuracygraph(
+	ctx: Context<'_>,
+	#[description = "Profile to show"] username: Option<String>,
+) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data.get_eo_username(&ctx.msg.author).await?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	ctx.msg
-		.channel_id
-		.say(
-			ctx.discord,
-			format!("Requesting data for {} (this may take a while)", username),
-		)
-		.await?;
+	poise::say_reply(
+		ctx,
+		format!("Requesting data for {} (this may take a while)", username),
+	)
+	.await?;
 
 	let scores = ctx
-		.data
+		.data()
 		.web
 		.user_scores(
-			ctx.data.web.user_details(&username).await?.user_id,
+			ctx.data().web.user_details(&username).await?.user_id,
 			..,
 			None,
 			etternaonline_api::web::UserScoresSortBy::Date,
@@ -288,18 +316,23 @@ pub async fn accuracygraph(ctx: PrefixContext<'_>, username: Option<String>) -> 
 	)
 	.map_err(|e| e.to_string())?;
 
-	ctx.msg
-		.channel_id
-		.send_files(ctx.discord, vec!["output.png"], |m| m)
-		.await?;
+	poise::send_reply(ctx, |f| {
+		f
+			.attachment("output.png".into())
+	})
+	.await?;
 
 	Ok(())
 }
 
-#[poise::command]
-pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Result<(), Error> {
+/// Show a graph of your total number of scores over time
+#[poise::command(slash_command, track_edits)]
+pub async fn scoregraph(
+	ctx: Context<'_>,
+	#[description = "Which users to include in the graph"] usernames: Vec<String>,
+) -> Result<(), Error> {
 	let usernames: Vec<String> = if usernames.is_empty() {
-		vec![ctx.data.get_eo_username(&ctx.msg.author).await?]
+		vec![ctx.data().get_eo_username(ctx.author()).await?]
 	} else {
 		usernames
 	};
@@ -356,29 +389,27 @@ pub async fn scoregraph(ctx: PrefixContext<'_>, usernames: Vec<String>) -> Resul
 
 	render::draw_score_graph(&score_timelines, "output.png").map_err(|e| e.to_string())?;
 
-	ctx.msg
-		.channel_id
-		.send_files(ctx.discord, vec!["output.png"], |f| {
-			// Only add that text if a single user was selected
-			if let [user] = &*score_timelines {
-				let mut content = format!(
-					"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**\n",
-					match &user.sub_aa_timeline {
-						Some(x) => x.last().map_or(0, |&(_, total)| total),
-						None => 0, // shouldn't happen
-					},
-					user.aa_timeline.last().map_or(0, |&(_, total)| total),
-					user.aaa_timeline.last().map_or(0, |&(_, total)| total),
-					user.aaaa_timeline.last().map_or(0, |&(_, total)| total),
-				);
-				if let Some((_, num_aaaaas)) = user.aaaaa_timeline.last() {
-					content += &format!("Number of AAAAAs: **{}**\n", num_aaaaas);
-				}
-				f.content(content);
+	poise::send_reply(ctx, |f| {
+		f.attachment("output.png".into());
+		if let [user] = &*score_timelines {
+			let mut content = format!(
+				"Number of sub-AAs: **{}**\nNumber of AAs: **{}**\nNumber of AAAs: **{}**\nNumber of AAAAs: **{}**\n",
+				match &user.sub_aa_timeline {
+					Some(x) => x.last().map_or(0, |&(_, total)| total),
+					None => 0, // shouldn't happen
+				},
+				user.aa_timeline.last().map_or(0, |&(_, total)| total),
+				user.aaa_timeline.last().map_or(0, |&(_, total)| total),
+				user.aaaa_timeline.last().map_or(0, |&(_, total)| total),
+			);
+			if let Some((_, num_aaaaas)) = user.aaaaa_timeline.last() {
+				content += &format!("Number of AAAAAs: **{}**\n", num_aaaaas);
 			}
-			f
-		})
-		.await?;
+			f.content(content);
+		}
+		f
+		
+	}).await?;
 
 	Ok(())
 }

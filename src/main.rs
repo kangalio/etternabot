@@ -1,8 +1,8 @@
 #![allow(
-	clippy::len_zero,
-	clippy::tabs_in_doc_comments,
-	clippy::collapsible_if,
-	clippy::needless_bool
+	clippy::len_zero, // easier to read
+	clippy::tabs_in_doc_comments, // we use tabs like it or not
+	clippy::collapsible_if, // easier to read
+	clippy::eval_order_dependence, // false positives
 )]
 #![warn(rust_2018_idioms)]
 
@@ -87,7 +87,7 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 // Returns None if msg was sent in DMs
 async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, Error> {
 	Ok(match ctx.guild_id() {
-		Some(guild_id) => Some(guild_id.member(ctx.discord(), ctx.try_author()?).await?),
+		Some(guild_id) => Some(guild_id.member(ctx.discord(), ctx.author()).await?),
 		None => None,
 	})
 }
@@ -248,24 +248,13 @@ async fn listener(
 }
 
 async fn pre_command(ctx: poise::Context<'_, State, Error>) {
-	let author = match ctx.author() {
-		Some(x) => x,
-		None => {
-			println!("Unknown interaction received on {:?}", ctx.created_at());
-			return;
-		}
-	};
-
+	let author = ctx.author();
 	match ctx {
 		poise::Context::Slash(ctx) => {
-			let command_name = match &ctx.interaction.data {
-				Some(data) => &data.name,
-				None => "<not an interaction>",
-			};
 			println!(
 				"{} invoked command {} on {:?}",
 				&author.name,
-				command_name,
+				&ctx.interaction.data.name,
 				&ctx.interaction.id.created_at()
 			);
 		}
@@ -304,32 +293,32 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 		pre_command: |ctx| Box::pin(pre_command(ctx)),
 		..Default::default()
 	};
-	framework.command(commands::compare);
-	framework.command(commands::help);
-	framework.command(commands::profile);
-	framework.command(commands::pattern);
-	framework.command(commands::ping);
-	framework.command(commands::servers);
-	framework.command(commands::uptime);
-	framework.command(commands::lastsession);
-	framework.command(commands::randomscore);
-	framework.command(commands::lookup);
-	framework.command(commands::scrollset);
-	framework.command(commands::userset);
-	framework.command(commands::rivalset);
-	framework.command(commands::rs);
-	framework.command(commands::rival);
-	framework.command(commands::skillgraph);
-	framework.command(commands::rivalgraph);
-	framework.command(commands::accuracygraph);
-	framework.command(commands::quote);
-	framework.command(commands::register);
-	framework.command(commands::top);
-	framework.command(commands::top10);
-	framework.command(commands::aroundme);
-	framework.command(commands::leaderboard);
-	framework.command(commands::details);
-	framework.command(commands::scoregraph);
+	framework.command(commands::compare(), |f| f);
+	framework.command(commands::help(), |f| f);
+	framework.command(commands::profile(), |f| f);
+	framework.command(commands::pattern(), |f| f);
+	framework.command(commands::ping(), |f| f);
+	framework.command(commands::servers(), |f| f);
+	framework.command(commands::uptime(), |f| f);
+	framework.command(commands::lastsession(), |f| f);
+	framework.command(commands::randomscore(), |f| f);
+	framework.command(commands::lookup(), |f| f);
+	framework.command(commands::scrollset(), |f| f);
+	framework.command(commands::userset(), |f| f);
+	framework.command(commands::rivalset(), |f| f);
+	framework.command(commands::rs(), |f| f);
+	framework.command(commands::rival(), |f| f);
+	framework.command(commands::skillgraph(), |f| f);
+	framework.command(commands::rivalgraph(), |f| f);
+	framework.command(commands::accuracygraph(), |f| f);
+	framework.command(commands::quote(), |f| f);
+	framework.command(commands::register(), |f| f);
+	framework.command(commands::top(), |f| f);
+	framework.command(commands::top10(), |f| f);
+	framework.command(commands::aroundme(), |f| f);
+	framework.command(commands::leaderboard(), |f| f);
+	framework.command(commands::details(), |f| f);
+	framework.command(commands::scoregraph(), |f| f);
 	framework
 }
 

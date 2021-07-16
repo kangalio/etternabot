@@ -114,7 +114,7 @@ pub async fn pattern(
 	let mut scroll_direction = ctx
 		.data()
 		.lock_data()
-		.scroll(ctx.try_author()?.id)
+		.scroll(ctx.author().id)
 		.unwrap_or(etterna::ScrollDirection::Upscroll);
 	let mut segments = Vec::new();
 
@@ -295,34 +295,19 @@ pub async fn pattern(
 		.write_to(&mut img_bytes, image::ImageOutputFormat::Png)
 		.map_err(pattern_draw::Error::ImageError)?;
 
+	let image_attachment = serenity::AttachmentType::Bytes {
+		data: img_bytes.into(),
+		filename: "output.png".to_owned(),
+	};
 	match ctx {
 		poise::Context::Prefix(ctx) => {
-			poise::send_prefix_reply(ctx, |f| {
-				f.attachment(serenity::AttachmentType::Bytes {
-					data: img_bytes.into(),
-					filename: "output.png".to_owned(),
-				})
-			})
-			.await?;
+			poise::send_prefix_reply(ctx, |f| f.attachment(image_attachment)).await?;
 		}
 		poise::Context::Slash(ctx) => {
-			// We can't send images in slash command responses yet, so we have to upload them
-			// manually and post a link instead
-
-			let imgbb_response = reqwest::Client::new()
-				.post("https://api.imgbb.com/1/upload")
-				.query(&[("key", &ctx.data.auth.imgbb_api_key)])
-				.form(&[("image", base64::encode(&img_bytes).as_str())])
-				.send()
-				.await?
-				.json::<serde_json::Value>()
-				.await?;
-			let img_url = imgbb_response["data"]["url"]
-				.as_str()
-				.ok_or("Failed to upload image :(")?;
-
-			// Send the image into the channel where the summoning message comes from
-			poise::say_slash_reply(ctx, img_url.to_owned()).await?;
+			// We need to send some initial response! Only follow up messages support
+			// attachments
+			poise::say_slash_reply(ctx, format!("`Pattern {}`", pattern)).await?;
+			poise::send_slash_reply(ctx, |f| f.attachment(image_attachment)).await?;
 		}
 	}
 
@@ -343,9 +328,7 @@ pub async fn scrollset(
 		_ => return Err(format!("No such scroll '{}'", scroll).into()),
 	};
 
-	ctx.data()
-		.lock_data()
-		.set_scroll(ctx.try_author()?.id, scroll);
+	ctx.data().lock_data().set_scroll(ctx.author().id, scroll);
 	poise::say_reply(ctx, format!("Your scroll type is now {:?}", scroll)).await?;
 
 	Ok(())

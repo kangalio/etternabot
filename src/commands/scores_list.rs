@@ -116,7 +116,7 @@ async fn topscores(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
 	if !(1..=30).contains(&limit) {
@@ -192,7 +192,7 @@ pub async fn lastsession(
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
-		None => ctx.data().get_eo_username(ctx.try_author()?).await?,
+		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
 	let scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
