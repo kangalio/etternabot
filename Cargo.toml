@@ -1,8 +1,10 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "etternabot"
 version = "0.1.0"
 authors = ["James Guess <jamesguessis@gmail.com>", "kangalioo <jannik.a.schaper@web.de>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 image = { version = "0.23", default-features = false }
