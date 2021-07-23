@@ -363,7 +363,7 @@ pub async fn scoregraph(
 			sub_aa_timeline: if usernames.len() == 1 {
 				Some(calculate_timeline(
 					&scores,
-					etterna::Wifescore::NEG_INFINITY..etterna::Wifescore::AA_THRESHOLD,
+					etterna::Wifescore::from_percent(50.0).unwrap()..etterna::Wifescore::AA_THRESHOLD,
 				))
 			} else {
 				None
