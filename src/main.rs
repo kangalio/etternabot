@@ -3,6 +3,7 @@
 	clippy::tabs_in_doc_comments, // we use tabs like it or not
 	clippy::collapsible_if, // easier to read
 	clippy::eval_order_dependence, // false positives
+	clippy::needless_borrow, // no reason to fix and would litter commit history
 )]
 #![warn(rust_2018_idioms)]
 
