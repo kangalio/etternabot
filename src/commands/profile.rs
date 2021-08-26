@@ -407,10 +407,11 @@ pub async fn profile(
 				embed.field("Default modifiers:", modifiers, false);
 			}
 			if let Some(about_me) = &details.about_me {
+				let about_me = html2md::parse_html(about_me);
 				if !about_me.is_empty() {
 					embed.field(
 						format!("About {}:", eo_username),
-						truncate_text_maybe(&html2md::parse_html(about_me), 1024),
+						truncate_text_maybe(&about_me, 1024),
 						false,
 					);
 				}
