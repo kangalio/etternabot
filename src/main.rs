@@ -115,7 +115,7 @@ async fn get_guild_permissions(ctx: Context<'_>) -> Result<Option<serenity::Perm
 		// `guild_member.permissions(&ctx.cache)` / `guild.member_permissions(msg.author.id)` can't
 		// be trusted - they return LITERALLY WRONG RESULTS AILUWRHDLIAUEHFISAUEHGLSIREUFHGLSIURHS
 		// See this thread on the serenity dev server: https://discord.com/channels/381880193251409931/381912587505500160/787965510124830790
-		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.discord()).await {
+		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.discord()) {
 			// try get guild data from cache and calculate permissions ourselves
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		} else {
@@ -259,7 +259,7 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 			);
 		}
 		poise::Context::Prefix(ctx) => {
-			let guild_name = match ctx.msg.guild(ctx.discord).await {
+			let guild_name = match ctx.msg.guild(ctx.discord) {
 				Some(guild) => guild.name,
 				None => "<unknown>".into(),
 			};

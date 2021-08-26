@@ -106,7 +106,7 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 ///
 /// Run with no arguments to register in guild, run with argument "global" to register globally.
 #[poise::command(hide_in_help)]
-pub async fn register(ctx: PrefixContext<'_>, #[flag] global: bool) -> CommandResult {
+pub async fn register(ctx: PrefixContext<'_>, #[flag] global: bool) -> Result<(), Error> {
     poise::defaults::register_slash_commands(ctx, global).await?;
 
     Ok(())
