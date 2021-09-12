@@ -425,6 +425,48 @@ pub async fn profile(
 	Ok(())
 }
 
+#[derive(poise::SlashChoiceParameter)]
+enum Skillset8 {
+	#[name = "Overall"]
+	Overall,
+	#[name = "Stream"]
+	Stream,
+	#[name = "Jumpstream"]
+	#[name = "JS"]
+	Jumpstream,
+	#[name = "Handstream"]
+	#[name = "HS"]
+	Handstream,
+	#[name = "Stamina"]
+	#[name = "Stam"]
+	Stamina,
+	#[name = "Jackspeed"]
+	#[name = "Jacks"]
+	#[name = "Jack"]
+	Jackspeed,
+	#[name = "Chordjack"]
+	#[name = "CJ"]
+	Chordjack,
+	#[name = "Technical"]
+	#[name = "Tech"]
+	Technical,
+}
+
+impl From<Skillset8> for etterna::Skillset8 {
+	fn from(x: Skillset8) -> Self {
+		match x {
+			Skillset8::Overall => etterna::Skillset8::Overall,
+			Skillset8::Stream => etterna::Skillset8::Stream,
+			Skillset8::Jumpstream => etterna::Skillset8::Jumpstream,
+			Skillset8::Handstream => etterna::Skillset8::Handstream,
+			Skillset8::Stamina => etterna::Skillset8::Stamina,
+			Skillset8::Jackspeed => etterna::Skillset8::Jackspeed,
+			Skillset8::Chordjack => etterna::Skillset8::Chordjack,
+			Skillset8::Technical => etterna::Skillset8::Technical,
+		}
+	}
+}
+
 /// Retrieve leaderboard entries directly above and below the current user.
 ///
 /// Call this command with `+aroundme [USERNAME] [SKILLSET] [AMOUNT]`
@@ -434,7 +476,7 @@ pub async fn aroundme(
 	#[lazy]
 	#[description = "EtternaOnline username"]
 	username: Option<String>,
-	#[description = "Skillset to sort by"] skillset: Option<poise::Wrapper<etterna::Skillset8>>,
+	#[description = "Skillset to sort by"] skillset: Option<poise::Wrapper<Skillset8>>,
 	#[description = "How many entries to fetch above and below"] num_entries: Option<u32>,
 ) -> Result<(), Error> {
 	let username = match username {
@@ -443,7 +485,7 @@ pub async fn aroundme(
 	};
 
 	let skillset = match skillset {
-		Some(x) => x.0,
+		Some(x) => x.0.into(),
 		None => etterna::Skillset8::Overall,
 	};
 
