@@ -290,6 +290,7 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 			..Default::default()
 		},
 		pre_command: |ctx| Box::pin(pre_command(ctx)),
+		owners: std::iter::FromIterator::from_iter([serenity::UserId(472029906943868929)]),
 		..Default::default()
 	};
 	framework.command(commands::compare(), |f| f);
