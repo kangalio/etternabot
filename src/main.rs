@@ -39,7 +39,6 @@ use etternaonline_api as eo;
 
 type Context<'a> = poise::Context<'a, State, Error>;
 type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
-// type SlashContext<'a> = poise::SlashContext<'a, State, Error>;
 
 const EO_COOLDOWN: std::time::Duration = std::time::Duration::from_millis(1000);
 const EO_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(30000);
@@ -250,7 +249,7 @@ async fn listener(
 async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 	let author = ctx.author();
 	match ctx {
-		poise::Context::Slash(ctx) => {
+		poise::Context::Application(ctx) => {
 			println!(
 				"{} invoked command {} on {:?}",
 				&author.name,
@@ -285,8 +284,8 @@ pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
 			)),
 			..Default::default()
 		},
-		slash_options: poise::SlashFrameworkOptions {
-			command_check: |c| Box::pin(user_is_allowed_bot_interaction(poise::Context::Slash(c))),
+		application_options: poise::ApplicationFrameworkOptions {
+			command_check: |ctx| Box::pin(user_is_allowed_bot_interaction(ctx.into())),
 			defer_response: true,
 			..Default::default()
 		},

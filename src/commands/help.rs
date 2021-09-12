@@ -2,7 +2,7 @@ use super::PrefixContext;
 use crate::Error;
 
 /// Display usage help for this bot
-#[poise::command(track_edits)]
+#[poise::command(prefix_command, track_edits)]
 pub async fn help(
 	ctx: PrefixContext<'_>,
 	#[flag]

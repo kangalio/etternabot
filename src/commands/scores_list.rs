@@ -22,7 +22,7 @@ impl std::str::FromStr for SkillOrAcc {
 /// Show a user's top 10 scores with the highest rating
 ///
 /// Call this command with `+top10 [USERNAME] [SKILLSET]` (username and skillset optional)
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn top10(
 	ctx: Context<'_>,
 	#[description = "Falls back to your username"]
@@ -36,7 +36,7 @@ pub async fn top10(
 /// Show a user's top scores with the highest rating
 ///
 /// Call this command with `+top [NN] [USERNAME] [SKILLSET]` (username and skillset optional)
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn top(
 	ctx: Context<'_>,
 	#[description = "Number of scores to show"] limit: u32,
@@ -120,7 +120,7 @@ async fn topscores(
 	};
 
 	if !(1..=30).contains(&limit) {
-		poise::say_reply(ctx, "Only limits up to 30 are supported".into()).await?;
+		poise::say_reply(ctx, "Only limits up to 30 are supported").await?;
 		return Ok(());
 	}
 
@@ -185,7 +185,7 @@ async fn topscores(
 }
 
 /// Show a list of recent scores
-#[poise::command(aliases("ls"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("ls"), track_edits, slash_command)]
 pub async fn lastsession(
 	ctx: Context<'_>,
 	#[description = "Falls back to your username"] username: Option<String>,
@@ -214,7 +214,7 @@ pub async fn lastsession(
 }
 
 /// Show details about a specific score from a previous score list
-#[poise::command(aliases("detail"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("detail"), track_edits, slash_command)]
 pub async fn details(
 	ctx: Context<'_>,
 	#[description = "Number of the score"] position: usize,

@@ -3,36 +3,29 @@
 use super::{Context, PrefixContext};
 use crate::Error;
 
-#[poise::command(track_edits)]
+#[poise::command(prefix_command, track_edits)]
 pub async fn ping(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Error> {
 	let mut response = String::from("Pong");
 	for _ in 0..args.matches("ping").count() {
 		response += " pong";
 	}
 	response += "!";
-	poise::say_prefix_reply(ctx, response).await?;
+	poise::say_reply(ctx.into(), response).await?;
 
 	Ok(())
 }
 
-#[poise::command(track_edits)]
-pub async fn servers(ctx: PrefixContext<'_>) -> Result<(), Error> {
-	let current_user = ctx.discord.http.get_current_user().await?;
-	let guilds = current_user.guilds(ctx.discord).await?;
-
-	let mut response = format!("I am currently in {} servers!\n", guilds.len());
-	for guild in guilds {
-		response += &format!("- {}\n", guild.name);
-	}
-
-	poise::say_prefix_reply(ctx, response).await?;
+/// List servers of which the bot is a member of
+#[poise::command(prefix_command, slash_command, track_edits, hide_in_help)]
+pub async fn servers(ctx: Context<'_>) -> Result<(), Error> {
+	poise::samples::servers(ctx).await?;
 
 	Ok(())
 }
 
-#[poise::command(track_edits)]
-pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
-	let uptime = std::time::Instant::now() - ctx.data.bot_start_time;
+#[poise::command(prefix_command, track_edits)]
+pub async fn uptime(ctx: Context<'_>) -> Result<(), Error> {
+	let uptime = std::time::Instant::now() - ctx.data().bot_start_time;
 
 	let div_mod = |a, b| (a / b, a % b);
 
@@ -41,7 +34,7 @@ pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
 	let (hours, minutes) = div_mod(minutes, 60);
 	let (days, hours) = div_mod(hours, 24);
 
-	poise::say_prefix_reply(
+	poise::say_reply(
 		ctx,
 		format!(
 			"Duration since last restart: {}d {}h {}m {}s",
@@ -56,7 +49,7 @@ pub async fn uptime(ctx: PrefixContext<'_>) -> Result<(), Error> {
 /// Lookup a saved user by their Discord username
 ///
 /// Call this command with `+lookup DISCORDUSERNAME`
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn lookup(
 	ctx: Context<'_>,
 	#[description = "Discord username"] discord_username: String,
@@ -86,7 +79,7 @@ pub async fn lookup(
 }
 
 /// Print one of various random quotes, phrases and memes from various rhythm gaming communities
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 	use rand::Rng as _;
 
@@ -102,12 +95,12 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 	Ok(())
 }
 
-/// Register slash commands in this guild or globally
+/// Registers slash commands in this guild or globally
 ///
 /// Run with no arguments to register in guild, run with argument "global" to register globally.
-#[poise::command(hide_in_help)]
-pub async fn register(ctx: PrefixContext<'_>, #[flag] global: bool) -> Result<(), Error> {
-    poise::defaults::register_slash_commands(ctx, global).await?;
+#[poise::command(prefix_command, hide_in_help)]
+pub async fn register(ctx: Context<'_>, #[flag] global: bool) -> Result<(), Error> {
+	poise::samples::register_application_commands(ctx, global).await?;
 
-    Ok(())
+	Ok(())
 }

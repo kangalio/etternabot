@@ -160,7 +160,7 @@ async fn profile_compare(
 }
 
 /// Compare your skillsets against your rival
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn rival(
 	ctx: Context<'_>,
 	#[description = "Show a bar chart of individual skillsets"]
@@ -177,7 +177,7 @@ pub async fn rival(
 	let you = match rival {
 		Some(rival) => rival,
 		None => {
-			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`".into()).await?;
+			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`").await?;
 			return Ok(());
 		}
 	};
@@ -188,7 +188,7 @@ pub async fn rival(
 /// Compare two users' skillsets.
 ///
 /// Call this command with `+compare OTHER_USER` or `+compare USER OTHER_USER`. Add `expanded` at the end to see a graphic
-#[poise::command(track_edits, slash_command)]
+#[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn compare(
 	ctx: Context<'_>,
 	#[description = "User on the left side of the comparison"]
@@ -210,7 +210,7 @@ pub async fn compare(
 /// Save your EtternaOnline username in the bot
 ///
 /// Call this command with `+userset YOUR_EO_USERNAME`
-#[poise::command(aliases("setuser"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("setuser"), track_edits, slash_command)]
 pub async fn userset(
 	ctx: Context<'_>,
 	#[description = "Your EtternaOnline username"] username: String,
@@ -261,7 +261,7 @@ pub async fn userset(
 /// Set a rival to compete against!
 ///
 /// Call this command with `+rivalset YOUR_EO_USERNAME`
-#[poise::command(aliases("setrival"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("setrival"), track_edits, slash_command)]
 pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
@@ -307,7 +307,7 @@ fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
 }
 
 /// Display your skillsets and your improvements since last time
-#[poise::command(aliases("advprof"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("advprof"), track_edits, slash_command)]
 pub async fn profile(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username. If not specified, shows your stats"] // dummy
@@ -426,7 +426,7 @@ pub async fn profile(
 }
 
 #[derive(poise::SlashChoiceParameter)]
-enum Skillset8 {
+pub enum Skillset8 {
 	#[name = "Overall"]
 	Overall,
 	#[name = "Stream"]
@@ -470,7 +470,7 @@ impl From<Skillset8> for etterna::Skillset8 {
 /// Retrieve leaderboard entries directly above and below the current user.
 ///
 /// Call this command with `+aroundme [USERNAME] [SKILLSET] [AMOUNT]`
-#[poise::command(slash_command, track_edits)]
+#[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn aroundme(
 	ctx: Context<'_>,
 	#[lazy]
@@ -577,7 +577,7 @@ pub async fn aroundme(
 /// Get EtternaOnline leaderboards with an optional country code.
 ///
 /// Call this command with `+leaderboard [COUNTRY CODE]`
-#[poise::command(slash_command, track_edits)]
+#[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn leaderboard(
 	ctx: Context<'_>,
 	#[description = "Country code"] country: Option<String>,

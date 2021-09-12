@@ -1,8 +1,8 @@
-use ::pattern as pattern_draw;
-pub use pattern_draw::{Error as PatternError, Noteskin};
-
 use super::Context;
 use crate::Error;
+use ::pattern as pattern_draw;
+pub use pattern_draw::{Error as PatternError, Noteskin};
+use poise::serenity_prelude as serenity;
 
 pub struct NoteskinProvider {
 	dbz: pattern_draw::Noteskin,
@@ -91,7 +91,7 @@ async fn always_true(_: Context<'_>) -> Result<bool, Error> {
 }
 
 /// Visualize note patterns
-#[poise::command(slash_command, track_edits, check = "always_true")]
+#[poise::command(prefix_command, slash_command, track_edits, check = "always_true")]
 pub async fn pattern(
 	ctx: Context<'_>,
 	#[rest]
@@ -300,14 +300,14 @@ pub async fn pattern(
 		filename: "output.png".to_owned(),
 	};
 	match ctx {
-		poise::Context::Prefix(ctx) => {
-			poise::send_prefix_reply(ctx, |f| f.attachment(image_attachment)).await?;
+		poise::Context::Prefix(_) => {
+			poise::send_reply(ctx, |f| f.attachment(image_attachment)).await?;
 		}
-		poise::Context::Slash(ctx) => {
+		poise::Context::Application(_) => {
 			// We need to send some initial response! Only follow up messages support
 			// attachments
-			poise::say_slash_reply(ctx, format!("`Pattern {}`", pattern)).await?;
-			poise::send_slash_reply(ctx, |f| f.attachment(image_attachment)).await?;
+			poise::say_reply(ctx, format!("`Pattern {}`", pattern)).await?;
+			poise::send_reply(ctx, |f| f.attachment(image_attachment)).await?;
 		}
 	}
 
@@ -317,7 +317,7 @@ pub async fn pattern(
 /// Change the scroll direction in subsequent pattern command calls
 ///
 /// Call this command with `+scrollset [down/up]`
-#[poise::command(aliases("setscroll"), track_edits, slash_command)]
+#[poise::command(prefix_command, aliases("setscroll"), track_edits, slash_command)]
 pub async fn scrollset(
 	ctx: Context<'_>,
 	#[description = "Scroll direction"] scroll: String,

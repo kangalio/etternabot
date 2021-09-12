@@ -203,7 +203,7 @@ async fn skillgraph_inner(
 }
 
 /// Show a graph of your profile rating over time
-#[poise::command(slash_command, track_edits)]
+#[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn skillgraph(
 	ctx: Context<'_>,
 	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
@@ -225,7 +225,7 @@ pub async fn skillgraph(
 }
 
 /// Show a graph of your profile versus your rival's profile rating over time
-#[poise::command(slash_command, track_edits)]
+#[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn rivalgraph(
 	ctx: Context<'_>,
 	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
@@ -241,7 +241,7 @@ pub async fn rivalgraph(
 	let you = match rival {
 		Some(rival) => rival,
 		None => {
-			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`".into()).await?;
+			poise::say_reply(ctx, "Set your rival first with `+rivalset USERNAME`").await?;
 			return Ok(());
 		}
 	};
@@ -252,7 +252,7 @@ pub async fn rivalgraph(
 
 // TODO: integrate into skillgraph_inner to not duplicate logic
 /// Calculate your profile rating over time, considering only scores above a certain threshold
-#[poise::command(slash_command, track_edits, aliases("accgraph"))]
+#[poise::command(prefix_command, slash_command, track_edits, aliases("accgraph"))]
 pub async fn accuracygraph(
 	ctx: Context<'_>,
 	#[description = "Profile to show"] username: Option<String>,
@@ -316,17 +316,13 @@ pub async fn accuracygraph(
 	)
 	.map_err(|e| e.to_string())?;
 
-	poise::send_reply(ctx, |f| {
-		f
-			.attachment("output.png".into())
-	})
-	.await?;
+	poise::send_reply(ctx, |f| f.attachment("output.png".into())).await?;
 
 	Ok(())
 }
 
 /// Show a graph of your total number of scores over time
-#[poise::command(slash_command, track_edits)]
+#[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn scoregraph(
 	ctx: Context<'_>,
 	#[description = "Which users to include in the graph"] usernames: Vec<String>,
@@ -363,7 +359,8 @@ pub async fn scoregraph(
 			sub_aa_timeline: if usernames.len() == 1 {
 				Some(calculate_timeline(
 					&scores,
-					etterna::Wifescore::from_percent(50.0).unwrap()..etterna::Wifescore::AA_THRESHOLD,
+					etterna::Wifescore::from_percent(50.0).unwrap()
+						..etterna::Wifescore::AA_THRESHOLD,
 				))
 			} else {
 				None
@@ -408,7 +405,6 @@ pub async fn scoregraph(
 			f.content(content);
 		}
 		f
-		
 	}).await?;
 
 	Ok(())
