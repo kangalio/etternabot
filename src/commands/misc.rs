@@ -16,7 +16,13 @@ pub async fn ping(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Er
 }
 
 /// List servers of which the bot is a member of
-#[poise::command(prefix_command, slash_command, track_edits, hide_in_help)]
+#[poise::command(
+	prefix_command,
+	slash_command,
+	track_edits,
+	hide_in_help,
+	defer_response = false
+)]
 pub async fn servers(ctx: Context<'_>) -> Result<(), Error> {
 	poise::samples::servers(ctx).await?;
 
