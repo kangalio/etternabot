@@ -499,7 +499,7 @@ async fn main() -> Result<(), Error> {
 	let application_id = env_var("APPLICATION_ID")?;
 
 	let framework = poise::Framework::new(
-		"+".into(),
+		"+",
 		serenity::ApplicationId(application_id),
 		|ctx, ready, _| Box::pin(State::load(ctx, auth, ready.user.id)),
 		init_framework(),

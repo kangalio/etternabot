@@ -28,9 +28,9 @@ pub async fn top10(
 	#[description = "Falls back to your username"]
 	#[lazy]
 	username: Option<String>,
-	#[description = "Specific skillset to focus on"] skillset: Option<poise::Wrapper<SkillOrAcc>>,
+	#[description = "Specific skillset to focus on"] skillset: Option<SkillOrAcc>,
 ) -> Result<(), Error> {
-	topscores(ctx, 10, skillset.map(|x| x.0), username).await
+	topscores(ctx, 10, skillset, username).await
 }
 
 /// Show a user's top scores with the highest rating
@@ -43,9 +43,9 @@ pub async fn top(
 	#[description = "Falls back to your username"]
 	#[lazy]
 	username: Option<String>,
-	#[description = "Specific skillset to focus on"] skillset: Option<poise::Wrapper<SkillOrAcc>>,
+	#[description = "Specific skillset to focus on"] skillset: Option<SkillOrAcc>,
 ) -> Result<(), Error> {
-	topscores(ctx, limit, skillset.map(|x| x.0), username).await
+	topscores(ctx, limit, skillset, username).await
 }
 
 struct ScoreEntry {
@@ -218,9 +218,7 @@ pub async fn lastsession(
 pub async fn details(
 	ctx: Context<'_>,
 	#[description = "Number of the score"] position: usize,
-	#[description = "Specific judge to use for statistics"] judge: Option<
-		poise::Wrapper<super::Judge>,
-	>,
+	#[description = "Specific judge to use for statistics"] judge: Option<super::Judge>,
 ) -> Result<(), Error> {
 	let (scorekey, username) = {
 		let data = ctx.data().lock_data();
@@ -240,7 +238,7 @@ pub async fn details(
 	super::send_score_card(
 		ctx,
 		super::ScoreCard {
-			alternative_judge: judge.map(|x| x.0 .0),
+			alternative_judge: judge.map(|x| x.0),
 			scorekey: &scorekey,
 			show_ssrs_and_judgements_and_modifiers: true,
 			user_id: None,

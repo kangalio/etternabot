@@ -476,7 +476,7 @@ pub async fn aroundme(
 	#[lazy]
 	#[description = "EtternaOnline username"]
 	username: Option<String>,
-	#[description = "Skillset to sort by"] skillset: Option<poise::Wrapper<Skillset8>>,
+	#[description = "Skillset to sort by"] skillset: Option<Skillset8>,
 	#[description = "How many entries to fetch above and below"] num_entries: Option<u32>,
 ) -> Result<(), Error> {
 	let username = match username {
@@ -485,7 +485,7 @@ pub async fn aroundme(
 	};
 
 	let skillset = match skillset {
-		Some(x) => x.0.into(),
+		Some(x) => x.into(),
 		None => etterna::Skillset8::Overall,
 	};
 

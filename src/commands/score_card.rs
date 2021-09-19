@@ -29,13 +29,13 @@ pub async fn rs(
 	#[lazy]
 	#[description = "EtternaOnline username"]
 	eo_username: Option<String>,
-	#[description = "Judge to show info about"] alternative_judge: Option<poise::Wrapper<Judge>>,
+	#[description = "Judge to show info about"] alternative_judge: Option<Judge>,
 ) -> Result<(), Error> {
 	let eo_username = match eo_username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
-	let alternative_judge = alternative_judge.map(|j| j.0 .0);
+	let alternative_judge = alternative_judge.map(|j| j.0);
 
 	let user_id = ctx.data().get_eo_user_id(&eo_username).await?;
 
@@ -148,7 +148,7 @@ pub async fn randomscore(
 	#[lazy]
 	#[description = "EtternaOnline username"]
 	username: Option<String>,
-	#[description = "Judge to show info about"] judge: Option<poise::Wrapper<Judge>>,
+	#[description = "Judge to show info about"] judge: Option<Judge>,
 ) -> Result<(), Error> {
 	let username = match username {
 		Some(x) => x,
@@ -170,7 +170,7 @@ pub async fn randomscore(
 			user_id: Some(user_eo_id),
 			username: Some(&username),
 			show_ssrs_and_judgements_and_modifiers: true,
-			alternative_judge: judge.map(|x| x.0 .0),
+			alternative_judge: judge.map(|x| x.0),
 		},
 	)
 	.await?;
