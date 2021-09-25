@@ -1,16 +1,15 @@
 //! Miscellaneous "fun-fact" commands
 
-use super::{Context, PrefixContext};
-use crate::Error;
+use crate::{Context, Error};
 
 #[poise::command(prefix_command, track_edits)]
-pub async fn ping(ctx: PrefixContext<'_>, #[rest] args: String) -> Result<(), Error> {
+pub async fn ping(ctx: Context<'_>, #[rest] args: String) -> Result<(), Error> {
 	let mut response = String::from("Pong");
 	for _ in 0..args.matches("ping").count() {
 		response += " pong";
 	}
 	response += "!";
-	poise::say_reply(ctx.into(), response).await?;
+	poise::say_reply(ctx, response).await?;
 
 	Ok(())
 }

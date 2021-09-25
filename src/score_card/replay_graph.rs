@@ -1,3 +1,5 @@
+//! Responsible for rendering the offset plot image in the score card, via the plotters library
+
 #![allow(clippy::type_complexity)] // type complexity is not my fault
 
 use etterna::Wife;

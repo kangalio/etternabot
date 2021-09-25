@@ -1,5 +1,6 @@
-use super::Context;
-use crate::Error;
+//! All commands that show a list of scores
+
+use crate::{Context, Error};
 
 #[derive(PartialEq)]
 pub enum SkillOrAcc {
@@ -99,7 +100,7 @@ async fn respond_score_list(
 	let scorekeys = scorekeys.into_iter().map(|s| s.scorekey).collect();
 	ctx.data().lock_data().last_scores_list.insert(
 		ctx.channel_id(),
-		super::config::ScoresList {
+		crate::config::ScoresList {
 			scorekeys,
 			username: username.to_owned(),
 		},
@@ -133,7 +134,7 @@ async fn topscores(
 			.v1
 			.user_top_scores(&username, skillset, limit)
 			.await
-			.map_err(super::no_such_user_or_skillset)?
+			.map_err(crate::no_such_user_or_skillset)?
 			.into_iter()
 			.map(|s| ScoreEntry {
 				rate: s.rate,
@@ -155,7 +156,7 @@ async fn topscores(
 				false,
 			)
 			.await
-			.map_err(super::no_such_user_or_skillset)?
+			.map_err(crate::no_such_user_or_skillset)?
 			.scores
 			.into_iter()
 			.filter_map(|s| {
@@ -235,9 +236,9 @@ pub async fn details(
 		(scorekey.clone(), scores_list.username.clone())
 	};
 
-	super::send_score_card(
+	crate::send_score_card(
 		ctx,
-		super::ScoreCard {
+		crate::ScoreCard {
 			alternative_judge: judge.map(|x| x.0),
 			scorekey: &scorekey,
 			show_ssrs_and_judgements_and_modifiers: true,

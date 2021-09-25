@@ -1,3 +1,6 @@
+//! This file handles bot configuration (read-only, set by user)
+//! and savedata/settings (read/write, populated by bot)
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

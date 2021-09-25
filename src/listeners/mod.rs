@@ -1,7 +1,6 @@
 //! All code that listens for certain discord events and reacts somehow
 
-use super::*;
-use crate::{serenity, Error};
+use crate::{serenity, Error, PrefixContext};
 
 fn contains_link(string: &str) -> bool {
 	static LINK_REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
@@ -49,16 +48,16 @@ fn extract_score_links_from_string(
 }
 
 async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
-	let alternative_judge = super::extract_judge_from_string(&ctx.msg.content);
+	let alternative_judge = crate::extract_judge_from_string(&ctx.msg.content);
 	let mut score_links = extract_score_links_from_string(&ctx.msg.content);
 	if let Some((scorekey, user_id)) = score_links.next() {
 		println!(
 			"Trying to show score card for scorekey {} user id {}",
 			scorekey, user_id
 		);
-		if let Err(e) = super::send_score_card(
+		if let Err(e) = crate::send_score_card(
 			poise::Context::Prefix(ctx),
-			super::ScoreCard {
+			crate::ScoreCard {
 				scorekey: &scorekey,
 				user_id: None,
 				username: None,
@@ -131,7 +130,7 @@ pub async fn listen_message(
 }
 
 pub async fn check_member_update_for_max_300(
-	state: &State,
+	state: &crate::State,
 	ctx: &serenity::Context,
 	old: &serenity::Member,
 	new: &serenity::Member,
@@ -179,7 +178,7 @@ pub async fn check_member_update_for_max_300(
 }
 
 pub async fn guild_member_update(
-	state: &State,
+	state: &crate::State,
 	ctx: &serenity::Context,
 	old: Option<&serenity::Member>,
 	new: &serenity::Member,

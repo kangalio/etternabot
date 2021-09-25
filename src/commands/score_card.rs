@@ -1,7 +1,6 @@
 //! All commands that spawn a score card
 
-use super::Context;
-use crate::Error;
+use crate::{Context, Error};
 
 #[derive(Debug)]
 pub struct InvalidJudge;
@@ -16,7 +15,7 @@ pub struct Judge(pub &'static etterna::Judge);
 impl std::str::FromStr for Judge {
 	type Err = InvalidJudge;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		super::extract_judge_from_string(s)
+		crate::extract_judge_from_string(s)
 			.map(Self)
 			.ok_or(InvalidJudge)
 	}
@@ -59,9 +58,9 @@ pub async fn rs(
 		.ok_or("Latest score is invalid")?
 		.scorekey;
 
-	super::send_score_card(
+	crate::send_score_card(
 		ctx,
-		super::ScoreCard {
+		crate::ScoreCard {
 			scorekey,
 			user_id: Some(user_id),
 			username: Some(&eo_username),
@@ -75,13 +74,13 @@ pub async fn rs(
 }
 
 async fn get_random_score(
-	state: &super::State,
+	state: &crate::State,
 	username: &str,
 	web_session: &etternaonline_api::web::Session,
 ) -> Result<etternaonline_api::web::UserScore, Error> {
 	use rand::Rng as _;
 
-	let super::config::UserRegistryEntry {
+	let crate::config::UserRegistryEntry {
 		eo_id,
 		last_known_num_scores,
 		..
@@ -163,9 +162,9 @@ pub async fn randomscore(
 		}
 	};
 
-	super::send_score_card(
+	crate::send_score_card(
 		ctx,
-		super::ScoreCard {
+		crate::ScoreCard {
 			scorekey: &scorekey,
 			user_id: Some(user_eo_id),
 			username: Some(&username),

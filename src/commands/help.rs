@@ -1,10 +1,11 @@
-use super::PrefixContext;
-use crate::Error;
+//! The help command
+
+use crate::{Context, Error};
 
 /// Display usage help for this bot
 #[poise::command(prefix_command, track_edits)]
 pub async fn help(
-	ctx: PrefixContext<'_>,
+	ctx: Context<'_>,
 	#[flag]
 	#[description = "Explain the pattern command"]
 	pattern: bool,
@@ -12,7 +13,7 @@ pub async fn help(
 	send_help(ctx, pattern).await
 }
 
-pub async fn send_help(ctx: PrefixContext<'_>, pattern: bool) -> Result<(), Error> {
+pub async fn send_help(ctx: Context<'_>, pattern: bool) -> Result<(), Error> {
 	let embed_contents = if pattern {
 		r#"
 **+pattern [down/up] [NN]ths [noteskin] [zoom]x [keymode]k PATTERN STRING**
@@ -38,7 +39,7 @@ Examples:
 		use rand::seq::SliceRandom as _;
 
 		let minanym = &ctx
-			.data
+			.data()
 			.config
 			.minanyms
 			.choose(&mut rand::thread_rng())
@@ -85,7 +86,7 @@ If you edit your message, the bot will update its response.
 		)
 	};
 
-	poise::send_prefix_reply(ctx, |m| {
+	poise::send_reply(ctx, |m| {
 		m.embed(|e| e.description(embed_contents).color(crate::ETTERNA_COLOR))
 	})
 	.await?;

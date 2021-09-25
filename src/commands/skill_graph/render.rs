@@ -1,3 +1,5 @@
+//! Renders a graph via the plotters library
+
 use plotters::{
 	prelude::*,
 	style::{

@@ -1,10 +1,10 @@
 //! Utility code used by various parts of the bot to show a score card
 
+mod fun_facts;
+mod replay_analysis;
 mod replay_graph;
 
-use super::Context;
-use crate::{serenity, Error};
-use etterna::{SimpleReplay as _, Wife as _};
+use crate::{serenity, Context, Error};
 
 pub struct ScoreCard<'a> {
 	pub scorekey: &'a etterna::Scorekey,
@@ -12,297 +12,6 @@ pub struct ScoreCard<'a> {
 	pub username: Option<&'a str>, // used to detect scorekey collision
 	pub show_ssrs_and_judgements_and_modifiers: bool,
 	pub alternative_judge: Option<&'a etterna::Judge>,
-}
-
-struct ScoringSystemComparison {
-	wife2_score: etterna::Wifescore,
-	wife3_score: etterna::Wifescore,
-	wife3_score_zero_mean: etterna::Wifescore,
-}
-
-struct ReplayAnalysis {
-	replay_graph_path: &'static str,
-	scoring_system_comparison_j4: ScoringSystemComparison,
-	scoring_system_comparison_alternative: Option<ScoringSystemComparison>,
-	fastest_finger_jackspeed: f32, // NPS, single finger
-	fastest_nps: f32,
-	longest_100_combo: u32,
-	longest_marv_combo: u32,
-	longest_perf_combo: u32,
-	longest_combo: u32,
-	mean_offset: f32,
-	fun_facts: Vec<String>,
-}
-
-fn fastest_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
-	let note_and_hit_seconds = replay.split_into_notes_and_hits()?;
-	let unsorted_hit_seconds = note_and_hit_seconds.hit_seconds;
-
-	let mut sorted_hit_seconds = unsorted_hit_seconds;
-	sorted_hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-	let sorted_hit_seconds = sorted_hit_seconds;
-	let fastest_nps = etterna::find_fastest_note_subset(&sorted_hit_seconds, 100, 100).speed;
-
-	Some(fastest_nps)
-}
-
-fn max_finger_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
-	// in the following, DONT scale find_fastest_note_subset results by rate - I only needed
-	// to do that for etterna-graph where the note seconds where unscaled. EO's note seconds
-	// _are_ scaled though.
-
-	let lanes = replay.split_into_lanes()?;
-	let mut max_finger_nps = 0.0;
-	for lane in &lanes {
-		let mut hit_seconds = lane.hit_seconds.clone();
-		// required because EO is jank
-		hit_seconds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-
-		let this_fingers_max_nps = etterna::find_fastest_note_subset(&hit_seconds, 20, 20).speed;
-
-		if this_fingers_max_nps > max_finger_nps {
-			max_finger_nps = this_fingers_max_nps;
-		}
-	}
-
-	Some(max_finger_nps)
-}
-
-fn adjust_offset(replay: &etternaonline_api::Replay) -> (f32, etternaonline_api::Replay) {
-	let mean_offset = replay.mean_deviation();
-	let replay_zero_mean = etternaonline_api::Replay {
-		notes: replay
-			.notes
-			.iter()
-			.map(|note| {
-				let mut note = note.clone();
-				if let etterna::Hit::Hit { deviation } = &mut note.hit {
-					*deviation -= mean_offset;
-				}
-				note
-			})
-			.collect(),
-	};
-
-	(mean_offset, replay_zero_mean)
-}
-
-fn make_scoring_system_comparison(
-	score: &etternaonline_api::v1::ScoreData,
-	replay: &etternaonline_api::Replay,
-	replay_zero_mean: &etternaonline_api::Replay,
-	judge: &etterna::Judge,
-) -> Option<ScoringSystemComparison> {
-	Some(ScoringSystemComparison {
-		wife2_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife2>(
-			replay,
-			score.judgements.hit_mines,
-			score.judgements.let_go_holds + score.judgements.missed_holds,
-			judge,
-		)?,
-		wife3_score: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-			replay,
-			score.judgements.hit_mines,
-			score.judgements.let_go_holds + score.judgements.missed_holds,
-			judge,
-		)?,
-		wife3_score_zero_mean: etternaonline_api::rescore::<etterna::NaiveScorer, etterna::Wife3>(
-			replay_zero_mean,
-			score.judgements.hit_mines,
-			score.judgements.let_go_holds + score.judgements.missed_holds,
-			judge,
-		)?,
-	})
-}
-
-/// Returns the wife points for the replay note and the number of notes it should be counted as
-/// (0 or 1)
-fn replay_note_wife_points(note: &etternaonline_api::ReplayNote) -> (f32, u32) {
-	let mut wife_points = 0.0;
-	let mut num_notes = 0;
-
-	// I have zero idea what I am doing
-	// (more specifically: I have zero idea if and how EO represents mines or holds in replays and
-	// whether the way I'm handling them here is remotely correct)
-	match note.note_type.unwrap_or(etterna::NoteType::Tap) {
-		etterna::NoteType::Tap | etterna::NoteType::HoldHead | etterna::NoteType::Lift => {
-			wife_points = etterna::wife3(note.hit, etterna::J4);
-			num_notes = 1;
-		}
-		etterna::NoteType::HoldTail => {
-			if note.hit.is_considered_miss(etterna::J4) {
-				wife_points = etterna::Wife3::HOLD_DROP_WEIGHT;
-			}
-		}
-		etterna::NoteType::Mine => {
-			if let etterna::Hit::Hit { .. } = note.hit {
-				wife_points = etterna::Wife3::MINE_HIT_WEIGHT;
-			}
-		}
-		etterna::NoteType::Keysound | etterna::NoteType::Fake => {}
-	}
-
-	(wife_points, num_notes)
-}
-
-fn calculate_hand_wifescores(replay: &etternaonline_api::Replay) -> (f32, f32) {
-	let mut left_wife_points = 0.0;
-	let mut left_num_notes = 0;
-	let mut right_wife_points = 0.0;
-	let mut right_num_notes = 0;
-
-	for note in &replay.notes {
-		let (wife_points, num_notes) = match note.lane {
-			Some(0 | 1) => (&mut left_wife_points, &mut left_num_notes),
-			Some(2 | 3) => (&mut right_wife_points, &mut right_num_notes),
-			_ => continue,
-		};
-
-		let (note_wife_points, note_num_notes) = replay_note_wife_points(note);
-		*wife_points += note_wife_points;
-		*num_notes += note_num_notes;
-	}
-
-	let left_wifescore = left_wife_points / left_num_notes as f32;
-	let right_wifescore = right_wife_points / right_num_notes as f32;
-
-	(left_wifescore, right_wifescore)
-}
-
-fn make_left_right_hand_difference_fun_fact(
-	fun_facts: &mut Vec<String>,
-	replay: &etternaonline_api::Replay,
-) {
-	let (left_wifescore, right_wifescore) = calculate_hand_wifescores(replay);
-
-	let (better_hand, better_hand_name, lower_hand, lower_hand_name) =
-		if left_wifescore > right_wifescore {
-			(left_wifescore, "left", right_wifescore, "right")
-		} else {
-			(right_wifescore, "right", left_wifescore, "left")
-		};
-
-	// Check if one hand played twice as good as the other
-	if (1.0 - lower_hand) / (1.0 - better_hand) >= 2.0 {
-		fun_facts.push(format!(
-			"Your {} hand played {:.02}% better than your {} hand ({:.02}% vs {:.02}%. Are you {}-handed? ;)",
-			better_hand_name,
-			(better_hand - lower_hand) * 100.0,
-			lower_hand_name,
-			(better_hand) * 100.0,
-			(lower_hand) * 100.0,
-			better_hand_name,
-		));
-	}
-}
-
-/*
-fn make_hit_outliers_fun_fact(fun_facts: &mut Vec<String>, replay: &etternaonline_api::Replay) {
-	let mut notes = replay
-		.notes
-		.iter()
-		.map(replay_note_wife_points)
-		.collect::<Vec<_>>();
-
-	let mut total_wifepoints = 0.0;
-	let mut total_num_notes = 0;
-	for (wifepoints, num_notes) in &notes {
-		total_wifepoints += wifepoints;
-		total_num_notes += num_notes;
-	}
-
-	#[derive(PartialOrd, PartialEq)]
-	struct NoisyFloat(f32);
-	// https://github.com/rust-lang/rust-clippy/issues/6219
-	#[allow(clippy::derive_ord_xor_partial_ord)]
-	impl Ord for NoisyFloat {
-		fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-			self.0.partial_cmp(&other.0).unwrap()
-		}
-	}
-	impl Eq for NoisyFloat {}
-
-	// Sort descendingly by the wifescore we'd have with the note excluded
-	notes.sort_by_cached_key(|(wifepoints, num_notes)| {
-		let new_wifescore = (total_wifepoints - wifepoints) / (total_num_notes - num_notes) as f32;
-		std::cmp::Reverse(NoisyFloat(new_wifescore))
-	});
-
-	// Now, starting with most negatively impactful notes, see how many we need to exclude to get a
-	// sudden jump in wifescore
-	let old_wifescore = total_wifepoints / total_num_notes as f32;
-	for (i, (wifepoints, num_notes)) in notes.iter().take(10).enumerate() {
-		total_wifepoints -= wifepoints;
-		total_num_notes -= num_notes;
-		let new_wifescore = total_wifepoints / total_num_notes as f32;
-
-		// yes i like meth ehh i mean math
-		let excluded_note_proportion = (i + 1) as f32 / total_num_notes as f32;
-		let multiplier_threshold = 1.0 / (1.0 - excluded_note_proportion).powf(100.0);
-		println!(
-			"With {:.02}% excluded, the new score needs to be {:.02}x better (is {:.02}x)",
-			excluded_note_proportion * 100.0,
-			multiplier_threshold,
-			(1.0 - old_wifescore) / (1.0 - new_wifescore)
-		);
-		if (1.0 - old_wifescore) / (1.0 - new_wifescore) >= multiplier_threshold {
-			fun_facts.push(format!(
-				"Would have been {:.02}% (instead of {:.02}%) without those {} pesky outliers",
-				new_wifescore * 100.0,
-				old_wifescore * 100.0,
-				i + 1,
-			));
-			break;
-		}
-	}
-}
-*/
-
-fn do_replay_analysis(
-	score: &etternaonline_api::v1::ScoreData,
-	alternative_judge: Option<&etterna::Judge>,
-) -> Option<Result<ReplayAnalysis, Error>> {
-	let replay = score.replay.as_ref()?;
-
-	let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
-	if let Err(e) = r {
-		return Some(Err(e.into()));
-	}
-
-	let (mean_offset, replay_zero_mean) = adjust_offset(replay);
-
-	let mut fun_facts = Vec::new();
-	make_left_right_hand_difference_fun_fact(&mut fun_facts, replay);
-	// make_hit_outliers_fun_fact(&mut fun_facts, replay);
-
-	Some(Ok(ReplayAnalysis {
-		replay_graph_path: "replay_graph.png",
-		scoring_system_comparison_j4: make_scoring_system_comparison(
-			score,
-			replay,
-			&replay_zero_mean,
-			etterna::J4,
-		)?,
-		scoring_system_comparison_alternative: match alternative_judge {
-			Some(alternative_judge) => Some(make_scoring_system_comparison(
-				score,
-				replay,
-				&replay_zero_mean,
-				alternative_judge,
-			)?),
-			None => None,
-		},
-		fastest_finger_jackspeed: max_finger_nps(replay)?,
-		fastest_nps: fastest_nps(replay)?,
-		longest_100_combo: replay.longest_combo(|hit| hit.is_within_window(0.005)),
-		longest_marv_combo: replay
-			.longest_combo(|hit| hit.is_within_window(etterna::J4.marvelous_window)),
-		longest_perf_combo: replay
-			.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
-		longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
-		mean_offset,
-		fun_facts,
-	}))
 }
 
 fn write_score_card_body(
@@ -387,7 +96,7 @@ fn write_score_card_body(
 
 fn generate_score_comparisons_text(
 	score: &etternaonline_api::v1::ScoreData,
-	analysis: &ReplayAnalysis,
+	analysis: &replay_analysis::ReplayAnalysis,
 	alternative_judge: Option<&etterna::Judge>,
 ) -> String {
 	let wifescore_floating_point_digits = match analysis
@@ -485,7 +194,8 @@ pub async fn send_score_card(ctx: Context<'_>, info: ScoreCard<'_>) -> Result<()
 
 	let description = write_score_card_body(&info, &score, alternative_judge_wifescore);
 
-	let replay_analysis = do_replay_analysis(&score, info.alternative_judge).transpose()?;
+	let replay_analysis =
+		replay_analysis::do_replay_analysis(&score, info.alternative_judge).transpose()?;
 
 	let mut embed = serenity::CreateEmbed::default();
 	embed

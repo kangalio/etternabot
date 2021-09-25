@@ -1,9 +1,10 @@
+//! All commands that show a skill graph image
+
 mod render;
 
 use poise::serenity_prelude as serenity;
 
-use super::Context;
-use crate::Error;
+use crate::{Context, Error};
 
 fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
 	chrono::Date::from_utc(

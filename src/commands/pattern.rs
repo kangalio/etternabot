@@ -1,5 +1,6 @@
-use super::Context;
-use crate::Error;
+//! Pattern command
+
+use crate::{Context, Error};
 use ::pattern as pattern_draw;
 pub use pattern_draw::{Error as PatternError, Noteskin};
 use poise::serenity_prelude as serenity;
@@ -98,13 +99,11 @@ pub async fn pattern(
 	#[description = "Pattern string to render"]
 	pattern: String,
 ) -> Result<(), Error> {
-	if let poise::Context::Prefix(ctx) = ctx {
-		// People are supposed to write `+help pattern` but some write `+pattern help` so let's help
-		// them as well :)
-		if pattern.eq_ignore_ascii_case("help") {
-			super::help::send_help(ctx, true).await?;
-			return Ok(());
-		}
+	// People are supposed to write `+help pattern` but some write `+pattern help` so let's help
+	// them as well :)
+	if pattern.eq_ignore_ascii_case("help") {
+		super::help::send_help(ctx, true).await?;
+		return Ok(());
 	}
 
 	let mut noteskin_override = None;
