@@ -1565,7 +1565,7 @@ dependencies = [
 [[package]]
 name = "poise"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise#a2bd538774b5d01b25eff4f3becd1a835588f066"
+source = "git+https://github.com/kangalioo/poise#5b6678a112c6cd21ff2a60819a26ab9a4aaa0f33"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1582,7 +1582,7 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise#a2bd538774b5d01b25eff4f3becd1a835588f066"
+source = "git+https://github.com/kangalioo/poise#5b6678a112c6cd21ff2a60819a26ab9a4aaa0f33"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2064,7 +2064,7 @@ dependencies = [
 [[package]]
 name = "serenity"
 version = "0.10.9"
-source = "git+https://github.com/serenity-rs/serenity?branch=next#723749c43182838925dd89ac90b93dd2a837261d"
+source = "git+https://github.com/serenity-rs/serenity?branch=next#5dafadd5c548f3168b62b1ba64afb5408dc20d27"
 dependencies = [
  "async-trait",
  "async-tungstenite",

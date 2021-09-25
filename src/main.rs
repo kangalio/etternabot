@@ -270,58 +270,6 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 	}
 }
 
-pub fn init_framework() -> poise::FrameworkOptions<State, Error> {
-	let mut framework = poise::FrameworkOptions {
-		listener: |ctx, event, framework, state| Box::pin(listener(ctx, event, framework, state)),
-		on_error: |e, ctx| Box::pin(on_error(e, ctx)),
-		prefix_options: poise::PrefixFrameworkOptions {
-			command_check: |c| Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c))),
-			broadcast_typing: poise::BroadcastTypingBehavior::WithDelay(
-				std::time::Duration::from_secs_f32(1.0),
-			),
-			edit_tracker: Some(poise::EditTracker::for_timespan(
-				std::time::Duration::from_secs(3600),
-			)),
-			..Default::default()
-		},
-		application_options: poise::ApplicationFrameworkOptions {
-			command_check: |ctx| Box::pin(user_is_allowed_bot_interaction(ctx.into())),
-			defer_response: true,
-			..Default::default()
-		},
-		pre_command: |ctx| Box::pin(pre_command(ctx)),
-		owners: std::iter::FromIterator::from_iter([serenity::UserId(472029906943868929)]),
-		..Default::default()
-	};
-	framework.command(commands::compare(), |f| f);
-	framework.command(commands::help(), |f| f);
-	framework.command(commands::profile(), |f| f);
-	framework.command(commands::pattern(), |f| f);
-	framework.command(commands::ping(), |f| f);
-	framework.command(commands::servers(), |f| f);
-	framework.command(commands::uptime(), |f| f);
-	framework.command(commands::lastsession(), |f| f);
-	framework.command(commands::randomscore(), |f| f);
-	framework.command(commands::lookup(), |f| f);
-	framework.command(commands::scrollset(), |f| f);
-	framework.command(commands::userset(), |f| f);
-	framework.command(commands::rivalset(), |f| f);
-	framework.command(commands::rs(), |f| f);
-	framework.command(commands::rival(), |f| f);
-	framework.command(commands::skillgraph(), |f| f);
-	framework.command(commands::rivalgraph(), |f| f);
-	framework.command(commands::accuracygraph(), |f| f);
-	framework.command(commands::quote(), |f| f);
-	framework.command(commands::register(), |f| f);
-	framework.command(commands::top(), |f| f);
-	framework.command(commands::top10(), |f| f);
-	framework.command(commands::aroundme(), |f| f);
-	framework.command(commands::leaderboard(), |f| f);
-	framework.command(commands::details(), |f| f);
-	framework.command(commands::scoregraph(), |f| f);
-	framework
-}
-
 pub struct State {
 	auth: crate::Auth,
 	bot_start_time: std::time::Instant,
@@ -496,20 +444,71 @@ async fn main() -> Result<(), Error> {
 		eo_v2_client_data: env_var("EO_CLIENT_DATA")?,
 	};
 	let discord_bot_token: String = env_var("DISCORD_BOT_TOKEN")?;
-	let application_id = env_var("APPLICATION_ID")?;
 
-	let framework = poise::Framework::new(
-		"+",
-		serenity::ApplicationId(application_id),
-		|ctx, ready, _| Box::pin(State::load(ctx, auth, ready.user.id)),
-		init_framework(),
-	);
-	framework
-		.start(serenity::Client::builder(discord_bot_token).intents(
-			serenity::GatewayIntents::non_privileged()
-				| serenity::GatewayIntents::GUILD_MEMBERS
-				| serenity::GatewayIntents::GUILD_PRESENCES,
-		))
+	poise::Framework::build()
+		.prefix("+")
+		.user_data_setup(|ctx, ready, _| Box::pin(State::load(ctx, auth, ready.user.id)))
+		.options(poise::FrameworkOptions {
+			listener: |ctx, event, framework, state| {
+				Box::pin(listener(ctx, event, framework, state))
+			},
+			on_error: |e, ctx| Box::pin(on_error(e, ctx)),
+			prefix_options: poise::PrefixFrameworkOptions {
+				command_check: |c| {
+					Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c)))
+				},
+				broadcast_typing: poise::BroadcastTypingBehavior::WithDelay(
+					std::time::Duration::from_secs_f32(1.0),
+				),
+				edit_tracker: Some(poise::EditTracker::for_timespan(
+					std::time::Duration::from_secs(3600),
+				)),
+				..Default::default()
+			},
+			application_options: poise::ApplicationFrameworkOptions {
+				command_check: |ctx| Box::pin(user_is_allowed_bot_interaction(ctx.into())),
+				defer_response: true,
+				..Default::default()
+			},
+			pre_command: |ctx| Box::pin(pre_command(ctx)),
+			owners: std::iter::FromIterator::from_iter([serenity::UserId(472029906943868929)]),
+			..Default::default()
+		})
+		.token(discord_bot_token)
+		.client_settings(|client| {
+			client.intents(
+				serenity::GatewayIntents::non_privileged()
+					| serenity::GatewayIntents::GUILD_MEMBERS
+					| serenity::GatewayIntents::GUILD_PRESENCES,
+			)
+		})
+		.command(commands::compare(), |f| f)
+		.command(commands::help(), |f| f)
+		.command(commands::profile(), |f| f)
+		.command(commands::pattern(), |f| f)
+		.command(commands::ping(), |f| f)
+		.command(commands::servers(), |f| f)
+		.command(commands::uptime(), |f| f)
+		.command(commands::lastsession(), |f| f)
+		.command(commands::randomscore(), |f| f)
+		.command(commands::lookup(), |f| f)
+		.command(commands::scrollset(), |f| f)
+		.command(commands::userset(), |f| f)
+		.command(commands::rivalset(), |f| f)
+		.command(commands::rs(), |f| f)
+		.command(commands::rival(), |f| f)
+		.command(commands::skillgraph(), |f| f)
+		.command(commands::rivalgraph(), |f| f)
+		.command(commands::accuracygraph(), |f| f)
+		.command(commands::quote(), |f| f)
+		.command(commands::register(), |f| f)
+		.command(commands::top(), |f| f)
+		.command(commands::top10(), |f| f)
+		.command(commands::aroundme(), |f| f)
+		.command(commands::leaderboard(), |f| f)
+		.command(commands::details(), |f| f)
+		.command(commands::scoregraph(), |f| f)
+		.run()
 		.await?;
 
 	Ok(())
