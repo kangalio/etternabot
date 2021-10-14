@@ -15,13 +15,7 @@ pub async fn ping(ctx: Context<'_>, #[rest] args: String) -> Result<(), Error> {
 }
 
 /// List servers of which the bot is a member of
-#[poise::command(
-	prefix_command,
-	slash_command,
-	track_edits,
-	hide_in_help,
-	defer_response = false
-)]
+#[poise::command(prefix_command, slash_command, track_edits, hide_in_help)]
 pub async fn servers(ctx: Context<'_>) -> Result<(), Error> {
 	poise::samples::servers(ctx).await?;
 
@@ -105,6 +99,8 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 /// Run with no arguments to register in guild, run with argument "global" to register globally.
 #[poise::command(prefix_command, hide_in_help)]
 pub async fn register(ctx: Context<'_>, #[flag] global: bool) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	poise::samples::register_application_commands(ctx, global).await?;
 
 	Ok(())

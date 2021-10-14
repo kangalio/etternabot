@@ -56,6 +56,8 @@ pub async fn aroundme(
 	#[description = "Skillset to sort by"] skillset: Option<Skillset8>,
 	#[description = "How many entries to fetch above and below"] num_entries: Option<u32>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let username = match username {
 		Some(x) => x.to_owned(),
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -159,6 +161,8 @@ pub async fn leaderboard(
 	ctx: Context<'_>,
 	#[description = "Country code"] country: Option<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let leaderboard = match &country {
 		Some(country) => {
 			let result = ctx.data().v1.country_leaderboard(country).await;

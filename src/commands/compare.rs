@@ -149,6 +149,8 @@ pub async fn rival(
 	#[flag]
 	expanded: bool,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let me = &ctx.data().get_eo_username(ctx.author()).await?;
 
 	let rival = ctx
@@ -181,6 +183,8 @@ pub async fn compare(
 	#[flag]
 	expanded: bool,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let left = match left {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -197,6 +201,8 @@ pub async fn rivalset(
 	ctx: Context<'_>,
 	#[description = "EtternaOnline username of your new rival"] rival: String,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	if ctx.data().v1.user_data(&rival).await.is_err() {
 		poise::say_reply(ctx, format!("User `{}` doesn't exist", rival)).await?;
 		return Ok(());

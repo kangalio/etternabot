@@ -115,6 +115,8 @@ async fn topscores(
 	skillset: Option<SkillOrAcc>,
 	username: Option<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let username = match username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -191,6 +193,8 @@ pub async fn lastsession(
 	ctx: Context<'_>,
 	#[description = "Falls back to your username"] username: Option<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let username = match username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -221,6 +225,8 @@ pub async fn details(
 	#[description = "Number of the score"] position: usize,
 	#[description = "Specific judge to use for statistics"] judge: Option<super::Judge>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let (scorekey, username) = {
 		let data = ctx.data().lock_data();
 

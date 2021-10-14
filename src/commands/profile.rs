@@ -11,6 +11,8 @@ pub async fn userset(
 	ctx: Context<'_>,
 	#[description = "Your EtternaOnline username"] username: String,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let new_user_entry = crate::config::UserRegistryEntry {
 		discord_id: ctx.author().id,
 		discord_username: ctx.author().name.to_owned(),
@@ -80,6 +82,8 @@ pub async fn profile(
 	#[description = "EtternaOnline username. If not specified, shows your stats"] // dummy
 	eo_username: Option<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let (eo_username, overwrite_prev_ratings) = match eo_username {
 		Some(eo_username) => (eo_username, false),
 		None => (ctx.data().get_eo_username(ctx.author()).await?, true),

@@ -212,6 +212,8 @@ pub async fn skillgraph(
 	>,
 	#[description = "Which user to show"] usernames: Vec<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	if usernames.len() == 0 {
 		skillgraph_inner(
 			ctx,
@@ -233,6 +235,8 @@ pub async fn rivalgraph(
 		SkillgraphThreshold,
 	>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let me = ctx.data().get_eo_username(ctx.author()).await?;
 	let rival = ctx
 		.data()
@@ -258,6 +262,8 @@ pub async fn accuracygraph(
 	ctx: Context<'_>,
 	#[description = "Profile to show"] username: Option<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let username = match username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -328,6 +334,8 @@ pub async fn scoregraph(
 	ctx: Context<'_>,
 	#[description = "Which users to include in the graph"] usernames: Vec<String>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let usernames: Vec<String> = if usernames.is_empty() {
 		vec![ctx.data().get_eo_username(ctx.author()).await?]
 	} else {

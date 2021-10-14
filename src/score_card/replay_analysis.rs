@@ -144,6 +144,6 @@ pub fn do_replay_analysis(
 			.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
 		longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
 		mean_offset,
-		fun_facts: fun_facts::make_fun_facts(replay),
+		fun_facts: fun_facts::make_fun_facts(&score.judgements, replay),
 	}))
 }

@@ -30,6 +30,8 @@ pub async fn rs(
 	eo_username: Option<String>,
 	#[description = "Judge to show info about"] alternative_judge: Option<Judge>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let eo_username = match eo_username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,
@@ -149,6 +151,8 @@ pub async fn randomscore(
 	username: Option<String>,
 	#[description = "Judge to show info about"] judge: Option<Judge>,
 ) -> Result<(), Error> {
+	let _typing = ctx.defer_or_broadcast().await;
+
 	let username = match username {
 		Some(x) => x,
 		None => ctx.data().get_eo_username(ctx.author()).await?,

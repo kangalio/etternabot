@@ -54,6 +54,7 @@ fn calculate_hand_wifescores(replay: &etternaonline_api::Replay) -> (f32, f32) {
 	(left_wifescore, right_wifescore)
 }
 
+// TODO: incorpoprate hit mines and dropped holds by distributing them equally on hands
 fn make_left_right_hand_difference_fun_fact(
 	fun_facts: &mut Vec<String>,
 	replay: &etternaonline_api::Replay,
@@ -143,11 +144,70 @@ fn make_hit_outliers_fun_fact(fun_facts: &mut Vec<String>, replay: &etternaonlin
 }
 */
 
-pub fn make_fun_facts(replay: &etternaonline_api::Replay) -> Vec<String> {
+fn calculate_sd(replay: &etternaonline_api::Replay) -> f32 {
+	let mut num_hits = 0;
+	let sum_of_squared_deviations = replay
+		.notes
+		.iter()
+		.filter_map(|note| note.hit.deviation())
+		.map(|deviation| deviation * deviation)
+		.inspect(|_| num_hits += 1)
+		.sum::<f32>();
+
+	(sum_of_squared_deviations / num_hits as f32).sqrt()
+}
+
+fn make_hit_outliers_fun_fact(
+	fun_facts: &mut Vec<String>,
+	judgements: &etterna::FullJudgements,
+	replay: &etternaonline_api::Replay,
+) {
+	let deviation_threshold = 5.0 * calculate_sd(replay);
+	dbg!(deviation_threshold);
+
+	let original_wifescore = etterna::Wife3::apply(
+		replay.notes.iter().map(|note| note.hit),
+		judgements.hit_mines,
+		judgements.missed_holds + judgements.let_go_holds,
+		etterna::J4,
+	);
+
+	let filtered_hits = replay.notes.iter().map(|note| note.hit).filter(|hit| {
+		let deviation = hit.deviation().unwrap_or(etterna::J4.bad_window).abs();
+		deviation < deviation_threshold
+	});
+	let num_removed_outliers = replay.notes.len() - filtered_hits.clone().count();
+	let filtered_wifescore = etterna::Wife3::apply(
+		filtered_hits,
+		judgements.hit_mines,
+		judgements.missed_holds + judgements.let_go_holds,
+		etterna::J4,
+	);
+
+	let (original_wifescore, filtered_wifescore) = match (original_wifescore, filtered_wifescore) {
+		(Some(a), Some(b)) => (a, b),
+		_ => return,
+	};
+
+	// if (1.0 - old_wifescore) / (1.0 - new_wifescore) >= multiplier_threshold {
+	if true {
+		fun_facts.push(format!(
+			"Would have been {:.02}% (instead of {:.02}%) with {} outliers removed",
+			filtered_wifescore.as_percent(),
+			original_wifescore.as_percent(),
+			num_removed_outliers,
+		));
+	}
+}
+
+pub fn make_fun_facts(
+	judgements: &etterna::FullJudgements,
+	replay: &etternaonline_api::Replay,
+) -> Vec<String> {
 	let mut fun_facts = Vec::new();
 
 	make_left_right_hand_difference_fun_fact(&mut fun_facts, replay);
-	// make_hit_outliers_fun_fact(&mut fun_facts, replay);
+	make_hit_outliers_fun_fact(&mut fun_facts, judgements, replay);
 
 	fun_facts
 }

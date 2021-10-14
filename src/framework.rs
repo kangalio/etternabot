@@ -159,7 +159,6 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 
 pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result<(), Error> {
 	poise::Framework::build()
-		.prefix("+")
 		.user_data_setup(|ctx, _ready, _| Box::pin(State::load(ctx, auth)))
 		.options(poise::FrameworkOptions {
 			listener: |ctx, event, framework, state| {
@@ -167,12 +166,10 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			},
 			on_error: |e, ctx| Box::pin(on_error(e, ctx)),
 			prefix_options: poise::PrefixFrameworkOptions {
+				prefix: Some("+".into()),
 				command_check: |c| {
 					Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c)))
 				},
-				broadcast_typing: poise::BroadcastTypingBehavior::WithDelay(
-					std::time::Duration::from_secs_f32(1.0),
-				),
 				edit_tracker: Some(poise::EditTracker::for_timespan(
 					std::time::Duration::from_secs(3600),
 				)),
@@ -180,7 +177,6 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			},
 			application_options: poise::ApplicationFrameworkOptions {
 				command_check: |ctx| Box::pin(user_is_allowed_bot_interaction(ctx.into())),
-				defer_response: true,
 				..Default::default()
 			},
 			pre_command: |ctx| Box::pin(pre_command(ctx)),
