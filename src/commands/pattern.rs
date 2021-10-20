@@ -305,7 +305,7 @@ pub async fn pattern(
 		poise::Context::Application(_) => {
 			// We need to send some initial response! Only follow up messages support
 			// attachments
-			poise::say_reply(ctx, format!("`Pattern {}`", pattern)).await?;
+			poise::say_reply(ctx, format!("Pattern `{}`", pattern)).await?;
 			poise::send_reply(ctx, |f| f.attachment(image_attachment)).await?;
 		}
 	}
