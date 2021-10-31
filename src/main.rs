@@ -92,7 +92,7 @@ fn extract_judge_from_string(string: &str) -> Option<&'static etterna::Judge> {
 
 /// Transforms an error by checking, if it's a User Not Found error. If yes,
 fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
-	println!("Got an error {}", error);
+	log::warn!("Got an error {}", error);
 	match error {
 		etternaonline_api::Error::UserNotFound {
 			name: Some(username),
@@ -104,6 +104,8 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+	env_logger::init();
+
 	fn env_var<T: std::str::FromStr>(name: &str) -> Result<T, Error>
 	where
 		T::Err: std::fmt::Display,

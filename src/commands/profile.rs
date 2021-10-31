@@ -21,7 +21,6 @@ pub async fn userset(
 		last_known_num_scores: None,
 		last_rating: None,
 	};
-	println!("a");
 
 	let old_eo_username;
 	{
@@ -50,7 +49,6 @@ pub async fn userset(
 		),
 		None => format!("Successfully set username to `{}`", username),
 	};
-	println!("b");
 	poise::say_reply(ctx, response).await?;
 
 	Ok(())

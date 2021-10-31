@@ -74,7 +74,7 @@ async fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error
 }
 
 async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
-	println!("Encountered an error: {:?}", e);
+	log::warn!("Encountered an error: {:?}", e);
 	match ctx {
 		poise::ErrorContext::Command(ctx) => {
 			let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
@@ -92,13 +92,13 @@ async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
 				e.to_string()
 			};
 			if let Err(e) = poise::say_reply(ctx.ctx(), user_error_msg).await {
-				println!("Error while user command error: {}", e);
+				log::warn!("Error while user command error: {}", e);
 			}
 		}
 		poise::ErrorContext::Listener(event) => {
-			println!("Error in listener while processing {:?}: {}", event, e)
+			log::warn!("Error in listener while processing {:?}: {}", event, e)
 		}
-		poise::ErrorContext::Setup => println!("Setup failed: {}", e),
+		poise::ErrorContext::Setup => log::error!("Setup failed: {}", e),
 	}
 }
 
@@ -137,7 +137,7 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 	let author = ctx.author();
 	match ctx {
 		poise::Context::Application(ctx) => {
-			println!(
+			log::info!(
 				"{} invoked command {} on {:?}",
 				&author.name,
 				&ctx.interaction.data.name,
@@ -149,9 +149,12 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 				Some(guild) => guild.name,
 				None => "<unknown>".into(),
 			};
-			println!(
+			log::info!(
 				"{} sent message {:?} on {:?} in {}",
-				&author.name, &ctx.msg.content, &ctx.msg.timestamp, guild_name,
+				&author.name,
+				&ctx.msg.content,
+				&ctx.msg.timestamp,
+				guild_name,
 			);
 		}
 	}

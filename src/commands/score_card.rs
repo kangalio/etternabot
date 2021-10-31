@@ -132,7 +132,7 @@ async fn get_random_score(
 	{
 		registry_entry.last_known_num_scores = Some(scores.entries_before_search_filtering);
 	} else {
-		println!("Warning: user registry entry has disappeared while retrieving random score");
+		log::warn!("User registry entry has disappeared while retrieving random score");
 	}
 
 	scores

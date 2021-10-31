@@ -36,9 +36,10 @@ fn extract_score_links_from_string(
 		let user_id: u32 = user_id_group
 			.parse()
 			.map_err(|e| {
-				println!(
+				log::warn!(
 					"Error while parsing '{}' (\\d+) as u32: {}",
-					user_id_group, e
+					user_id_group,
+					e
 				)
 			})
 			.ok()?;
@@ -51,9 +52,10 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 	let alternative_judge = crate::extract_judge_from_string(&ctx.msg.content);
 	let mut score_links = extract_score_links_from_string(&ctx.msg.content);
 	if let Some((scorekey, user_id)) = score_links.next() {
-		println!(
+		log::info!(
 			"Trying to show score card for scorekey {} user id {}",
-			scorekey, user_id
+			scorekey,
+			user_id
 		);
 		if let Err(e) = crate::send_score_card(
 			poise::Context::Prefix(ctx),
@@ -67,13 +69,13 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 		)
 		.await
 		{
-			println!("Error while showing score card for {}: {}", scorekey, e);
+			log::warn!("Error while showing score card for {}: {}", scorekey, e);
 		}
 	}
 
 	let num_score_links = score_links.count() + 1;
 	if num_score_links > 1 {
-		println!("Refusing to show all {} score links", num_score_links);
+		log::info!("Refusing to show all {} score links", num_score_links);
 	}
 }
 
@@ -141,9 +143,10 @@ pub async fn check_member_update_for_max_300(
 		if let Some(guild) = guild.roles.get(guild_id) {
 			Some(guild.name.as_str())
 		} else {
-			println!(
+			log::warn!(
 				"Couldn't find role {:?} in guild roles ({:?})... weird",
-				guild_id, guild.roles
+				guild_id,
+				guild.roles
 			);
 			None
 		}

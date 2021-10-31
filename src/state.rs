@@ -81,7 +81,7 @@ impl State {
 			v2_session: tokio::sync::Mutex::new(match Self::attempt_v2_login(&auth).await {
 				Ok(v2) => Some(v2),
 				Err(e) => {
-					println!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
+					log::warn!("Failed to login to EO on bot startup: {}. Continuing with no v2 session active", e);
 					None
 				}
 			}),
