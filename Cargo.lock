@@ -30,12 +30,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arc-swap"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6df5aef5c5830360ce5218cecb8f018af3438af5686ae945094affc86fdec63"
-
-[[package]]
 name = "async-trait"
 version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -495,7 +489,7 @@ dependencies = [
 [[package]]
 name = "etternaonline_api"
 version = "0.2.0"
-source = "git+https://github.com/kangalioo/etternaonline-api#d5a4cab00905161b62bd7afd18028f4a74c5c61f"
+source = "git+https://github.com/kangalioo/etternaonline-api#6efc7811ed8772f39bedb94d7fc3538937e0691d"
 dependencies = [
  "etterna",
  "libm",
@@ -1594,14 +1588,12 @@ dependencies = [
 [[package]]
 name = "poise"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#9353e8e0f76747581ea073f4b09f7d985576af2f"
+source = "git+https://github.com/kangalioo/poise?branch=develop#9074a04211306ac744acb71ff5715dc8f91eac22"
 dependencies = [
- "arc-swap",
  "async-trait",
  "chrono",
  "futures",
  "once_cell",
- "parking_lot",
  "poise_macros",
  "regex",
  "serde_json",
@@ -1612,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#9353e8e0f76747581ea073f4b09f7d985576af2f"
+source = "git+https://github.com/kangalioo/poise?branch=develop#9074a04211306ac744acb71ff5715dc8f91eac22"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2094,7 +2086,7 @@ dependencies = [
 [[package]]
 name = "serenity"
 version = "0.10.9"
-source = "git+https://github.com/serenity-rs/serenity?branch=next#29dd43adeae81861613930e6d6385cd2497018de"
+source = "git+https://github.com/kangalioo/serenity?branch=poise-tailored#0227784a3fa35dd824614dcae1dcfdf611d3fdfd"
 dependencies = [
  "async-trait",
  "async-tungstenite",
