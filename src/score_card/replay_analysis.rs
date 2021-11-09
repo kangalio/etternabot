@@ -1,6 +1,6 @@
 //! Extracts all data we care about in the score card from a replay
 
-use super::{fun_facts, replay_graph};
+use super::replay_graph;
 use crate::Error;
 use etterna::SimpleReplay as _;
 
@@ -21,7 +21,6 @@ pub struct ReplayAnalysis {
 	pub longest_perf_combo: u32,
 	pub longest_combo: u32,
 	pub mean_offset: f32,
-	pub fun_facts: Vec<String>,
 }
 
 fn fastest_nps(replay: &etternaonline_api::Replay) -> Option<f32> {
@@ -144,6 +143,5 @@ pub fn do_replay_analysis(
 			.longest_combo(|hit| hit.is_within_window(etterna::J4.perfect_window)),
 		longest_combo: replay.longest_combo(|hit| hit.is_within_window(etterna::J4.great_window)),
 		mean_offset,
-		fun_facts: fun_facts::make_fun_facts(&score.judgements, replay),
 	}))
 }

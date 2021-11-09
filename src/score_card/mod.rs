@@ -1,6 +1,5 @@
 //! Utility code used by various parts of the bot to show a score card
 
-mod fun_facts;
 mod replay_analysis;
 mod replay_graph;
 
@@ -256,10 +255,6 @@ Longest 100% combo: {}
 				),
 				false,
 			);
-
-		if !analysis.fun_facts.is_empty() {
-			embed.field("Fun facts", analysis.fun_facts.join("\n"), false);
-		}
 	}
 
 	poise::send_reply(ctx, |f: &mut poise::CreateReply<'_>| {
