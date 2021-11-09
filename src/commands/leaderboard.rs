@@ -52,6 +52,7 @@ pub async fn aroundme(
 	ctx: Context<'_>,
 	#[lazy]
 	#[description = "EtternaOnline username"]
+	#[autocomplete = "crate::autocomplete_username"]
 	username: Option<String>,
 	#[description = "Skillset to sort by"] skillset: Option<Skillset8>,
 	#[description = "How many entries to fetch above and below"] num_entries: Option<u32>,

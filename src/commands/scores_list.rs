@@ -28,6 +28,7 @@ pub async fn top10(
 	ctx: Context<'_>,
 	#[description = "Falls back to your username"]
 	#[lazy]
+	#[autocomplete = "crate::autocomplete_username"]
 	username: Option<String>,
 	#[description = "Specific skillset to focus on"] skillset: Option<SkillOrAcc>,
 ) -> Result<(), Error> {
@@ -43,6 +44,7 @@ pub async fn top(
 	#[description = "Number of scores to show"] limit: u32,
 	#[description = "Falls back to your username"]
 	#[lazy]
+	#[autocomplete = "crate::autocomplete_username"]
 	username: Option<String>,
 	#[description = "Specific skillset to focus on"] skillset: Option<SkillOrAcc>,
 ) -> Result<(), Error> {

@@ -77,7 +77,8 @@ fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
 #[poise::command(prefix_command, aliases("advprof"), track_edits, slash_command)]
 pub async fn profile(
 	ctx: Context<'_>,
-	#[description = "EtternaOnline username. If not specified, shows your stats"] // dummy
+	#[description = "EtternaOnline username. If not specified, shows your stats"]
+	#[autocomplete = "crate::autocomplete_username"]
 	eo_username: Option<String>,
 ) -> Result<(), Error> {
 	let _typing = ctx.defer_or_broadcast().await;

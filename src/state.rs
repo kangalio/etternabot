@@ -51,6 +51,8 @@ pub struct State {
 	v2_session: tokio::sync::Mutex<Option<etternaonline_api::v2::Session>>,
 	pub web: etternaonline_api::web::Session,
 	pub noteskin_provider: commands::NoteskinProvider,
+	// All lowercase
+	pub eo_usernames: crate::Cached<Vec<String>>,
 }
 
 impl State {
@@ -90,6 +92,26 @@ impl State {
 			config,
 			data: std::sync::Mutex::new(config::Data::load()),
 			noteskin_provider: commands::NoteskinProvider::load()?,
+			eo_usernames: crate::Cached::new(
+				"EtternaOnline usernames",
+				|ctx| {
+					Box::pin(async move {
+						let all_players = ctx.data().web.leaderboard(
+							..500, // REMEMBER
+							etternaonline_api::web::LeaderboardSortBy::Rating(
+								etterna::Skillset8::Overall,
+							),
+							etternaonline_api::web::SortDirection::Descending,
+						);
+						Ok(all_players
+							.await?
+							.into_iter()
+							.map(|player| player.username.to_lowercase())
+							.collect())
+					})
+				},
+				std::time::Duration::from_secs(60 * 60 * 24), // Refresh every day at most
+			),
 		})
 	}
 

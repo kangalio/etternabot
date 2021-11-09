@@ -98,6 +98,14 @@ async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
 		poise::ErrorContext::Listener(event) => {
 			log::warn!("Error in listener while processing {:?}: {}", event, e)
 		}
+		poise::ErrorContext::Autocomplete(err_ctx) => {
+			let ctx = err_ctx.ctx;
+			log::warn!(
+				"Error in autocomplete callback for command {:?}: {}",
+				ctx.command.slash_or_context_menu_name(),
+				e
+			)
+		}
 		poise::ErrorContext::Setup => log::error!("Setup failed: {}", e),
 	}
 }
@@ -140,8 +148,8 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 			log::info!(
 				"{} invoked command {} on {:?}",
 				&author.name,
-				&ctx.interaction.data.name,
-				&ctx.interaction.id.created_at()
+				&ctx.interaction.data().name,
+				&ctx.interaction.id().created_at()
 			);
 		}
 		poise::Context::Prefix(ctx) => {
@@ -170,18 +178,12 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			on_error: |e, ctx| Box::pin(on_error(e, ctx)),
 			prefix_options: poise::PrefixFrameworkOptions {
 				prefix: Some("+".into()),
-				command_check: |c| {
-					Box::pin(user_is_allowed_bot_interaction(poise::Context::Prefix(c)))
-				},
 				edit_tracker: Some(poise::EditTracker::for_timespan(
 					std::time::Duration::from_secs(3600),
 				)),
 				..Default::default()
 			},
-			application_options: poise::ApplicationFrameworkOptions {
-				command_check: |ctx| Box::pin(user_is_allowed_bot_interaction(ctx.into())),
-				..Default::default()
-			},
+			command_check: Some(|ctx| Box::pin(user_is_allowed_bot_interaction(ctx))),
 			pre_command: |ctx| Box::pin(pre_command(ctx)),
 			owners: std::iter::FromIterator::from_iter([serenity::UserId(472029906943868929)]),
 			..Default::default()

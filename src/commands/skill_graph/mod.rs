@@ -260,7 +260,9 @@ pub async fn rivalgraph(
 #[poise::command(prefix_command, slash_command, track_edits, aliases("accgraph"))]
 pub async fn accuracygraph(
 	ctx: Context<'_>,
-	#[description = "Profile to show"] username: Option<String>,
+	#[description = "Profile to show"]
+	#[autocomplete = "crate::autocomplete_username"]
+	username: Option<String>,
 ) -> Result<(), Error> {
 	let _typing = ctx.defer_or_broadcast().await;
 

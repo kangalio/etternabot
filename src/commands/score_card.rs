@@ -27,6 +27,7 @@ pub async fn rs(
 	ctx: Context<'_>,
 	#[lazy]
 	#[description = "EtternaOnline username"]
+	#[autocomplete = "crate::autocomplete_username"]
 	eo_username: Option<String>,
 	#[description = "Judge to show info about"] alternative_judge: Option<Judge>,
 ) -> Result<(), Error> {
@@ -148,6 +149,7 @@ pub async fn randomscore(
 	ctx: Context<'_>,
 	#[lazy]
 	#[description = "EtternaOnline username"]
+	#[autocomplete = "crate::autocomplete_username"]
 	username: Option<String>,
 	#[description = "Judge to show info about"] judge: Option<Judge>,
 ) -> Result<(), Error> {

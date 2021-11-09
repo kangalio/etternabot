@@ -25,6 +25,9 @@ mod framework;
 mod state;
 pub use state::State;
 
+mod cached;
+use cached::Cached;
+
 // Custom serenity prelude module
 use poise::serenity_prelude as serenity;
 
@@ -100,6 +103,17 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 		etternaonline_api::Error::UserNotFound { name: None } => "No such user or skillset".into(),
 		other => other.into(),
 	}
+}
+
+async fn autocomplete_username(ctx: Context<'_>, partial: String) -> Vec<String> {
+	let usernames = ctx.data().eo_usernames.fetch(ctx).await;
+
+	let partial = partial.to_lowercase();
+	usernames
+		.iter()
+		.filter(move |username| username.starts_with(&partial))
+		.map(|s| s.clone())
+		.collect()
 }
 
 #[tokio::main]
