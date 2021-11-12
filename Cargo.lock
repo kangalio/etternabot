@@ -1588,7 +1588,7 @@ dependencies = [
 [[package]]
 name = "poise"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#9074a04211306ac744acb71ff5715dc8f91eac22"
+source = "git+https://github.com/kangalioo/poise?branch=develop#19bcc0afef2c77533a4e2f0a4aaffa4baea74f2a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#9074a04211306ac744acb71ff5715dc8f91eac22"
+source = "git+https://github.com/kangalioo/poise?branch=develop#19bcc0afef2c77533a4e2f0a4aaffa4baea74f2a"
 dependencies = [
  "darling",
  "proc-macro2",
