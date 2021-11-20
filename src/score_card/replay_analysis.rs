@@ -107,10 +107,16 @@ fn make_scoring_system_comparison(
 pub fn do_replay_analysis(
 	score: &etternaonline_api::v1::ScoreData,
 	alternative_judge: Option<&etterna::Judge>,
+	draw_mean_instead_of_wifescore: bool,
 ) -> Option<Result<ReplayAnalysis, Error>> {
 	let replay = score.replay.as_ref()?;
 
-	let r = replay_graph::generate_replay_graph(replay, "replay_graph.png").transpose()?;
+	let r = replay_graph::generate_replay_graph(
+		replay,
+		"replay_graph.png",
+		draw_mean_instead_of_wifescore,
+	)
+	.transpose()?;
 	if let Err(e) = r {
 		return Some(Err(e.into()));
 	}

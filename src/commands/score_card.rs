@@ -69,6 +69,7 @@ pub async fn rs(
 			username: Some(&eo_username),
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge,
+			draw_mean_instead_of_wifescore: false,
 		},
 	)
 	.await?;
@@ -176,6 +177,7 @@ pub async fn randomscore(
 			username: Some(&username),
 			show_ssrs_and_judgements_and_modifiers: true,
 			alternative_judge: judge.map(|x| x.0),
+			draw_mean_instead_of_wifescore: false,
 		},
 	)
 	.await?;

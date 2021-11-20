@@ -65,6 +65,7 @@ async fn show_score_links_inside_message(ctx: PrefixContext<'_>) {
 				username: None,
 				show_ssrs_and_judgements_and_modifiers: true,
 				alternative_judge,
+				draw_mean_instead_of_wifescore: ctx.msg.content.contains("mean"),
 			},
 		)
 		.await

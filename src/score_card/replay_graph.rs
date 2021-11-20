@@ -79,7 +79,7 @@ impl IconStamper {
 struct HitStats {
 	time: f32,
 	running_wifescore: f32,
-	running_mean: f32,
+	ewma_mean: f32,
 }
 
 struct ReplayStats {
@@ -93,8 +93,8 @@ struct ReplayStats {
 fn gen_replay_stats(replay: &etternaonline_api::Replay) -> Option<ReplayStats> {
 	let notes = &replay.notes;
 
-	let mut hit_mean_sum = 0.0;
-	let mut num_hit_means = 0;
+	let ewma_weight = 0.05;
+	let mut ewma_mean = 0.0;
 
 	let mut hits: Vec<HitStats> = Vec::new();
 	let mut mine_hit_locations: Vec<f32> = Vec::new();
@@ -114,16 +114,16 @@ fn gen_replay_stats(replay: &etternaonline_api::Replay) -> Option<ReplayStats> {
 				points += etterna::wife3(note.hit, &etterna::J4);
 				let wifescore = points / (hits.len() + 1) as f32 * 100.0;
 
+				// if note.hit.is_marv(etterna::J4) {
 				if let Some(deviation) = note.hit.deviation() {
-					hit_mean_sum += deviation;
-					num_hit_means += 1;
+					ewma_mean = ewma_weight * deviation + (1.0 - ewma_weight) * ewma_mean;
 				}
-				let running_mean = hit_mean_sum / num_hit_means as f32;
+				// }
 
 				hits.push(HitStats {
 					time: note.time as f32,
 					running_wifescore: wifescore,
-					running_mean,
+					ewma_mean,
 				});
 
 				if wifescore < min_wifescore {
@@ -296,9 +296,65 @@ fn draw_wifescore_chart<'a, 'b>(
 	Ok(())
 }
 
+fn draw_mean_chart<'a, 'b>(
+	canvas: &'a DrawingArea<
+		BitMapBackend<'b, plotters_bitmap::bitmap_pixel::RGBPixel>,
+		plotters::coord::Shift,
+	>,
+	x_range: &std::ops::Range<f32>,
+	stats: &ReplayStats,
+) -> Result<(), Box<dyn std::error::Error>> {
+	let mut max_abs_mean = f32::NEG_INFINITY;
+	for hit in &stats.hits {
+		let abs_mean = hit.ewma_mean.abs();
+		if abs_mean > max_abs_mean {
+			max_abs_mean = abs_mean;
+		}
+	}
+	let y_range = f32::max(0.02, max_abs_mean);
+	let y_range = (-y_range)..y_range;
+
+	let mut chart =
+		ChartBuilder::on(&canvas).build_cartesian_2d(x_range.clone(), y_range.clone())?;
+
+	chart.draw_series(LineSeries::new(
+		stats.hits.iter().map(|hit| (hit.time, hit.ewma_mean)),
+		ShapeStyle {
+			color: WHITE.to_rgba(),
+			filled: true,
+			stroke_width: 1,
+		},
+	))?;
+
+	ChartBuilder::on(&canvas)
+		.y_label_area_size(55)
+		.build_cartesian_2d(x_range.clone(), y_range)?
+		.configure_mesh()
+		.disable_mesh()
+		// .disable_x_mesh()
+		// .line_style_1(&WHITE.mix(0.5))
+		// .line_style_2(&TRANSPARENT)
+		.disable_x_axis()
+		.axis_style(&WHITE.mix(0.5))
+		.y_label_style(TextStyle {
+			color: BackendColor {
+				rgb: (255, 255, 255),
+				alpha: 0.8,
+			},
+			pos: Pos::new(HPos::Center, VPos::Center),
+			font: ("Open Sans", 18).into(),
+		})
+		.y_label_formatter(&|y| format!("{:.1}", y * 1000.0))
+		.y_labels(5)
+		.draw()?;
+
+	Ok(())
+}
+
 fn inner(
 	replay: &etternaonline_api::Replay,
 	output_path: &str,
+	draw_mean_instead_of_wifescore: bool,
 ) -> Result<Option<()>, Box<dyn std::error::Error>> {
 	let stats = match gen_replay_stats(replay) {
 		Some(stats) => stats,
@@ -312,7 +368,11 @@ fn inner(
 
 	let dots_chart = draw_hit_dots(&replay, &stats, &x_range, &canvas)?;
 
-	draw_wifescore_chart(&canvas, &x_range, &stats)?;
+	if draw_mean_instead_of_wifescore {
+		draw_mean_chart(&canvas, &x_range, &stats)?;
+	} else {
+		draw_wifescore_chart(&canvas, &x_range, &stats)?
+	}
 
 	draw_mines(&canvas, &stats.mine_hit_locations, |time| {
 		dots_chart.backend_coord(&(time, 0.0)).0
@@ -326,11 +386,12 @@ fn inner(
 pub fn generate_replay_graph(
 	replay: &etternaonline_api::Replay,
 	output_path: &str,
+	draw_mean_instead_of_wifescore: bool,
 ) -> Result<Option<()>, String> {
 	// match inner(replay, output_path) {
 	// 	Ok(Some(())) => Ok(()),
 	// 	Ok(None) => Err(Error::InsufficientReplayData),
 	// 	Err(e) => Err(Error::PlottersError(e.to_string())),
 	// }
-	inner(replay, output_path).map_err(|e| e.to_string())
+	inner(replay, output_path, draw_mean_instead_of_wifescore).map_err(|e| e.to_string())
 }

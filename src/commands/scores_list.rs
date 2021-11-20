@@ -252,6 +252,7 @@ pub async fn details(
 			show_ssrs_and_judgements_and_modifiers: true,
 			user_id: None,
 			username: Some(&username),
+			draw_mean_instead_of_wifescore: false,
 		},
 	)
 	.await?;

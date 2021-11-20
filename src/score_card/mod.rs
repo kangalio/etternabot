@@ -11,6 +11,7 @@ pub struct ScoreCard<'a> {
 	pub username: Option<&'a str>, // used to detect scorekey collision
 	pub show_ssrs_and_judgements_and_modifiers: bool,
 	pub alternative_judge: Option<&'a etterna::Judge>,
+	pub draw_mean_instead_of_wifescore: bool,
 }
 
 fn write_score_card_body(
@@ -193,8 +194,12 @@ pub async fn send_score_card(ctx: Context<'_>, info: ScoreCard<'_>) -> Result<()
 
 	let description = write_score_card_body(&info, &score, alternative_judge_wifescore);
 
-	let replay_analysis =
-		replay_analysis::do_replay_analysis(&score, info.alternative_judge).transpose()?;
+	let replay_analysis = replay_analysis::do_replay_analysis(
+		&score,
+		info.alternative_judge,
+		info.draw_mean_instead_of_wifescore,
+	)
+	.transpose()?;
 
 	let mut embed = serenity::CreateEmbed::default();
 	embed
