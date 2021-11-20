@@ -76,8 +76,14 @@ impl IconStamper {
 	}
 }
 
+struct HitStats {
+	time: f32,
+	running_wifescore: f32,
+	running_mean: f32,
+}
+
 struct ReplayStats {
-	hits: Vec<(f32, f32)>,
+	hits: Vec<HitStats>,
 	mine_hit_locations: Vec<f32>,
 	min_wifescore: f32,
 	max_wifescore: f32,
@@ -87,7 +93,10 @@ struct ReplayStats {
 fn gen_replay_stats(replay: &etternaonline_api::Replay) -> Option<ReplayStats> {
 	let notes = &replay.notes;
 
-	let mut hits: Vec<(f32, f32)> = Vec::new();
+	let mut hit_mean_sum = 0.0;
+	let mut num_hit_means = 0;
+
+	let mut hits: Vec<HitStats> = Vec::new();
 	let mut mine_hit_locations: Vec<f32> = Vec::new();
 	let mut points = 0.0;
 	let mut min_wifescore = f32::INFINITY;
@@ -97,15 +106,25 @@ fn gen_replay_stats(replay: &etternaonline_api::Replay) -> Option<ReplayStats> {
 		let note_type = note.note_type?;
 		match note_type {
 			etterna::NoteType::Tap | etterna::NoteType::HoldHead | etterna::NoteType::Lift => {
-				points += etterna::wife3(note.hit, &etterna::J4);
-
 				// if we miss a hold head, we additionally get the hold drop penalty
 				if note.hit.was_missed() && note_type == etterna::NoteType::HoldHead {
 					points += etterna::Wife3::HOLD_DROP_WEIGHT;
 				}
 
+				points += etterna::wife3(note.hit, &etterna::J4);
 				let wifescore = points / (hits.len() + 1) as f32 * 100.0;
-				hits.push((note.time as f32, wifescore));
+
+				if let Some(deviation) = note.hit.deviation() {
+					hit_mean_sum += deviation;
+					num_hit_means += 1;
+				}
+				let running_mean = hit_mean_sum / num_hit_means as f32;
+
+				hits.push(HitStats {
+					time: note.time as f32,
+					running_wifescore: wifescore,
+					running_mean,
+				});
 
 				if wifescore < min_wifescore {
 					min_wifescore = wifescore
@@ -235,7 +254,10 @@ fn draw_wifescore_chart<'a, 'b>(
 		ChartBuilder::on(&canvas).build_cartesian_2d(x_range.clone(), y_range.clone())?;
 
 	wifescore_chart.draw_series(LineSeries::new(
-		stats.hits.iter().copied(),
+		stats
+			.hits
+			.iter()
+			.map(|hit| (hit.time, hit.running_wifescore)),
 		ShapeStyle {
 			color: WHITE.to_rgba(),
 			filled: true,
