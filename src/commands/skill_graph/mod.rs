@@ -48,22 +48,27 @@ fn parse_wifescore_or_grade(string: &str) -> Option<etterna::Wifescore> {
 }
 
 #[derive(Clone, Copy)]
-pub struct SkillgraphThreshold(etterna::Wifescore);
+pub struct SkillgraphThreshold(Option<etterna::Wifescore>);
 
+#[serenity::async_trait]
 impl<'a> poise::PopArgument<'a> for SkillgraphThreshold {
-	type Err = StringError;
+	async fn pop_from(
+		args: &'a str,
+		ctx: &serenity::Context,
+		msg: &serenity::Message,
+	) -> Result<(&'a str, Self), (Box<dyn std::error::Error + Send + Sync>, Option<String>)> {
+		let (args, params) = poise::KeyValueArgs::pop_from(args, ctx, msg).await?;
 
-	fn pop_from(args: &poise::ArgString<'a>) -> Result<(poise::ArgString<'a>, Self), Self::Err> {
-		let (args, params) = match poise::KeyValueArgs::pop_from(args) {
-			Ok(x) => x,
-			Err(e) => match e {},
+		let threshold = if let Some(threshold_str) = params.get("threshold") {
+			Some(parse_wifescore_or_grade(threshold_str).ok_or_else(|| {
+				(
+					"unknown wifescore or grade".into(),
+					Some(threshold_str.to_string()),
+				)
+			})?)
+		} else {
+			None
 		};
-
-		let threshold_str = params
-			.get("threshold")
-			.ok_or("No threshold argument found")?;
-		let threshold = parse_wifescore_or_grade(threshold_str)
-			.ok_or_else(|| format!("Unknown wifescore or grade `{}`", threshold_str))?;
 
 		Ok((args, Self(threshold)))
 	}
@@ -79,12 +84,19 @@ impl poise::SlashArgument for SkillgraphThreshold {
 	) -> Result<Self, poise::SlashArgError> {
 		use poise::SlashArgumentHack as _;
 
-		let threshold_str = (&&&&&std::marker::PhantomData::<String>)
+		let threshold = if let Ok(threshold_str) = (&&&&&std::marker::PhantomData::<String>)
 			.extract(ctx, guild, channel, value)
-			.await?;
-		let threshold = parse_wifescore_or_grade(&threshold_str)
-			.ok_or_else(|| format!("Unknown wifescore or grade `{}`", threshold_str))
-			.map_err(|e| poise::SlashArgError::Parse(e.into()))?;
+			.await
+		{
+			Some(parse_wifescore_or_grade(&threshold_str).ok_or_else(|| {
+				poise::SlashArgError::Parse {
+					error: "unknown wifescore or grade".into(),
+					input: threshold_str.into(),
+				}
+			})?)
+		} else {
+			None
+		};
 
 		Ok(Self(threshold))
 	}
@@ -166,7 +178,7 @@ async fn generic_download_timelines<T>(
 // usernames slice must contain at least one element!
 async fn skillgraph_inner(
 	ctx: Context<'_>,
-	threshold: Option<SkillgraphThreshold>,
+	threshold: SkillgraphThreshold,
 	usernames: &[&str], // future me: leave this as is, changing it to be type-safe is ugly
 ) -> Result<(), Error> {
 	assert!(usernames.len() >= 1);
@@ -174,8 +186,8 @@ async fn skillgraph_inner(
 	let skill_timelines = generic_download_timelines(ctx, usernames, |_, scores| {
 		etterna::SkillTimeline::calculate(
 			scores.iter().filter_map(|score| {
-				if let Some(threshold) = threshold {
-					if score.wifescore < threshold.0 {
+				if let Some(threshold) = threshold.0 {
+					if score.wifescore < threshold {
 						return None;
 					}
 				}
@@ -207,9 +219,8 @@ async fn skillgraph_inner(
 #[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn skillgraph(
 	ctx: Context<'_>,
-	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
-		SkillgraphThreshold,
-	>,
+	#[description = "Threshold for scores to be included in the calculation"]
+	threshold: SkillgraphThreshold,
 	#[description = "Which user to show"] usernames: Vec<String>,
 ) -> Result<(), Error> {
 	let _typing = ctx.defer_or_broadcast().await;
@@ -231,9 +242,8 @@ pub async fn skillgraph(
 #[poise::command(prefix_command, slash_command, track_edits)]
 pub async fn rivalgraph(
 	ctx: Context<'_>,
-	#[description = "Threshold for scores to be included in the calculation"] threshold: Option<
-		SkillgraphThreshold,
-	>,
+	#[description = "Threshold for scores to be included in the calculation"]
+	threshold: SkillgraphThreshold,
 ) -> Result<(), Error> {
 	let _typing = ctx.defer_or_broadcast().await;
 

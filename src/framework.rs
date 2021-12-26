@@ -73,43 +73,6 @@ async fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error
 	})
 }
 
-async fn on_error(e: Error, ctx: poise::ErrorContext<'_, State, Error>) {
-	log::warn!("Encountered an error: {:?}", e);
-	match ctx {
-		poise::ErrorContext::Command(ctx) => {
-			let user_error_msg = if let Some(poise::ArgumentParseError(e)) = e.downcast_ref() {
-				// If we caught an argument parse error, give a helpful error message with the
-				// command explanation if available
-
-				let mut usage = "Please check the help menu for usage information".into();
-				if let poise::CommandErrorContext::Prefix(ctx) = &ctx {
-					if let Some(multiline_help) = &ctx.command.options.multiline_help {
-						usage = multiline_help();
-					}
-				}
-				format!("**{}**\n{}", e, usage)
-			} else {
-				e.to_string()
-			};
-			if let Err(e) = poise::say_reply(ctx.ctx(), user_error_msg).await {
-				log::warn!("Error while user command error: {}", e);
-			}
-		}
-		poise::ErrorContext::Listener(event) => {
-			log::warn!("Error in listener while processing {:?}: {}", event, e)
-		}
-		poise::ErrorContext::Autocomplete(err_ctx) => {
-			let ctx = err_ctx.ctx;
-			log::warn!(
-				"Error in autocomplete callback for command {:?}: {}",
-				ctx.command.slash_or_context_menu_name(),
-				e
-			)
-		}
-		poise::ErrorContext::Setup => log::error!("Setup failed: {}", e),
-	}
-}
-
 async fn listener(
 	ctx: &serenity::Context,
 	event: &poise::Event<'_>,
@@ -123,7 +86,10 @@ async fn listener(
 				discord: ctx,
 				msg: new_message,
 				framework,
-				command: None,
+				// Just supply dummy values; we won't read these fields anyways
+				command: &framework.options().commands[0],
+				invoked_command_name: "",
+				prefix: "",
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(
@@ -172,10 +138,44 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 	poise::Framework::build()
 		.user_data_setup(|ctx, _ready, _| Box::pin(State::load(ctx, auth)))
 		.options(poise::FrameworkOptions {
+			commands: vec![
+				commands::compare(),
+				commands::help(),
+				commands::profile(),
+				commands::pattern(),
+				commands::ping(),
+				commands::servers(),
+				commands::uptime(),
+				commands::lastsession(),
+				commands::randomscore(),
+				commands::lookup(),
+				commands::scrollset(),
+				commands::userset(),
+				commands::rivalset(),
+				commands::rs(),
+				commands::rival(),
+				commands::skillgraph(),
+				commands::rivalgraph(),
+				commands::accuracygraph(),
+				commands::quote(),
+				commands::register(),
+				commands::top(),
+				commands::top10(),
+				commands::aroundme(),
+				commands::leaderboard(),
+				commands::details(),
+				commands::scoregraph(),
+			],
 			listener: |ctx, event, framework, state| {
 				Box::pin(listener(ctx, event, framework, state))
 			},
-			on_error: |e, ctx| Box::pin(on_error(e, ctx)),
+			on_error: |ctx| {
+				Box::pin(async move {
+					if let Err(e) = poise::builtins::on_error(ctx).await {
+						println!("Error while handling error: {}", e);
+					}
+				})
+			},
 			prefix_options: poise::PrefixFrameworkOptions {
 				prefix: Some("+".into()),
 				edit_tracker: Some(poise::EditTracker::for_timespan(
@@ -196,32 +196,6 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 					| serenity::GatewayIntents::GUILD_PRESENCES,
 			)
 		})
-		.command(commands::compare(), |f| f)
-		.command(commands::help(), |f| f)
-		.command(commands::profile(), |f| f)
-		.command(commands::pattern(), |f| f)
-		.command(commands::ping(), |f| f)
-		.command(commands::servers(), |f| f)
-		.command(commands::uptime(), |f| f)
-		.command(commands::lastsession(), |f| f)
-		.command(commands::randomscore(), |f| f)
-		.command(commands::lookup(), |f| f)
-		.command(commands::scrollset(), |f| f)
-		.command(commands::userset(), |f| f)
-		.command(commands::rivalset(), |f| f)
-		.command(commands::rs(), |f| f)
-		.command(commands::rival(), |f| f)
-		.command(commands::skillgraph(), |f| f)
-		.command(commands::rivalgraph(), |f| f)
-		.command(commands::accuracygraph(), |f| f)
-		.command(commands::quote(), |f| f)
-		.command(commands::register(), |f| f)
-		.command(commands::top(), |f| f)
-		.command(commands::top10(), |f| f)
-		.command(commands::aroundme(), |f| f)
-		.command(commands::leaderboard(), |f| f)
-		.command(commands::details(), |f| f)
-		.command(commands::scoregraph(), |f| f)
 		.run()
 		.await?;
 
