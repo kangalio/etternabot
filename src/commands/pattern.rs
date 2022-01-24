@@ -189,7 +189,7 @@ pub async fn pattern(
 		let mut did_user_intend = false;
 		if let Some(new_snap) = extract_snap(arg, &mut did_user_intend) {
 			if pattern_buffer.len() > 0 {
-				segments.push((pattern_draw::parse_pattern(&pattern_buffer), snap));
+				segments.push((pattern_buffer.clone(), snap));
 				pattern_buffer.clear();
 			}
 			snap = new_snap;
@@ -242,9 +242,67 @@ pub async fn pattern(
 		pattern_buffer += arg;
 	}
 	if pattern_buffer.len() > 0 {
-		segments.push((pattern_draw::parse_pattern(&pattern_buffer), snap));
-		pattern_buffer.clear();
+		segments.push((pattern_buffer, snap));
 	}
+
+	let segments = if pattern.contains("ArrowVortex:notes:") {
+		let mut full_pattern = String::new();
+		for (partial_pattern, _) in &segments {
+			full_pattern += partial_pattern;
+		}
+		// Unwrap code block ticks
+		if let Some(s) = full_pattern
+			.strip_prefix("```")
+			.and_then(|s| s.strip_suffix("```"))
+		{
+			full_pattern = s.trim().to_owned();
+		}
+
+		let notes = match arrowvortex_clipboard::decode(full_pattern.as_bytes())
+			.map_err(|e| format!("Failed to decode ArrowVortex pattern: {}", e))?
+		{
+			arrowvortex_clipboard::DecodeResult::RowBasedNotes(notes) => notes,
+			arrowvortex_clipboard::DecodeResult::TimeBasedNotes(_) => {
+				return Err("Please change to row-based mode before copying the notes".into())
+			}
+			arrowvortex_clipboard::DecodeResult::TempoEvents(_) => {
+				return Err("Please paste note data, not tempo data".into())
+			}
+		};
+
+		let mut pattern = pattern_draw::Pattern { rows: Vec::new() };
+		let mut row = Vec::new();
+		let mut prev_pos = 0;
+		for note in notes {
+			if note.pos != prev_pos {
+				pattern.rows.push(pattern_draw::Row { notes: row });
+				row = Vec::new();
+
+				for _ in (prev_pos + 1)..note.pos {
+					pattern.rows.push(pattern_draw::Row { notes: Vec::new() });
+				}
+				prev_pos = note.pos;
+			}
+
+			let note_type = match note.kind {
+				arrowvortex_clipboard::NoteKind::Tap => pattern_draw::NoteType::Tap,
+				arrowvortex_clipboard::NoteKind::Mine => pattern_draw::NoteType::Mine,
+				_ => continue, // ignore unsupported note types
+			};
+			row.push((pattern_draw::Lane::Index(note.column as _), note_type));
+		}
+		if !row.is_empty() {
+			pattern.rows.push(pattern_draw::Row { notes: row });
+		}
+
+		vertical_spacing_multiplier /= 6.0;
+		vec![(pattern, etterna::Snap::_192th.into())]
+	} else {
+		segments
+			.into_iter()
+			.map(|(partial_pattern, snap)| (pattern_draw::parse_pattern(&partial_pattern), snap))
+			.collect()
+	};
 
 	let keymode = if let Some(keymode) = keymode_override {
 		keymode

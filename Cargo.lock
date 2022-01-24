@@ -30,6 +30,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrowvortex_clipboard"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e51adf5637747e84549c667d31e6f481379c71873b8b61f6deb544ac674a0a8"
+
+[[package]]
 name = "async-trait"
 version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -461,6 +467,7 @@ dependencies = [
 name = "etternabot"
 version = "0.1.0"
 dependencies = [
+ "arrowvortex_clipboard",
  "base64",
  "chrono",
  "env_logger",
