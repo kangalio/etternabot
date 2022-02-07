@@ -82,11 +82,8 @@ impl poise::SlashArgument for SkillgraphThreshold {
 		channel: Option<serenity::ChannelId>,
 		value: &serde_json::Value,
 	) -> Result<Self, poise::SlashArgError> {
-		use poise::SlashArgumentHack as _;
-
-		let threshold = if let Ok(threshold_str) = (&&&&&std::marker::PhantomData::<String>)
-			.extract(ctx, guild, channel, value)
-			.await
+		let threshold = if let Ok(threshold_str) =
+			poise::extract_slash_argument!(String, ctx, guild, channel, value).await
 		{
 			Some(parse_wifescore_or_grade(&threshold_str).ok_or_else(|| {
 				poise::SlashArgError::Parse {
@@ -101,12 +98,8 @@ impl poise::SlashArgument for SkillgraphThreshold {
 		Ok(Self(threshold))
 	}
 
-	fn create(
-		builder: &mut serenity::CreateApplicationCommandOption,
-	) -> &mut serenity::CreateApplicationCommandOption {
-		use poise::SlashArgumentHack as _;
-
-		(&&&&&std::marker::PhantomData::<String>).create(builder)
+	fn create(builder: &mut serenity::CreateApplicationCommandOption) {
+		poise::create_slash_argument!(String, builder);
 	}
 }
 

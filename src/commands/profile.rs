@@ -73,20 +73,6 @@ fn truncate_text_maybe(text_body: &str, max_length: usize) -> Cow<'_, str> {
 	}
 }
 
-// hehe easter egg
-fn maybe_uppercase<'a>(ctx: Context<'_>, text: &'a str) -> String {
-	let bot_was_screamed_at = ctx
-		.invoked_command_name()
-		.bytes()
-		.all(|b| !b.is_ascii_lowercase());
-
-	if bot_was_screamed_at {
-		text.to_uppercase()
-	} else {
-		text.to_string()
-	}
-}
-
 /// Display your skillsets and your improvements since last time
 #[poise::command(prefix_command, aliases("advprof"), track_edits, slash_command)]
 pub async fn profile(
@@ -170,9 +156,9 @@ pub async fn profile(
 	poise::send_reply(ctx, |m| {
 		m.embed(|embed| {
 			embed
-				.description(maybe_uppercase(ctx, &rating_string))
+				.description(rating_string)
 				.author(|a| {
-					a.name(maybe_uppercase(ctx, &title))
+					a.name(title)
 						.url(format!(
 							"https://etternaonline.com/user/profile/{}",
 							&eo_username
@@ -194,8 +180,8 @@ pub async fn profile(
 				let about_me = html2md::parse_html(about_me);
 				if !about_me.is_empty() {
 					embed.field(
-						maybe_uppercase(ctx, &format!("About {}:", eo_username)),
-						truncate_text_maybe(&maybe_uppercase(ctx, &about_me), 1024),
+						format!("About {}:", eo_username),
+						truncate_text_maybe(&about_me, 1024),
 						false,
 					);
 				}

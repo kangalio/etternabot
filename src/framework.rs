@@ -107,7 +107,7 @@ async fn listener(
 	}
 }
 
-async fn pre_command(ctx: poise::Context<'_, State, Error>) {
+async fn pre_command(ctx: Context<'_>) {
 	let author = ctx.author();
 	match ctx {
 		poise::Context::Application(ctx) => {
@@ -130,6 +130,42 @@ async fn pre_command(ctx: poise::Context<'_, State, Error>) {
 				&ctx.msg.timestamp,
 				guild_name,
 			);
+		}
+	}
+}
+
+fn scream_back(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
+	let bot_was_screamed_at = ctx
+		.invoked_command_name()
+		.bytes()
+		.all(|b| !b.is_ascii_lowercase());
+
+	if bot_was_screamed_at {
+		if let Some(s) = &mut reply.content {
+			s.make_ascii_uppercase();
+		}
+		for embed in &mut reply.embeds {
+			if let Some(serde_json::Value::String(s)) = embed.0.get_mut("title") {
+				s.make_ascii_uppercase();
+			}
+			if let Some(serde_json::Value::String(s)) = embed.0.get_mut("description") {
+				s.make_ascii_uppercase();
+			}
+			if let Some(serde_json::Value::Object(author)) = embed.0.get_mut("author") {
+				if let Some(serde_json::Value::String(s)) = author.get_mut("name") {
+					s.make_ascii_uppercase();
+				}
+			}
+			if let Some(serde_json::Value::Array(fields)) = embed.0.get_mut("fields") {
+				for field in fields {
+					if let Some(serde_json::Value::String(s)) = field.get_mut("name") {
+						s.make_ascii_uppercase();
+					}
+					if let Some(serde_json::Value::String(s)) = field.get_mut("value") {
+						s.make_ascii_uppercase();
+					}
+				}
+			}
 		}
 	}
 }
@@ -185,6 +221,7 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			},
 			command_check: Some(|ctx| Box::pin(user_is_allowed_bot_interaction(ctx))),
 			pre_command: |ctx| Box::pin(pre_command(ctx)),
+			reply_callback: Some(scream_back),
 			owners: std::iter::FromIterator::from_iter([serenity::UserId(472029906943868929)]),
 			..Default::default()
 		})
