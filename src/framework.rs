@@ -90,6 +90,7 @@ async fn listener(
 				command: &framework.options().commands[0],
 				invoked_command_name: "",
 				prefix: "",
+				args: "",
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(

@@ -54,10 +54,13 @@ pub struct SkillgraphThreshold(Option<etterna::Wifescore>);
 impl<'a> poise::PopArgument<'a> for SkillgraphThreshold {
 	async fn pop_from(
 		args: &'a str,
+		attachment_index: usize,
 		ctx: &serenity::Context,
 		msg: &serenity::Message,
-	) -> Result<(&'a str, Self), (Box<dyn std::error::Error + Send + Sync>, Option<String>)> {
-		let (args, params) = poise::KeyValueArgs::pop_from(args, ctx, msg).await?;
+	) -> Result<(&'a str, usize, Self), (Box<dyn std::error::Error + Send + Sync>, Option<String>)>
+	{
+		let (args, attachment_index, params) =
+			poise::KeyValueArgs::pop_from(args, attachment_index, ctx, msg).await?;
 
 		let threshold = if let Some(threshold_str) = params.get("threshold") {
 			Some(parse_wifescore_or_grade(threshold_str).ok_or_else(|| {
@@ -70,7 +73,7 @@ impl<'a> poise::PopArgument<'a> for SkillgraphThreshold {
 			None
 		};
 
-		Ok((args, Self(threshold)))
+		Ok((args, attachment_index, Self(threshold)))
 	}
 }
 
@@ -78,12 +81,11 @@ impl<'a> poise::PopArgument<'a> for SkillgraphThreshold {
 impl poise::SlashArgument for SkillgraphThreshold {
 	async fn extract(
 		ctx: &serenity::Context,
-		guild: Option<serenity::GuildId>,
-		channel: Option<serenity::ChannelId>,
+		interaction: poise::ApplicationCommandOrAutocompleteInteraction<'_>,
 		value: &serde_json::Value,
 	) -> Result<Self, poise::SlashArgError> {
 		let threshold = if let Ok(threshold_str) =
-			poise::extract_slash_argument!(String, ctx, guild, channel, value).await
+			poise::extract_slash_argument!(String, ctx, interaction, value).await
 		{
 			Some(parse_wifescore_or_grade(&threshold_str).ok_or_else(|| {
 				poise::SlashArgError::Parse {

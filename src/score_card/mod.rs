@@ -217,7 +217,11 @@ pub async fn send_score_card(ctx: Context<'_>, info: ScoreCard<'_>) -> Result<()
 		})
 		// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 		.description(description)
-		.timestamp(score.datetime.as_str())
+		.timestamp(chrono::DateTime::<chrono::Utc>::from_utc(
+			chrono::NaiveDateTime::parse_from_str(score.datetime.as_str(), "%Y-%m-%d %H:%M:%S")
+				.unwrap(),
+			chrono::Utc,
+		))
 		.footer(|f| {
 			f.text(format!("Played by {}", &score.user.username,))
 				.icon_url(format!(

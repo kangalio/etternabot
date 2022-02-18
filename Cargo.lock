@@ -1599,7 +1599,6 @@ dependencies = [
 [[package]]
 name = "poise"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#7159137f301aa24f6d637fd695cbbbf075727ccd"
 dependencies = [
  "async-trait",
  "futures-core",
@@ -1614,7 +1613,6 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.1.0"
-source = "git+https://github.com/kangalioo/poise?branch=develop#7159137f301aa24f6d637fd695cbbbf075727ccd"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2106,7 +2104,7 @@ dependencies = [
 [[package]]
 name = "serenity"
 version = "0.10.10"
-source = "git+https://github.com/serenity-rs/serenity?branch=next#e70adc7187d616932e4a10f59c5de82246a08a38"
+source = "git+https://github.com/serenity-rs/serenity?branch=next#9e3b92cd3f95fbb50f96ac3af36dc7fe947fc833"
 dependencies = [
  "async-trait",
  "async-tungstenite",
