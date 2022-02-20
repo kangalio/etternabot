@@ -139,7 +139,9 @@ fn scream_back(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
 	let bot_was_screamed_at = ctx
 		.invoked_command_name()
 		.bytes()
-		.all(|b| !b.is_ascii_lowercase());
+		.all(|b| !b.is_ascii_lowercase())
+		// the dummy Context from the listener sets an empty string
+		&& !ctx.invoked_command_name().is_empty();
 
 	if bot_was_screamed_at {
 		if let Some(s) = &mut reply.content {
