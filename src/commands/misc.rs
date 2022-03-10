@@ -3,7 +3,9 @@
 use crate::{Context, Error};
 
 #[poise::command(prefix_command, track_edits)]
-pub async fn ping(ctx: Context<'_>, #[rest] args: String) -> Result<(), Error> {
+pub async fn ping(ctx: Context<'_>, #[rest] args: Option<String>) -> Result<(), Error> {
+	let args = args.as_deref().unwrap_or("");
+
 	let mut response = String::from("Pong");
 	for _ in 0..args.matches("ping").count() {
 		response += " pong";
