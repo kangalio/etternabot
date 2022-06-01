@@ -81,6 +81,7 @@ async fn listener(
 ) -> Result<(), Error> {
 	match event {
 		poise::Event::Message { new_message } => {
+			let invocation_data = tokio::sync::Mutex::new(Box::new(()) as _);
 			let ctx = poise::PrefixContext {
 				data: state,
 				discord: ctx,
@@ -91,6 +92,7 @@ async fn listener(
 				invoked_command_name: "",
 				prefix: "",
 				args: "",
+				invocation_data: &invocation_data,
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(
@@ -229,13 +231,12 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			..Default::default()
 		})
 		.token(discord_bot_token)
-		.client_settings(|client| {
-			client.intents(
-				serenity::GatewayIntents::non_privileged()
-					| serenity::GatewayIntents::GUILD_MEMBERS
-					| serenity::GatewayIntents::GUILD_PRESENCES,
-			)
-		})
+		.intents(
+			serenity::GatewayIntents::non_privileged()
+				| serenity::GatewayIntents::GUILD_MEMBERS
+				| serenity::GatewayIntents::GUILD_PRESENCES
+				| serenity::GatewayIntents::MESSAGE_CONTENT,
+		)
 		.run()
 		.await?;
 

@@ -2,7 +2,7 @@
 
 use crate::{Context, Error};
 
-#[derive(poise::SlashChoiceParameter)]
+#[derive(poise::ChoiceParameter)]
 pub enum Skillset8 {
 	#[name = "Overall"]
 	Overall,
