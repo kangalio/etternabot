@@ -76,7 +76,7 @@ async fn user_is_allowed_bot_interaction(ctx: Context<'_>) -> Result<bool, Error
 async fn listener(
 	ctx: &serenity::Context,
 	event: &poise::Event<'_>,
-	framework: &poise::Framework<State, Error>,
+	framework: poise::FrameworkContext<'_, State, Error>,
 	state: &State,
 ) -> Result<(), Error> {
 	match event {
@@ -93,6 +93,7 @@ async fn listener(
 				prefix: "",
 				args: "",
 				invocation_data: &invocation_data,
+				__non_exhaustive: (), // 🎶 I - don't - care 🎶
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(
@@ -138,45 +139,79 @@ async fn pre_command(ctx: Context<'_>) {
 }
 
 fn scream_back(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
-	let bot_was_screamed_at = ctx
-		.invoked_command_name()
-		.bytes()
-		.all(|b| !b.is_ascii_lowercase())
-		// the dummy Context from the listener sets an empty string
-		&& !ctx.invoked_command_name().is_empty();
-
-	if bot_was_screamed_at {
+	fn modify_strings(reply: &mut poise::CreateReply<'_>, f: fn(&mut String)) {
 		if let Some(s) = &mut reply.content {
-			s.make_ascii_uppercase();
+			f(s);
 		}
 		for embed in &mut reply.embeds {
 			if let Some(serde_json::Value::String(s)) = embed.0.get_mut("title") {
-				s.make_ascii_uppercase();
+				f(s);
 			}
 			if let Some(serde_json::Value::String(s)) = embed.0.get_mut("description") {
-				s.make_ascii_uppercase();
+				f(s);
 			}
 			if let Some(serde_json::Value::Object(author)) = embed.0.get_mut("author") {
 				if let Some(serde_json::Value::String(s)) = author.get_mut("name") {
-					s.make_ascii_uppercase();
+					f(s);
 				}
 			}
 			if let Some(serde_json::Value::Array(fields)) = embed.0.get_mut("fields") {
 				for field in fields {
 					if let Some(serde_json::Value::String(s)) = field.get_mut("name") {
-						s.make_ascii_uppercase();
+						f(s);
 					}
 					if let Some(serde_json::Value::String(s)) = field.get_mut("value") {
-						s.make_ascii_uppercase();
+						f(s);
 					}
 				}
 			}
 		}
 	}
+
+	let invoked_command_name = ctx.invoked_command_name();
+	// the dummy Context from the listener sets an empty string
+	if invoked_command_name.is_empty() {
+		return;
+	}
+
+	fn is_scream(s: &str) -> bool {
+		s.bytes().all(|b| !b.is_ascii_lowercase())
+	}
+	fn is_spongebob(s: &str) -> bool {
+		if let [first, rest @ ..] = s.as_bytes() {
+			let prev_was_uppercase = first.is_ascii_uppercase();
+			for c in rest {
+				if prev_was_uppercase == c.is_ascii_uppercase() {
+					return false;
+				}
+				prev_was_uppercase = c.is_ascii_uppercase();
+			}
+		} else {
+			false
+		}
+	}
+	fn make_spongebob(s: &str) -> String {
+		let mut uppercase = true;
+		s.chars()
+			.map(|c| {
+				uppercase = !uppercase;
+				match uppercase {
+					true => c.to_ascii_uppercase(),
+					false => c.to_ascii_lowercase(),
+				}
+			})
+			.collect()
+	}
+
+	if is_scream(invoked_command_name) {
+		modify_strings(reply, |s| s.make_ascii_uppercase());
+	} else if is_spongebob(invoked_command_name) {
+		modify_strings(reply, |s| *s = make_spongebob(&s));
+	}
 }
 
 pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result<(), Error> {
-	poise::Framework::build()
+	poise::Framework::builder()
 		.user_data_setup(|ctx, _ready, _| Box::pin(State::load(ctx, auth)))
 		.options(poise::FrameworkOptions {
 			commands: vec![
