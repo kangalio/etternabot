@@ -103,6 +103,10 @@ impl poise::SlashArgument for SkillgraphThreshold {
 	fn create(builder: &mut serenity::CreateApplicationCommandOption) {
 		poise::create_slash_argument!(String, builder);
 	}
+
+	fn choices() -> Vec<poise::CommandParameterChoice> {
+		Vec::new()
+	}
 }
 
 // Format multiple strings ["a", "b", "c"] into a single string "a, b and c"

@@ -105,7 +105,7 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 	}
 }
 
-async fn autocomplete_username(ctx: Context<'_>, partial: String) -> Vec<String> {
+async fn autocomplete_username(ctx: Context<'_>, partial: &str) -> Vec<String> {
 	let usernames = ctx.data().eo_usernames.fetch(ctx).await;
 
 	let partial = partial.to_lowercase();
