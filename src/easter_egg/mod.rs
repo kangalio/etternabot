@@ -1,7 +1,7 @@
 // TODO: support simultaneous casing and char changes
 
 mod casing;
-mod reverse;
+mod order;
 mod unicode;
 
 use crate::{Context, Error, State};
@@ -25,8 +25,8 @@ fn map_words(s: &mut String, f: fn(&str) -> String) {
 
 #[derive(Default, Clone)]
 struct Transformations {
+	order: Option<fn(&str) -> String>,
 	casing: Option<fn(&mut String)>,
-	reverse: bool,
 	unicode: Option<std::sync::Arc<dyn Fn(&mut String) + Send + Sync>>,
 }
 
@@ -41,26 +41,27 @@ fn detect_transformations<C>(
 		transformations.unicode = Some(f);
 	}
 
-	let command = if let Some((command, detransformed)) = reverse::detect(&s, &find_command) {
-		s = detransformed;
-		transformations.reverse = true;
+	transformations.casing = casing::detect(&s);
+	s.make_ascii_lowercase(); // normalize for the order detection
+
+	let command = if let Some((command, _detransformed, f)) = order::detect(&s, &find_command) {
+		// s = detransformed;
+		transformations.order = Some(f);
 		command
 	} else {
 		find_command(&s)?
 	};
 
-	transformations.casing = casing::detect(&s);
-
 	Some((transformations, command))
 }
 
 fn apply_transformations(transformations: &Transformations, s: &mut String) {
-	if let Some(f) = transformations.casing {
-		f(s);
+	if let Some(f) = transformations.order {
+		map_words(s, f);
 	}
 
-	if transformations.reverse {
-		map_words(s, |s| s.chars().rev().collect());
+	if let Some(f) = transformations.casing {
+		f(s);
 	}
 
 	if let Some(f) = &transformations.unicode {
@@ -170,8 +171,8 @@ pub fn reply_callback(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
 	// If there are no transformations stored, the command was dispatched via poise builtin
 	// dispatch, so only casing could have been transformed
 	let transformations = transformations.unwrap_or_else(|| Transformations {
+		order: None,
 		casing: casing::detect(invoked_command_name),
-		reverse: false,
 		unicode: None,
 	});
 
