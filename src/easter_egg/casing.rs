@@ -48,7 +48,7 @@ fn is_reverse_scream(s: &str) -> bool {
 }
 
 fn make_reverse_scream(s: &mut String) {
-	fn transform_single_word(s: &str) -> String {
+	super::map_words(s, |s| {
 		let mut is_first = true;
 		s.chars()
 			.map(|c| {
@@ -60,21 +60,7 @@ fn make_reverse_scream(s: &mut String) {
 				}
 			})
 			.collect()
-	}
-
-	let words = s
-		.split(|c: char| !c.is_alphabetic())
-		.filter(|&s| s != "")
-		.map(|word| {
-			let index = word.as_ptr() as usize - s.as_ptr() as usize;
-			let transformed = transform_single_word(word);
-			(index, transformed)
-		})
-		.collect::<Vec<_>>();
-
-	for (index, transformed) in words {
-		s.replace_range(index..index + transformed.len(), &transformed);
-	}
+	})
 }
 
 pub fn detect(template: &str) -> Option<fn(&mut String)> {

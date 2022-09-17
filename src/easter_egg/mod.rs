@@ -6,6 +6,23 @@ mod unicode;
 
 use crate::{Context, Error, State};
 
+// Utility function
+fn map_words(s: &mut String, f: fn(&str) -> String) {
+	let word_spans = s
+		.split(|c: char| !c.is_alphabetic())
+		.filter(|&s| s != "")
+		.map(|word| {
+			let index = word.as_ptr() as usize - s.as_ptr() as usize;
+			(index..index + word.len(), f(word))
+		})
+		.collect::<Vec<_>>();
+
+	// Iterate in reverse so that shifting won't mess up the later indices
+	for (span, transformed) in word_spans.into_iter().rev() {
+		s.replace_range(span, &transformed);
+	}
+}
+
 #[derive(Default, Clone)]
 struct Transformations {
 	casing: Option<fn(&mut String)>,
@@ -43,7 +60,7 @@ fn apply_transformations(transformations: &Transformations, s: &mut String) {
 	}
 
 	if transformations.reverse {
-		*s = s.chars().rev().collect();
+		map_words(s, |s| s.chars().rev().collect());
 	}
 
 	if let Some(f) = &transformations.unicode {
