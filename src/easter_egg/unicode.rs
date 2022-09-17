@@ -35,8 +35,40 @@ const FUNKY_ALPHABETS: &[&str] = &[
     "AdↄbɘꟻgHijklmᴎoqpᴙꙅTUvwxYzAdↃbƎꟻGHIJK⅃MᴎOꟼpᴙꙄTUVWXYZ",
 ];
 
-pub struct CharTransformer(pub Box<dyn Fn(&mut String) + Send + Sync>);
+/// Detects which transformation was applied to the string, returns the detransformed string and a
+/// function to apply the detected transformation to any string
+pub fn detect(
+	template: &str,
+) -> Option<(String, std::sync::Arc<dyn Fn(&mut String) + Send + Sync>)> {
+	for &funky_alphabet in FUNKY_ALPHABETS {
+		if let Some(untransformed) = template
+			.chars()
+			.map(|c| {
+				funky_alphabet
+					.chars()
+					.position(|x| x == c)
+					.map(|i| NORMAL_ALPHABET.as_bytes()[i] as char)
+			})
+			.collect::<Option<String>>()
+		{
+			let transformer = std::sync::Arc::new(move |s: &mut String| {
+				*s = s
+					.chars()
+					.map(|c| match NORMAL_ALPHABET.find(c) {
+						// unwrap_or case shouldn't happen (all alphabets are same length)
+						Some(i) => funky_alphabet.chars().nth(i).unwrap_or(' '),
+						None => c,
+					})
+					.collect()
+			});
 
+			return Some((untransformed, transformer));
+		}
+	}
+
+	None
+}
+/*
 // Using generic C instead of poise::Command to keep this module pure and innocent from outside
 // types
 pub fn char_transformer<C>(
@@ -60,9 +92,12 @@ pub fn char_transformer<C>(
 			})
 			.collect::<Option<String>>()
 		{
-			println!("{} => {}", s, untransformed);
 			if let Some(command) = find_command(&untransformed) {
+				let casing_transformer = super::casing_transformer(&untransformed);
 				let transformer = move |s: &mut String| {
+					if let Some(f) = casing_transformer {
+						f(s);
+					}
 					*s = s
 						.chars()
 						.map(|c| match NORMAL_ALPHABET.find(c) {
@@ -80,3 +115,4 @@ pub fn char_transformer<C>(
 
 	None
 }
+ */

@@ -1,11 +1,55 @@
 // TODO: support simultaneous casing and char changes
 
 mod casing;
-use casing::*;
-mod chars;
-use chars::*;
+mod reverse;
+mod unicode;
 
 use crate::{Context, Error, State};
+
+#[derive(Default, Clone)]
+struct Transformations {
+	casing: Option<fn(&mut String)>,
+	reverse: bool,
+	unicode: Option<std::sync::Arc<dyn Fn(&mut String) + Send + Sync>>,
+}
+
+fn detect_transformations<C>(
+	mut s: String,
+	find_command: impl Fn(&str) -> Option<C>,
+) -> Option<(Transformations, C)> {
+	let mut transformations = Transformations::default();
+
+	if let Some((detransformed, f)) = unicode::detect(&s) {
+		s = detransformed;
+		transformations.unicode = Some(f);
+	}
+
+	let command = if let Some((command, detransformed)) = reverse::detect(&s, &find_command) {
+		s = detransformed;
+		transformations.reverse = true;
+		command
+	} else {
+		find_command(&s)?
+	};
+
+	transformations.casing = casing::detect(&s);
+
+	Some((transformations, command))
+}
+
+fn apply_transformations(transformations: &Transformations, s: &mut String) {
+	if let Some(f) = transformations.casing {
+		f(s);
+	}
+
+	if transformations.reverse {
+		*s = s.chars().rev().collect();
+	}
+
+	if let Some(f) = &transformations.unicode {
+		f(s);
+	}
+}
 
 /// Returns true if a funky invocation was detected and executed
 pub async fn intercept_funky_invocation(error: &poise::FrameworkError<'_, State, Error>) -> bool {
@@ -27,10 +71,12 @@ pub async fn intercept_funky_invocation(error: &poise::FrameworkError<'_, State,
 				.iter()
 				.find(|c| c.name.eq_ignore_ascii_case(s))
 		};
-		if let Some((command, transformer)) = char_transformer(invoked_command_name, find_command) {
+		if let Some((transformations, command)) =
+			detect_transformations(invoked_command_name.to_string(), find_command)
+		{
 			if let Some(action) = command.prefix_action {
-				// Store the transformer, to be retrieved in the reply callback
-				*invocation_data.lock().await = Box::new(transformer);
+				// Store the transformations, to be retrieved in the reply callback
+				*invocation_data.lock().await = Box::new(transformations);
 				if let Err(e) = poise::run_invocation(poise::PrefixContext {
 					discord: ctx,
 					msg,
@@ -95,17 +141,22 @@ pub fn reply_callback(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
 		return;
 	}
 
-	// If this was an "invalid" command invocation (reverse, or unicode chars), the transform
-	// function is stored in invocation_data. Otherwise, for just silly casing, we check it
-	// now and get the transformer for that
-	if let Some(char_transformer) = ctx
-		.invocation_data::<CharTransformer>()
+	// If more than casing was transformed, poise failed to dispatch the command and called
+	// UnknownCommand, thereby invoking our custom dispatcher above which stores the detected
+	// transformations
+	let transformations = ctx
+		.invocation_data::<Transformations>()
 		// We never lock it anywhere so we can do this
 		.now_or_never()
 		.flatten()
-	{
-		modify_strings(reply, &char_transformer.0);
-	} else if let Some(casing_transformer) = casing_transformer(invoked_command_name) {
-		modify_strings(reply, &casing_transformer);
-	}
+		.map(|x| x.clone());
+	// If there are no transformations stored, the command was dispatched via poise builtin
+	// dispatch, so only casing could have been transformed
+	let transformations = transformations.unwrap_or_else(|| Transformations {
+		casing: casing::detect(invoked_command_name),
+		reverse: false,
+		unicode: None,
+	});
+
+	modify_strings(reply, &|s| apply_transformations(&transformations, s));
 }

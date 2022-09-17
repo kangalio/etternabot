@@ -77,7 +77,7 @@ fn make_reverse_scream(s: &mut String) {
 	}
 }
 
-pub fn casing_transformer(template: &str) -> Option<fn(&mut String)> {
+pub fn detect(template: &str) -> Option<fn(&mut String)> {
 	if is_scream(template) {
 		Some(make_scream)
 	} else if is_spongebob(template) {
