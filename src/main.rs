@@ -28,6 +28,8 @@ pub use state::State;
 mod cached;
 use cached::Cached;
 
+mod easter_egg;
+
 // Custom serenity prelude module
 use poise::serenity_prelude as serenity;
 

@@ -1,6 +1,8 @@
 //! This file sets up the framework, including configuration, registering all commands, registering
 //! event handlers, global error handling, framework logging
 
+use futures::FutureExt as _;
+
 use super::{commands, listeners};
 use crate::{serenity, Context, Error, State};
 
@@ -93,6 +95,8 @@ async fn listener(
 				prefix: "",
 				args: "",
 				invocation_data: &invocation_data,
+				action: |_| unreachable!(),
+				trigger: poise::MessageDispatchTrigger::MessageCreate,
 				__non_exhaustive: (), // 🎶 I - don't - care 🎶
 			};
 			#[allow(clippy::eval_order_dependence)] // ???
@@ -139,7 +143,7 @@ async fn pre_command(ctx: Context<'_>) {
 }
 
 fn scream_back(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
-	fn modify_strings(reply: &mut poise::CreateReply<'_>, f: fn(&mut String)) {
+	fn modify_strings(reply: &mut poise::CreateReply<'_>, f: &dyn Fn(&mut String)) {
 		if let Some(s) = &mut reply.content {
 			f(s);
 		}
@@ -174,40 +178,20 @@ fn scream_back(ctx: Context<'_>, reply: &mut poise::CreateReply<'_>) {
 		return;
 	}
 
-	fn is_scream(s: &str) -> bool {
-		s.bytes().all(|b| !b.is_ascii_lowercase())
-	}
-	fn is_spongebob(s: &str) -> bool {
-		if let [first, rest @ ..] = s.as_bytes() {
-			let mut prev_was_uppercase = first.is_ascii_uppercase();
-			for c in rest {
-				if prev_was_uppercase == c.is_ascii_uppercase() {
-					return false;
-				}
-				prev_was_uppercase = c.is_ascii_uppercase();
-			}
-			true
-		} else {
-			false
-		}
-	}
-	fn make_spongebob(s: &str) -> String {
-		let mut uppercase = true;
-		s.chars()
-			.map(|c| {
-				uppercase = !uppercase;
-				match uppercase {
-					true => c.to_ascii_uppercase(),
-					false => c.to_ascii_lowercase(),
-				}
-			})
-			.collect()
-	}
-
-	if is_scream(invoked_command_name) {
-		modify_strings(reply, |s| s.make_ascii_uppercase());
-	} else if is_spongebob(invoked_command_name) {
-		modify_strings(reply, |s| *s = make_spongebob(&s));
+	// If this was an "invalid" command invocation (reverse, or unicode chars), the transform
+	// function is stored in invocation_data. Otherwise, for just silly casing, we check it
+	// now and get the transformer for that
+	if let Some(char_transformer) = ctx
+		.invocation_data::<crate::easter_egg::CharTransformer>()
+		// We never lock it anywhere so we can do this
+		.now_or_never()
+		.flatten()
+	{
+		modify_strings(reply, &char_transformer.0);
+	} else if let Some(casing_transformer) =
+		crate::easter_egg::casing_transformer(invoked_command_name)
+	{
+		modify_strings(reply, &casing_transformer);
 	}
 }
 
@@ -246,9 +230,55 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 			listener: |ctx, event, framework, state| {
 				Box::pin(listener(ctx, event, framework, state))
 			},
-			on_error: |ctx| {
+			on_error: |error| {
 				Box::pin(async move {
-					if let Err(e) = poise::builtins::on_error(ctx).await {
+					if let poise::FrameworkError::UnknownCommand {
+						ctx,
+						msg,
+						prefix,
+						invoked_command_name,
+						args,
+						framework,
+						invocation_data,
+						trigger,
+					} = error
+					{
+						let find_command = |s: &str| {
+							framework
+								.options
+								.commands
+								.iter()
+								.find(|c| c.name.eq_ignore_ascii_case(s))
+						};
+						if let Some((command, transformer)) =
+							crate::easter_egg::char_transformer(invoked_command_name, find_command)
+						{
+							if let Some(action) = command.prefix_action {
+								// Store the transformer, to be retrieved in the reply callback
+								*invocation_data.lock().await = Box::new(transformer);
+								if let Err(e) = poise::run_invocation(poise::PrefixContext {
+									discord: ctx,
+									msg,
+									prefix,
+									invoked_command_name,
+									args,
+									framework,
+									command,
+									data: framework.user_data().await,
+									invocation_data,
+									trigger,
+									action,
+									__non_exhaustive: (),
+								})
+								.await
+								{
+									e.handle(&framework.options).await;
+								}
+							}
+						}
+					}
+
+					if let Err(e) = poise::builtins::on_error(error).await {
 						println!("Error while handling error: {}", e);
 					}
 				})
