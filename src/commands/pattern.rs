@@ -24,7 +24,7 @@ impl NoteskinProvider {
 				"assets/noteskin/dbz-notes.png",
 				"assets/noteskin/dbz-receptor.png",
 				"assets/noteskin/dbz-mine.png",
-			)?,
+			),
 			delta_note: Noteskin::read_pump(
 				64,
 				"assets/noteskin/deltanote-center-notes.png",
@@ -32,26 +32,26 @@ impl NoteskinProvider {
 				"assets/noteskin/deltanote-corner-notes.png",
 				"assets/noteskin/deltanote-corner-receptor.png",
 				"assets/noteskin/deltanote-mine.png",
-			)?,
+			),
 			sbz: Noteskin::read_bar(
 				64,
 				"assets/noteskin/sbz-notes.png",
 				"assets/noteskin/sbz-receptor.png",
 				"assets/noteskin/dbz-mine.png",
-			)?,
+			),
 			mbz: Noteskin::read_bar(
 				64,
 				"assets/noteskin/mbz-notes.png",
 				"assets/noteskin/mbz-receptor.png",
 				"assets/noteskin/dbz-mine.png",
-			)?,
+			),
 			lambda: {
 				let mut lambda = Noteskin::read_ldur_with_6k(
 					128,
 					"assets/noteskin/lambda-notes.png",
 					"assets/noteskin/lambda-receptor.png",
 					"assets/noteskin/lambda-mine.png",
-				)?;
+				);
 				lambda.resize_sprites(64);
 				lambda
 			},
@@ -60,7 +60,7 @@ impl NoteskinProvider {
 				"assets/noteskin/wafles-notes.png",
 				"assets/noteskin/wafles-receptor.png",
 				"assets/noteskin/wafles-mine.png",
-			)?,
+			),
 			eo_baner: Noteskin::read_ldur(
 				120,
 				"assets/noteskin/eobaner-note-left.png",
@@ -72,14 +72,14 @@ impl NoteskinProvider {
 				"assets/noteskin/eobaner-note-right.png",
 				"assets/noteskin/eobaner-receptor-right.png",
 				"assets/noteskin/eobaner-mine.png",
-			)?,
+			),
 			rustmania: {
 				let mut rustmania = Noteskin::read_ldur_with_6k(
 					224,
 					"assets/noteskin/rustmania-notes.png",
 					"assets/noteskin/rustmania-receptor.png",
 					"assets/noteskin/rustmania-mine.png",
-				)?;
+				);
 				rustmania.turn_sprites_upside_down(); // I made an oopsie in gimp
 				rustmania
 			},

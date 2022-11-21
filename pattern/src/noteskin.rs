@@ -1,5 +1,5 @@
+use crate::Warn;
 use image::GenericImageView;
-use std::convert::TryInto;
 
 fn iterate_center_column_of_texture_map(
 	texture_map: &image::RgbaImage,
@@ -20,11 +20,21 @@ fn iterate_center_column_of_texture_map(
 	})
 }
 
-/// Parameter must be a row of sprites next to each other
-fn middle_texture(texture_map: &image::RgbaImage) -> Result<image::RgbaImage, super::Error> {
-	iterate_center_column_of_texture_map(texture_map, texture_map.height() as usize)
+fn open_image(path: &str) -> image::RgbaImage {
+	image::open(path)
+		.warn()
+		.map(|img| img.to_rgba8())
+		.unwrap_or_else(|| image::RgbaImage::new(0, 0))
+}
+
+/// Image must be a row of sprites next to each other
+fn open_middle_texture(texture_map_path: &str) -> image::RgbaImage {
+	let texture_map = open_image(texture_map_path);
+	let ret = iterate_center_column_of_texture_map(&texture_map, texture_map.height() as usize)
 		.next()
-		.ok_or(super::Error::NoteskinTextureMapTooSmall)
+		.ok_or("texture map too small")
+		.warn_or_default();
+	ret
 }
 
 // Rotate a texture of a down-facing arrow to face down-left
@@ -50,6 +60,10 @@ fn snap_to_texture_index(snap: etterna::Snap) -> usize {
 		etterna::Snap::_64th => 7,
 		etterna::Snap::_192th => 7,
 	}
+}
+
+fn array_from_iter<const N: usize, T: Default>(mut iter: impl Iterator<Item = T>) -> [T; N] {
+	std::array::from_fn(|_| iter.next().unwrap_or_default())
 }
 
 enum Textures {
@@ -88,47 +102,41 @@ impl Noteskin {
 		corner_notes_path: &str,
 		corner_receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, super::Error> {
+	) -> Self {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
-		let center_receptor = middle_texture(&image::open(center_receptor_path)?.into_rgba8())?;
-		let corner_receptor = middle_texture(&image::open(corner_receptor_path)?.into_rgba8())?;
-		let center_notes = image::open(center_notes_path)?.into_rgba8();
-		let corner_notes = image::open(corner_notes_path)?.into_rgba8();
+		let mine = open_middle_texture(mine_path);
+		let center_receptor = open_middle_texture(center_receptor_path);
+		let corner_receptor = open_middle_texture(corner_receptor_path);
+		let center_notes = open_image(center_notes_path);
+		let corner_notes = open_image(corner_notes_path);
 
-		Ok(Self {
+		fn make_note_set(
+			center_note: image::RgbaImage,
+			corner_note: image::RgbaImage,
+		) -> [image::RgbaImage; 5] {
+			[
+				corner_note.clone(),
+				image::imageops::rotate90(&corner_note),
+				center_note,
+				image::imageops::rotate180(&corner_note),
+				image::imageops::rotate270(&corner_note),
+			]
+		}
+
+		Self {
 			sprite_resolution,
 			textures: Textures::Pump {
-				receptors: [
-					corner_receptor.clone(),
-					image::imageops::rotate90(&corner_receptor),
-					center_receptor,
-					image::imageops::rotate180(&corner_receptor),
-					image::imageops::rotate270(&corner_receptor),
-				],
-				notes: {
-					let boxed: Box<_> = Iterator::zip(
+				receptors: make_note_set(center_receptor, corner_receptor),
+				notes: array_from_iter(
+					Iterator::zip(
 						iterate_center_column_of_texture_map(&center_notes, sprite_resolution),
 						iterate_center_column_of_texture_map(&corner_notes, sprite_resolution),
 					)
-					.map(|(center_note, corner_note)| {
-						[
-							corner_note.clone(),
-							image::imageops::rotate90(&corner_note),
-							center_note,
-							image::imageops::rotate180(&corner_note),
-							image::imageops::rotate270(&corner_note),
-						]
-					})
-					.collect::<Vec<_>>()
-					.into_boxed_slice()
-					.try_into()
-					.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
-					*boxed
-				},
+					.map(|(center_note, corner_note)| make_note_set(center_note, corner_note)),
+				),
 				mine,
 			},
-		})
+		}
 	}
 
 	pub fn read_ldur_with_6k(
@@ -136,45 +144,34 @@ impl Noteskin {
 		notes_path: &str,
 		receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, super::Error> {
+	) -> Self {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
-		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba8())?;
-		let notes = image::open(notes_path)?.into_rgba8();
+		let mine = open_middle_texture(mine_path);
+		let receptor = open_middle_texture(receptor_path);
+		let notes = open_image(notes_path);
 
-		Ok(Self {
+		fn make_note_set(note: image::RgbaImage) -> [image::RgbaImage; 6] {
+			[
+				image::imageops::rotate90(&note),
+				note.clone(),
+				image::imageops::rotate180(&note),
+				image::imageops::rotate270(&note),
+				rotate_clockwise_by(&note, 135), // rotate down -> up-left
+				rotate_clockwise_by(&note, 225), // rotate down -> up-right
+			]
+		}
+
+		Self {
 			sprite_resolution,
 			textures: Textures::LdurWith6k {
-				receptors: [
-					image::imageops::rotate90(&receptor),
-					receptor.clone(),
-					image::imageops::rotate180(&receptor),
-					image::imageops::rotate270(&receptor),
-					rotate_clockwise_by(&receptor, 135), // rotate down -> up-left
-					rotate_clockwise_by(&receptor, 225), // rotate down -> up-right
-				],
-				notes: {
-					let boxed: Box<_> =
-						iterate_center_column_of_texture_map(&notes, sprite_resolution)
-							.map(|note| {
-								[
-									image::imageops::rotate90(&note),
-									note.clone(),
-									image::imageops::rotate180(&note),
-									image::imageops::rotate270(&note),
-									rotate_clockwise_by(&note, 135), // rotate down -> up-left
-									rotate_clockwise_by(&note, 225), // rotate down -> up-right
-								]
-							})
-							.collect::<Vec<_>>()
-							.into_boxed_slice()
-							.try_into()
-							.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
-					*boxed
-				},
+				receptors: make_note_set(receptor),
+				notes: array_from_iter(
+					iterate_center_column_of_texture_map(&notes, sprite_resolution)
+						.map(make_note_set),
+				),
 				mine,
 			},
-		})
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)] // ehhhhhhh this is fine
@@ -189,25 +186,25 @@ impl Noteskin {
 		right_note_path: &str,
 		right_receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, super::Error> {
-		Ok(Self {
+	) -> Self {
+		Self {
 			sprite_resolution,
 			textures: Textures::MonoSnapLdur {
 				notes: [
-					image::open(left_note_path)?.into_rgba8(),
-					image::open(down_note_path)?.into_rgba8(),
-					image::open(up_note_path)?.into_rgba8(),
-					image::open(right_note_path)?.into_rgba8(),
+					open_image(left_note_path),
+					open_image(down_note_path),
+					open_image(up_note_path),
+					open_image(right_note_path),
 				],
 				receptors: [
-					image::open(left_receptor_path)?.into_rgba8(),
-					image::open(down_receptor_path)?.into_rgba8(),
-					image::open(up_receptor_path)?.into_rgba8(),
-					image::open(right_receptor_path)?.into_rgba8(),
+					open_image(left_receptor_path),
+					open_image(down_receptor_path),
+					open_image(up_receptor_path),
+					open_image(right_receptor_path),
 				],
-				mine: image::open(mine_path)?.into_rgba8(),
+				mine: open_image(mine_path),
 			},
-		})
+		}
 	}
 
 	pub fn read_bar(
@@ -215,28 +212,23 @@ impl Noteskin {
 		notes_path: &str,
 		receptor_path: &str,
 		mine_path: &str,
-	) -> Result<Self, super::Error> {
+	) -> Self {
 		// we use the middle frame of the animations
-		let mine = middle_texture(&image::open(mine_path)?.into_rgba8())?;
-		let receptor = middle_texture(&image::open(receptor_path)?.into_rgba8())?;
-		let notes = image::open(notes_path)?.into_rgba8();
+		let mine = open_middle_texture(mine_path);
+		let receptor = open_middle_texture(receptor_path);
+		let notes_map = open_image(notes_path);
 
-		Ok(Self {
+		Self {
 			sprite_resolution,
 			textures: Textures::Bar {
 				receptor,
-				notes: {
-					let boxed: Box<_> =
-						iterate_center_column_of_texture_map(&notes, sprite_resolution)
-							.collect::<Vec<_>>()
-							.into_boxed_slice()
-							.try_into()
-							.map_err(|_| super::Error::NoteskinTextureMapTooSmall)?;
-					*boxed
-				},
+				notes: array_from_iter(iterate_center_column_of_texture_map(
+					&notes_map,
+					sprite_resolution,
+				)),
 				mine,
 			},
-		})
+		}
 	}
 
 	fn check_keymode(&self, lane: usize, keymode: usize) -> Result<(), super::Error> {

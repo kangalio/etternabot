@@ -9,3 +9,4 @@ image = { version = "0.23", default-features = false }
 thiserror = "1.0.20" # pattern draw Error type
 etterna = { version = "0.1.0", features = ["parallel", "serde"] }
 imageproc = "0.21.0"
+log = "0.4.17"

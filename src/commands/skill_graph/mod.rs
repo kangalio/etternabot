@@ -334,7 +334,23 @@ pub async fn accuracygraph(
 	)
 	.map_err(|e| e.to_string())?;
 
-	poise::send_reply(ctx, |f| f.attachment("output.png".into())).await?;
+	let mut content = format!(
+		"Full rating: **{:.2}**",
+		full_timeline
+			.changes
+			.last()
+			.map_or(0.0, |(_, rating)| rating.overall),
+	);
+	for &(timeline, name) in &[
+		(&aaa_timeline, "AAA-only rating"),
+		(&aaaa_timeline, "AAAA-only rating"),
+		(&aaaaa_timeline, "AAAAA-only rating"),
+	] {
+		if let Some((_, rating)) = timeline.changes.last() {
+			content += &format!("\n{}: **{:.2}**", name, rating.overall);
+		}
+	}
+	poise::send_reply(ctx, |f| f.content(content).attachment("output.png".into())).await?;
 
 	Ok(())
 }

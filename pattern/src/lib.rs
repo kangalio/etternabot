@@ -42,3 +42,32 @@ pub enum Error {
 	#[error("Holds are not supported yet")]
 	HoldsAreUnsupported,
 }
+
+trait Warn<T>: Sized {
+	#[track_caller]
+	fn warn(self) -> Option<T>;
+
+	#[track_caller]
+	fn warn_or_default(self) -> T
+	where
+		T: Default,
+	{
+		self.warn().unwrap_or_default()
+	}
+}
+impl<T, E: std::fmt::Display> Warn<T> for Result<T, E> {
+	#[track_caller]
+	fn warn(self) -> Option<T> {
+		match self {
+			Ok(x) => Some(x),
+			Err(e) => {
+				log::warn!(
+					"unexpected error: {}\n{}",
+					e,
+					std::backtrace::Backtrace::capture()
+				);
+				None
+			}
+		}
+	}
+}

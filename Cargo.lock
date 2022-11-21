@@ -1484,6 +1484,7 @@ dependencies = [
  "etterna",
  "image",
  "imageproc",
+ "log",
  "thiserror",
 ]
 
