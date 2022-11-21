@@ -17,8 +17,8 @@ pub struct NoteskinProvider {
 }
 
 impl NoteskinProvider {
-	pub fn load() -> Result<Self, PatternError> {
-		Ok(Self {
+	pub fn load() -> Self {
+		Self {
 			dbz: Noteskin::read_ldur_with_6k(
 				64,
 				"assets/noteskin/dbz-notes.png",
@@ -83,7 +83,7 @@ impl NoteskinProvider {
 				rustmania.turn_sprites_upside_down(); // I made an oopsie in gimp
 				rustmania
 			},
-		})
+		}
 	}
 }
 

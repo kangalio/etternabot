@@ -5,9 +5,10 @@
 	clippy::len_zero, // easier to read
 	clippy::tabs_in_doc_comments, // we use tabs like it or not
 	clippy::collapsible_if, // easier to read
-	clippy::eval_order_dependence, // false positives
+	clippy::mixed_read_write_in_expression, // false positives
 	clippy::needless_borrow, // no reason to fix and would litter commit history
 )]
+#![warn(clippy::unnecessary_wraps)]
 #![warn(rust_2018_idioms)]
 
 mod config;
@@ -40,6 +41,35 @@ const MISSING_REGISTRY_ENTRY_ERROR_MESSAGE: &str =
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, State, Error>;
 type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
+
+trait Warn<T>: Sized {
+	#[track_caller]
+	fn warn(self) -> Option<T>;
+
+	#[track_caller]
+	fn warn_or_default(self) -> T
+	where
+		T: Default,
+	{
+		self.warn().unwrap_or_default()
+	}
+}
+impl<T, E: std::fmt::Display> Warn<T> for Result<T, E> {
+	#[track_caller]
+	fn warn(self) -> Option<T> {
+		match self {
+			Ok(x) => Some(x),
+			Err(e) => {
+				log::warn!(
+					"unexpected error: {}\n{}",
+					e,
+					std::backtrace::Backtrace::capture()
+				);
+				None
+			}
+		}
+	}
+}
 
 #[derive(Clone)]
 pub struct Auth {
@@ -114,7 +144,7 @@ async fn autocomplete_username(ctx: Context<'_>, partial: &str) -> Vec<String> {
 	usernames
 		.iter()
 		.filter(move |username| username.starts_with(&partial))
-		.map(|s| s.clone())
+		.cloned()
 		.collect()
 }
 

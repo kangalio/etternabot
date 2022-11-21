@@ -2,7 +2,7 @@
 
 use crate::{Context, Error};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum SkillOrAcc {
 	Skillset(etterna::Skillset8),
 	Accuracy,

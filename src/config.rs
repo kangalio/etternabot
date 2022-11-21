@@ -61,7 +61,7 @@ pub struct UserRegistryEntry {
 	pub last_rating: Option<etterna::Skillsets8>,
 }
 
-#[derive(Default, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ScoresList {
 	pub scorekeys: Vec<etterna::Scorekey>,
 	pub username: String,

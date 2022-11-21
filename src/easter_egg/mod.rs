@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 // TODO: support simultaneous casing and char changes
 
 mod casing;
@@ -8,9 +10,10 @@ use crate::{Context, Error, State};
 
 // Utility function
 fn map_words(s: &mut String, f: fn(&str) -> String) {
+	#[allow(clippy::needless_collect)] // intermediate collect is needed to avoid mutating borrowed
 	let word_spans = s
 		.split(|c: char| !c.is_alphabetic())
-		.filter(|&s| s != "")
+		.filter(|&s| !s.is_empty())
 		.map(|word| {
 			let index = word.as_ptr() as usize - s.as_ptr() as usize;
 			(index..index + word.len(), f(word))

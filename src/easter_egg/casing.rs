@@ -2,6 +2,7 @@ fn is_scream(s: &str) -> bool {
 	s.bytes().all(|b| !b.is_ascii_lowercase())
 }
 
+#[allow(clippy::ptr_arg)] // we want &mut String for consistency
 fn make_scream(s: &mut String) {
 	s.make_ascii_uppercase()
 }

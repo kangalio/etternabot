@@ -2,7 +2,7 @@
 //! data that commands need, like the EtternaOnline client sessions or configuration
 
 use super::{commands, config};
-use crate::{serenity, Error};
+use crate::{serenity, Error, Warn};
 
 const EO_COOLDOWN: std::time::Duration = std::time::Duration::from_millis(1000);
 const EO_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(30000);
@@ -27,12 +27,12 @@ impl std::ops::Deref for AutoSaveGuard<'_> {
 	type Target = config::Data;
 
 	fn deref(&self) -> &Self::Target {
-		&*self.guard
+		&self.guard
 	}
 }
 impl std::ops::DerefMut for AutoSaveGuard<'_> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut *self.guard
+		&mut self.guard
 	}
 }
 impl Drop for AutoSaveGuard<'_> {
@@ -56,24 +56,25 @@ pub struct State {
 }
 
 impl State {
-	pub async fn load(ctx: &serenity::Context, auth: crate::Auth) -> Result<Self, Error> {
+	pub async fn load(ctx: &serenity::Context, auth: crate::Auth) -> Self {
 		let web_session = etternaonline_api::web::Session::new(
 			std::time::Duration::from_millis(1000),
 			Some(std::time::Duration::from_millis(300_000)), // EO takes a while for user scores
 		);
 
 		let config = config::Config::load();
-		if config
+		if let Some(channel) = config
 			.promotion_gratulations_channel
 			.to_channel(ctx)
-			.await?
-			.guild()
-			.is_none()
+			.await
+			.warn()
 		{
-			panic!("Configured promotion gratulations channel is not a valid guild channel!");
+			if channel.guild().is_none() {
+				panic!("Configured promotion gratulations channel is not a valid guild channel!");
+			}
 		}
 
-		Ok(Self {
+		Self {
 			bot_start_time: std::time::Instant::now(),
 			v1: etternaonline_api::v1::Session::new(
 				auth.eo_v1_api_key.clone(),
@@ -91,7 +92,7 @@ impl State {
 			web: web_session,
 			config,
 			data: std::sync::Mutex::new(config::Data::load()),
-			noteskin_provider: commands::NoteskinProvider::load()?,
+			noteskin_provider: commands::NoteskinProvider::load(),
 			eo_usernames: crate::Cached::new(
 				"EtternaOnline usernames",
 				|ctx| {
@@ -112,7 +113,7 @@ impl State {
 				},
 				std::time::Duration::from_secs(60 * 60 * 24), // Refresh every day at most
 			),
-		})
+		}
 	}
 
 	async fn attempt_v2_login(

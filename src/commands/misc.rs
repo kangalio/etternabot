@@ -1,6 +1,6 @@
 //! Miscellaneous "fun-fact" commands
 
-use crate::{Context, Error};
+use crate::{Context, Error, Warn};
 
 #[poise::command(prefix_command, track_edits)]
 pub async fn ping(ctx: Context<'_>, #[rest] args: Option<String>) -> Result<(), Error> {
@@ -11,7 +11,7 @@ pub async fn ping(ctx: Context<'_>, #[rest] args: Option<String>) -> Result<(), 
 		response += " pong";
 	}
 	response += "!";
-	poise::say_reply(ctx, response).await?;
+	poise::say_reply(ctx, response).await.warn();
 
 	Ok(())
 }
@@ -19,7 +19,7 @@ pub async fn ping(ctx: Context<'_>, #[rest] args: Option<String>) -> Result<(), 
 /// List servers of which the bot is a member of
 #[poise::command(prefix_command, slash_command, track_edits, hide_in_help)]
 pub async fn servers(ctx: Context<'_>) -> Result<(), Error> {
-	poise::samples::servers(ctx).await?;
+	poise::samples::servers(ctx).await.warn();
 
 	Ok(())
 }
@@ -35,14 +35,11 @@ pub async fn uptime(ctx: Context<'_>) -> Result<(), Error> {
 	let (hours, minutes) = div_mod(minutes, 60);
 	let (days, hours) = div_mod(hours, 24);
 
-	poise::say_reply(
-		ctx,
-		format!(
-			"Duration since last restart: {}d {}h {}m {}s",
-			days, hours, minutes, seconds
-		),
-	)
-	.await?;
+	let response = format!(
+		"Duration since last restart: {}d {}h {}m {}s",
+		days, hours, minutes, seconds
+	);
+	poise::say_reply(ctx, response).await.warn();
 
 	Ok(())
 }
@@ -67,14 +64,11 @@ pub async fn lookup(
 		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?
 		.clone();
 
-	poise::say_reply(
-		ctx,
-		format!(
-			"Discord: **{}** (ID {})\nEtternaOnline: **{}** (ID {})\nhttps://etternaonline.com/user/{}",
-			user.discord_username, user.discord_id, user.eo_username, user.eo_id, user.eo_username,
-		),
-	)
-	.await?;
+	let response = format!(
+		"Discord: **{}** (ID {})\nEtternaOnline: **{}** (ID {})\nhttps://etternaonline.com/user/{}",
+		user.discord_username, user.discord_id, user.eo_username, user.eo_id, user.eo_username,
+	);
+	poise::say_reply(ctx, response).await.warn();
 
 	Ok(())
 }
@@ -91,7 +85,7 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 		Some(source) => format!("> {}\n~ {}", quote.quote, source),
 		None => format!("> {}", quote.quote),
 	};
-	poise::say_reply(ctx, string).await?;
+	poise::say_reply(ctx, string).await.warn();
 
 	Ok(())
 }
@@ -103,7 +97,9 @@ pub async fn quote(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn register(ctx: Context<'_>, #[flag] global: bool) -> Result<(), Error> {
 	let _typing = ctx.defer_or_broadcast().await;
 
-	poise::samples::register_application_commands(ctx, global).await?;
+	poise::samples::register_application_commands(ctx, global)
+		.await
+		.warn();
 
 	Ok(())
 }

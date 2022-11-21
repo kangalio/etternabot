@@ -90,7 +90,7 @@ impl poise::SlashArgument for SkillgraphThreshold {
 			Some(parse_wifescore_or_grade(&threshold_str).ok_or_else(|| {
 				poise::SlashArgError::Parse {
 					error: "unknown wifescore or grade".into(),
-					input: threshold_str.into(),
+					input: threshold_str,
 				}
 			})?)
 		} else {

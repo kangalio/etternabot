@@ -97,7 +97,6 @@ async fn listener(
 				trigger: poise::MessageDispatchTrigger::MessageCreate,
 				__non_exhaustive: (), // 🎶 I - don't - care 🎶
 			};
-			#[allow(clippy::eval_order_dependence)] // ???
 			listeners::listen_message(
 				ctx,
 				user_has_manage_messages_permission(poise::Context::Prefix(ctx)).await?,
@@ -142,7 +141,7 @@ async fn pre_command(ctx: Context<'_>) {
 
 pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result<(), Error> {
 	poise::Framework::builder()
-		.user_data_setup(|ctx, _ready, _| Box::pin(State::load(ctx, auth)))
+		.user_data_setup(|ctx, _ready, _| Box::pin(async move { Ok(State::load(ctx, auth).await) }))
 		.options(poise::FrameworkOptions {
 			commands: vec![
 				commands::compare(),
