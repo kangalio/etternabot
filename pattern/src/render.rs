@@ -1,3 +1,5 @@
+use image::Pixel;
+
 use super::*;
 
 struct Sprite<'a> {
@@ -31,7 +33,7 @@ fn copy_from(
 	for i in 0..other.width() {
 		for k in 0..other.height() {
 			let p = other.get_pixel(i, k);
-			this.blend_pixel(i + x, k + y, *p);
+			this.get_pixel_mut(i + x, k + y).blend(p);
 		}
 	}
 	Ok(())

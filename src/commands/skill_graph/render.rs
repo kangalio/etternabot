@@ -26,11 +26,8 @@ fn get_skillset_color(skillset: etterna::Skillset8) -> RGBColor {
 	}
 }
 
-fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
-	chrono::Date::from_utc(
-		chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO"),
-		chrono::Utc,
-	)
+fn parsedate(string: &str) -> chrono::NaiveDate {
+	chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO")
 }
 
 struct LineSpec<I> {
@@ -42,7 +39,7 @@ struct LineSpec<I> {
 }
 
 fn generic_lines_over_time(
-	lines: &[LineSpec<impl IntoIterator<Item = (chrono::Date<chrono::Utc>, f32)> + Clone>],
+	lines: &[LineSpec<impl IntoIterator<Item = (chrono::NaiveDate, f32)> + Clone>],
 	series_label_position: SeriesLabelPosition,
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -100,7 +97,7 @@ fn generic_lines_over_time(
 			let (x, y) = line_points.next()?;
 			let next_x = match line_points.peek() {
 				Some(&(next_x, _next_y)) => next_x,
-				None => chrono::Utc::now().date(),
+				None => chrono::Utc::now().date_naive(),
 			};
 
 			Some(vec![(x, y), (next_x, y)])
@@ -138,7 +135,7 @@ fn generic_lines_over_time(
 }
 
 pub fn draw_skillsets_graph(
-	skill_timeline: &etterna::SkillTimeline<chrono::Date<chrono::Utc>>,
+	skill_timeline: &etterna::SkillTimeline<chrono::NaiveDate>,
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let mut lines = Vec::new();
@@ -162,7 +159,7 @@ pub fn draw_skillsets_graph(
 }
 
 pub fn draw_user_overalls_graph(
-	skill_timelines: &[etterna::SkillTimeline<chrono::Date<chrono::Utc>>],
+	skill_timelines: &[etterna::SkillTimeline<chrono::NaiveDate>],
 	usernames: &[&str],
 	output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -233,12 +230,12 @@ pub fn draw_accuracy_graph(
 }
 
 pub struct ScoreGraphUser {
-	pub sub_aa_timeline: Option<Vec<(chrono::Date<chrono::Utc>, u32)>>,
-	pub aa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
-	pub aaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
-	pub aaaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub sub_aa_timeline: Option<Vec<(chrono::NaiveDate, u32)>>,
+	pub aa_timeline: Vec<(chrono::NaiveDate, u32)>,
+	pub aaa_timeline: Vec<(chrono::NaiveDate, u32)>,
+	pub aaaa_timeline: Vec<(chrono::NaiveDate, u32)>,
 	/// Only shown in legend if not empty
-	pub aaaaa_timeline: Vec<(chrono::Date<chrono::Utc>, u32)>,
+	pub aaaaa_timeline: Vec<(chrono::NaiveDate, u32)>,
 	pub username: String,
 }
 

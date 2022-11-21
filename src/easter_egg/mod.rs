@@ -78,13 +78,15 @@ pub async fn intercept_funky_invocation(error: &poise::FrameworkError<'_, State,
 		ctx,
 		msg,
 		prefix,
-		invoked_command_name,
-		args,
+		msg_content,
 		framework,
 		invocation_data,
 		trigger,
 	} = *error
 	{
+		let (invoked_command_name, args) =
+			msg_content.split_at(msg_content.find(' ').unwrap_or(msg_content.len()));
+
 		let find_command = |s: &str| {
 			framework
 				.options
@@ -99,7 +101,7 @@ pub async fn intercept_funky_invocation(error: &poise::FrameworkError<'_, State,
 				// Store the transformations, to be retrieved in the reply callback
 				*invocation_data.lock().await = Box::new(transformations);
 				if let Err(e) = poise::run_invocation(poise::PrefixContext {
-					discord: ctx,
+					serenity_context: ctx,
 					msg,
 					prefix,
 					invoked_command_name,
@@ -110,6 +112,7 @@ pub async fn intercept_funky_invocation(error: &poise::FrameworkError<'_, State,
 					invocation_data,
 					trigger,
 					action,
+					parent_commands: &[],
 					__non_exhaustive: (),
 				})
 				.await

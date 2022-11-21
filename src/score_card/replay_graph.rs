@@ -32,7 +32,7 @@ fn deviation_to_color(deviation: f32) -> RGBColor {
 }
 
 struct IconStamper {
-	icon: BitMapElement<'static, (i32, i32), plotters_bitmap::bitmap_pixel::RGBPixel>,
+	icon: BitMapElement<'static, (i32, i32), plotters::backend::RGBPixel>,
 }
 
 impl IconStamper {

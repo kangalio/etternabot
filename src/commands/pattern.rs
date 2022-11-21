@@ -349,7 +349,10 @@ pub async fn pattern(
 
 	let mut img_bytes = Vec::with_capacity(1_000_000); // preallocate 1 MB for the img
 	image::DynamicImage::ImageRgba8(generated_pattern)
-		.write_to(&mut img_bytes, image::ImageOutputFormat::Png)
+		.write_to(
+			&mut std::io::Cursor::new(&mut img_bytes),
+			image::ImageOutputFormat::Png,
+		)
 		.map_err(pattern_draw::Error::ImageError)?;
 
 	let image_attachment = serenity::AttachmentType::Bytes {

@@ -1,5 +1,3 @@
-use image::GenericImage as _;
-
 mod parse;
 pub use parse::*;
 
@@ -43,6 +41,18 @@ pub enum Error {
 	HoldsAreUnsupported,
 }
 
+fn trimmed_backtrace() -> String {
+	let mut bt = std::backtrace::Backtrace::capture().to_string();
+
+	if let Some(i) = bt.find("tokio::runtime::task::core::Core<T,S>::poll::{{closure}}") {
+		if let Some(i) = bt[..i].rfind('\n') {
+			bt.truncate(i);
+		}
+	}
+
+	bt
+}
+
 trait Warn<T>: Sized {
 	#[track_caller]
 	fn warn(self) -> Option<T>;
@@ -61,11 +71,7 @@ impl<T, E: std::fmt::Display> Warn<T> for Result<T, E> {
 		match self {
 			Ok(x) => Some(x),
 			Err(e) => {
-				log::warn!(
-					"unexpected error: {}\n{}",
-					e,
-					std::backtrace::Backtrace::capture()
-				);
+				log::warn!("unexpected error: {}\n{}", e, trimmed_backtrace());
 				None
 			}
 		}

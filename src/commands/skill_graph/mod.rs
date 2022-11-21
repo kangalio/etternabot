@@ -6,11 +6,8 @@ use poise::serenity_prelude as serenity;
 
 use crate::{Context, Error};
 
-fn parsedate(string: &str) -> chrono::Date<chrono::Utc> {
-	chrono::Date::from_utc(
-		chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO"),
-		chrono::Utc,
-	)
+fn parsedate(string: &str) -> chrono::NaiveDate {
+	chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO")
 }
 
 #[derive(Debug)]
@@ -373,7 +370,7 @@ pub async fn scoregraph(
 	fn calculate_timeline(
 		scores: &[etternaonline_api::web::UserScore],
 		range: std::ops::Range<etterna::Wifescore>,
-	) -> Vec<(chrono::Date<chrono::Utc>, u32)> {
+	) -> Vec<(chrono::NaiveDate, u32)> {
 		use itertools::Itertools;
 
 		let mut num_total_scores = 0;

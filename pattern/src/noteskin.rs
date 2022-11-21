@@ -24,7 +24,7 @@ fn open_image(path: &str) -> image::RgbaImage {
 	image::open(path)
 		.warn()
 		.map(|img| img.to_rgba8())
-		.unwrap_or_else(|| image::RgbaImage::new(0, 0))
+		.unwrap_or_else(|| image::RgbaImage::new(64, 64))
 }
 
 /// Image must be a row of sprites next to each other

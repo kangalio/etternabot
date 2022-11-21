@@ -7,7 +7,7 @@ use crate::{serenity, Context, Error, State};
 // Returns None if msg was sent in DMs
 async fn get_guild_member(ctx: Context<'_>) -> Result<Option<serenity::Member>, Error> {
 	Ok(match ctx.guild_id() {
-		Some(guild_id) => Some(guild_id.member(ctx.discord(), ctx.author()).await?),
+		Some(guild_id) => Some(guild_id.member(ctx, ctx.author()).await?),
 		None => None,
 	})
 }
@@ -35,12 +35,12 @@ async fn get_guild_permissions(ctx: Context<'_>) -> Result<Option<serenity::Perm
 		// `guild_member.permissions(&ctx.cache)` / `guild.member_permissions(msg.author.id)` can't
 		// be trusted - they return LITERALLY WRONG RESULTS AILUWRHDLIAUEHFISAUEHGLSIREUFHGLSIURHS
 		// See this thread on the serenity dev server: https://discord.com/channels/381880193251409931/381912587505500160/787965510124830790
-		let permissions = if let Some(guild) = guild_id.to_guild_cached(&ctx.discord()) {
+		let permissions = if let Some(guild) = guild_id.to_guild_cached(ctx) {
 			// try get guild data from cache and calculate permissions ourselves
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		} else {
 			// request guild data from http and calculate permissions ourselves
-			let guild = &guild_id.to_partial_guild(&ctx.discord()).await?;
+			let guild = &guild_id.to_partial_guild(ctx).await?;
 			aggregate_role_permissions(&guild_member, guild.owner_id, &guild.roles)
 		};
 
@@ -84,7 +84,7 @@ async fn listener(
 			let invocation_data = tokio::sync::Mutex::new(Box::new(()) as _);
 			let ctx = poise::PrefixContext {
 				data: state,
-				discord: ctx,
+				serenity_context: ctx,
 				msg: new_message,
 				framework,
 				// Just supply dummy values; we won't read these fields anyways
@@ -95,6 +95,7 @@ async fn listener(
 				invocation_data: &invocation_data,
 				action: |_| unreachable!(),
 				trigger: poise::MessageDispatchTrigger::MessageCreate,
+				parent_commands: &[],
 				__non_exhaustive: (), // 🎶 I - don't - care 🎶
 			};
 			listeners::listen_message(
@@ -124,7 +125,7 @@ async fn pre_command(ctx: Context<'_>) {
 			);
 		}
 		poise::Context::Prefix(ctx) => {
-			let guild_name = match ctx.msg.guild(ctx.discord) {
+			let guild_name = match ctx.msg.guild(ctx.serenity_context) {
 				Some(guild) => guild.name,
 				None => "<unknown>".into(),
 			};
@@ -141,7 +142,7 @@ async fn pre_command(ctx: Context<'_>) {
 
 pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result<(), Error> {
 	poise::Framework::builder()
-		.user_data_setup(|ctx, _ready, _| Box::pin(async move { Ok(State::load(ctx, auth).await) }))
+		.setup(|ctx, _ready, _| Box::pin(async move { Ok(State::load(ctx, auth).await) }))
 		.options(poise::FrameworkOptions {
 			commands: vec![
 				commands::compare(),
@@ -171,7 +172,7 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 				commands::details(),
 				commands::scoregraph(),
 			],
-			listener: |ctx, event, framework, state| {
+			event_handler: |ctx, event, framework, state| {
 				Box::pin(listener(ctx, event, framework, state))
 			},
 			on_error: |error| {

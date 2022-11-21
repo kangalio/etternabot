@@ -89,19 +89,19 @@ pub async fn listen_message(
 		&& !has_manage_messages_permission
 	{
 		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
-			ctx.msg.delete(ctx.discord).await?;
+			ctx.msg.delete(ctx.serenity_context).await?;
 			let notice_msg = ctx
 				.msg
 				.channel_id
 				.say(
-					ctx.discord,
+					ctx.serenity_context,
 					format!(
 					"Only links and attachments are allowed in this channel. For discussions use <#{}>",
 					ctx.data.config.work_in_progress_discussion_channel),
 				)
 				.await?;
 			tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-			notice_msg.delete(ctx.discord).await?;
+			notice_msg.delete(ctx.serenity_context).await?;
 			return Ok(());
 		}
 	}
@@ -110,17 +110,17 @@ pub async fn listen_message(
 		&& !has_manage_messages_permission
 	{
 		if !contains_link(&ctx.msg.content) && ctx.msg.attachments.is_empty() {
-			ctx.msg.delete(ctx.discord).await?;
+			ctx.msg.delete(ctx.serenity_context).await?;
 			let notice_msg = ctx
 				.msg
 				.channel_id
 				.say(
-					ctx.discord,
+					ctx.serenity_context,
 					"Only links and attachments are allowed in this channel.",
 				)
 				.await?;
 			tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-			notice_msg.delete(ctx.discord).await?;
+			notice_msg.delete(ctx.serenity_context).await?;
 			return Ok(());
 		}
 	}
