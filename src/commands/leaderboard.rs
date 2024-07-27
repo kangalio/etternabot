@@ -114,7 +114,7 @@ pub async fn aroundme(
 		.find(|entry| entry.username.eq_ignore_ascii_case(&username))
 		.or_else(|| entries.iter().find(|entry| entry.rank == rank)) // fallback 1
 		.or_else(|| entries.get(0)) // fallback 2
-		.ok_or("Error when retrieving leaderboard entries")?; // welp we did everything we could
+		.ok_or_else(|| anyhow::anyhow!("Error when retrieving leaderboard entries"))?; // welp we did everything we could
 
 	let mut output = String::from("```c\n");
 	for entry in &entries {

@@ -54,11 +54,13 @@ pub async fn rs(
 		)
 		.await?
 		.scores;
-	let score = latest_scores.first().ok_or("User has no scores")?;
+	let score = latest_scores
+		.first()
+		.ok_or_else(|| anyhow::anyhow!("User has no scores"))?;
 	let scorekey = &score
 		.validity_dependant
 		.as_ref()
-		.ok_or("Latest score is invalid")?
+		.ok_or_else(|| anyhow::anyhow!("Latest score is invalid"))?
 		.scorekey;
 
 	crate::send_score_card(
@@ -93,7 +95,7 @@ async fn get_random_score(
 		.user_registry
 		.iter_mut()
 		.find(|user| user.eo_username.eq_ignore_ascii_case(&username))
-		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?;
+		.ok_or_else(|| anyhow::anyhow!(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE))?;
 
 	let scores = if let Some(last_known_num_scores) = last_known_num_scores {
 		// choose a random score
@@ -141,7 +143,7 @@ async fn get_random_score(
 		.scores
 		.into_iter()
 		.next()
-		.ok_or_else(|| "A score was requested from EO but none was sent".into())
+		.ok_or_else(|| anyhow::anyhow!("A score was requested from EO but none was sent"))
 }
 
 /// Show a random score

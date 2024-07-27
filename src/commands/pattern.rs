@@ -259,14 +259,16 @@ pub async fn pattern(
 		}
 
 		let notes = match arrowvortex_clipboard::decode(full_pattern.as_bytes())
-			.map_err(|e| format!("Failed to decode ArrowVortex pattern: {}", e))?
+			.map_err(|e| anyhow::anyhow!("Failed to decode ArrowVortex pattern: {}", e))?
 		{
 			arrowvortex_clipboard::DecodeResult::RowBasedNotes(notes) => notes,
 			arrowvortex_clipboard::DecodeResult::TimeBasedNotes(_) => {
-				return Err("Please change to row-based mode before copying the notes".into())
+				return Err(anyhow::anyhow!(
+					"Please change to row-based mode before copying the notes"
+				))
 			}
 			arrowvortex_clipboard::DecodeResult::TempoEvents(_) => {
-				return Err("Please paste note data, not tempo data".into())
+				return Err(anyhow::anyhow!("Please paste note data, not tempo data"))
 			}
 		};
 
@@ -385,7 +387,7 @@ pub async fn scrollset(
 	let scroll = match scroll.to_lowercase().as_str() {
 		"down" | "downscroll" | "reverse" => etterna::ScrollDirection::Downscroll,
 		"up" | "upscroll" => etterna::ScrollDirection::Upscroll,
-		_ => return Err(format!("No such scroll '{}'", scroll).into()),
+		_ => return Err(anyhow::anyhow!("No such scroll '{}'", scroll)),
 	};
 
 	ctx.data().lock_data().set_scroll(ctx.author().id, scroll);

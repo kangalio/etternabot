@@ -42,7 +42,7 @@ fn generic_lines_over_time(
 	lines: &[LineSpec<impl IntoIterator<Item = (chrono::NaiveDate, f32)> + Clone>],
 	series_label_position: SeriesLabelPosition,
 	output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), crate::Error> {
 	assert!(lines.len() >= 1);
 
 	let label_text_style = TextStyle {
@@ -62,12 +62,12 @@ fn generic_lines_over_time(
 		.iter()
 		.filter_map(|line| Some(line.points.clone().into_iter().next()?.0))
 		.min()
-		.ok_or("Empty timeline")?;
+		.ok_or_else(|| anyhow::anyhow!("Empty timeline"))?;
 	let right_bound = lines
 		.iter()
 		.filter_map(|line| Some(line.points.clone().into_iter().last()?.0))
 		.max()
-		.ok_or("Empty timeline")?;
+		.ok_or_else(|| anyhow::anyhow!("Empty timeline"))?;
 	let upper_bound = f32_max(
 		lines
 			.iter()
@@ -137,7 +137,7 @@ fn generic_lines_over_time(
 pub fn draw_skillsets_graph(
 	skill_timeline: &etterna::SkillTimeline<chrono::NaiveDate>,
 	output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), crate::Error> {
 	let mut lines = Vec::new();
 	for ss in etterna::Skillset8::iter() {
 		lines.push(LineSpec {
@@ -162,7 +162,7 @@ pub fn draw_user_overalls_graph(
 	skill_timelines: &[etterna::SkillTimeline<chrono::NaiveDate>],
 	usernames: &[&str],
 	output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), crate::Error> {
 	assert_eq!(skill_timelines.len(), usernames.len());
 
 	const COLOR_MAP: &[RGBColor] = &[
@@ -203,7 +203,7 @@ pub fn draw_accuracy_graph(
 	aaaa_timeline: &etterna::SkillTimeline<&str>,
 	aaaaa_timeline: &etterna::SkillTimeline<&str>,
 	output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), crate::Error> {
 	let mut lines = Vec::new();
 	for (skill_timeline, name, color) in &[
 		(full_timeline, "All scores", RGBColor(0x66, 0xCC, 0x66)),
@@ -247,10 +247,7 @@ fn lerp_color(a: RGBColor, b: RGBColor, t: f32) -> RGBColor {
 	)
 }
 
-pub fn draw_score_graph(
-	users: &[ScoreGraphUser],
-	output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn draw_score_graph(users: &[ScoreGraphUser], output_path: &str) -> Result<(), crate::Error> {
 	assert!(!users.is_empty());
 
 	const COLOR_MAP: &[RGBColor] = &[

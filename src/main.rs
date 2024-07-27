@@ -38,7 +38,7 @@ const ETTERNA_COLOR: serenity::Color = serenity::Color::from_rgb(78, 0, 146);
 const MISSING_REGISTRY_ENTRY_ERROR_MESSAGE: &str =
 	"User not found in registry (`+userset` must have been called at least once)";
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
+type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, State, Error>;
 type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
 
@@ -131,8 +131,10 @@ fn no_such_user_or_skillset(error: etternaonline_api::Error) -> Error {
 	match error {
 		etternaonline_api::Error::UserNotFound {
 			name: Some(username),
-		} => format!("No such user or skillset \"{}\"", username).into(),
-		etternaonline_api::Error::UserNotFound { name: None } => "No such user or skillset".into(),
+		} => anyhow::anyhow!("No such user or skillset \"{}\"", username),
+		etternaonline_api::Error::UserNotFound { name: None } => {
+			anyhow::anyhow!("No such user or skillset")
+		}
 		other => other.into(),
 	}
 }
@@ -150,6 +152,7 @@ async fn autocomplete_username(ctx: Context<'_>, partial: &str) -> Vec<String> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+	dotenvy::dotenv().warn();
 	env_logger::init();
 
 	fn env_var<T: std::str::FromStr>(name: &str) -> Result<T, Error>
@@ -157,9 +160,9 @@ async fn main() -> Result<(), Error> {
 		T::Err: std::fmt::Display,
 	{
 		Ok(std::env::var(name)
-			.map_err(|_| format!("Invalid/missing {}", name))?
+			.map_err(|_| anyhow::anyhow!("Invalid/missing {}", name))?
 			.parse()
-			.map_err(|e| format!("Invalid {}: {}", name, e))?)
+			.map_err(|e| anyhow::anyhow!("Invalid {}: {}", name, e))?)
 	}
 
 	let auth = crate::Auth {

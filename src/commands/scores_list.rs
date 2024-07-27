@@ -235,12 +235,14 @@ pub async fn details(
 		let scores_list = data
 			.last_scores_list
 			.get(&ctx.channel_id())
-			.ok_or("No score list has been posted in this channel")?;
+			.ok_or_else(|| anyhow::anyhow!("No score list has been posted in this channel"))?;
 
 		let scorekey = position
 			.checked_sub(1)
 			.and_then(|i| scores_list.scorekeys.get(i))
-			.ok_or_else(|| format!("Enter a number between 1-{}", scores_list.scorekeys.len()))?;
+			.ok_or_else(|| {
+				anyhow::anyhow!("Enter a number between 1-{}", scores_list.scorekeys.len())
+			})?;
 		(scorekey.clone(), scores_list.username.clone())
 	};
 

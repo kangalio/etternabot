@@ -61,7 +61,7 @@ pub async fn lookup(
 			user.discord_username
 				.eq_ignore_ascii_case(&discord_username)
 		})
-		.ok_or(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE)?
+		.ok_or_else(|| anyhow::anyhow!(crate::MISSING_REGISTRY_ENTRY_ERROR_MESSAGE))?
 		.clone();
 
 	let response = format!(

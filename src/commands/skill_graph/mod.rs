@@ -123,7 +123,7 @@ async fn generic_download_timelines<T>(
 	assert!(usernames.len() >= 1);
 
 	if usernames.len() > 20 {
-		return Err("Relax, now. 20 users ought to be enough".into());
+		return Err(anyhow::anyhow!("Relax, now. 20 users ought to be enough"));
 	}
 
 	let wait_msg = format!(
@@ -200,10 +200,10 @@ async fn skillgraph_inner(
 
 	if skill_timelines.len() == 1 {
 		render::draw_skillsets_graph(&skill_timelines[0], "output.png")
-			.map_err(|e| e.to_string())?;
+			.map_err(|e| anyhow::anyhow!(e))?;
 	} else {
 		render::draw_user_overalls_graph(&skill_timelines, &usernames, "output.png")
-			.map_err(|e| e.to_string())?;
+			.map_err(|e| anyhow::anyhow!(e))?;
 	}
 
 	poise::send_reply(ctx, |f| f.attachment("output.png".into())).await?;
@@ -329,7 +329,7 @@ pub async fn accuracygraph(
 		&aaaaa_timeline,
 		"output.png",
 	)
-	.map_err(|e| e.to_string())?;
+	.map_err(|e| anyhow::anyhow!(e))?;
 
 	let mut content = format!(
 		"Full rating: **{:.2}**",
@@ -417,7 +417,7 @@ pub async fn scoregraph(
 		})
 		.await?;
 
-	render::draw_score_graph(&score_timelines, "output.png").map_err(|e| e.to_string())?;
+	render::draw_score_graph(&score_timelines, "output.png").map_err(|e| anyhow::anyhow!(e))?;
 
 	poise::send_reply(ctx, |f| {
 		f.attachment("output.png".into());

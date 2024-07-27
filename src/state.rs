@@ -50,6 +50,7 @@ pub struct State {
 	pub v1: etternaonline_api::v1::Session,
 	v2_session: tokio::sync::Mutex<Option<etternaonline_api::v2::Session>>,
 	pub web: etternaonline_api::web::Session,
+	pub eo2: eo2::Client,
 	pub noteskin_provider: commands::NoteskinProvider,
 	// All lowercase
 	pub eo_usernames: crate::Cached<Vec<String>>,
@@ -88,6 +89,7 @@ impl State {
 					None
 				}
 			}),
+			eo2: eo2::Client::new(),
 			auth,
 			web: web_session,
 			config,
@@ -158,7 +160,7 @@ impl State {
 						"Can't complete this request because EO login failed ({})",
 						e
 					);
-					Err(e.into())
+					Err(anyhow::anyhow!(e))
 				}
 			}
 		}
@@ -192,7 +194,7 @@ impl State {
 
 				Ok(discord_user.name.to_owned())
 			}
-			Err(etternaonline_api::Error::UserNotFound { name: _ }) => Err(format!(
+			Err(etternaonline_api::Error::UserNotFound { name: _ }) => Err(anyhow::anyhow!(
 				"User {} not found on EO. Please manually specify your EtternaOnline username with `+userset`",
 				discord_user.name.to_owned()
 			)

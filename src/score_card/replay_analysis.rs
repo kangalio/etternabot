@@ -118,7 +118,7 @@ pub fn do_replay_analysis(
 	)
 	.transpose()?;
 	if let Err(e) = r {
-		return Some(Err(e.into()));
+		return Some(Err(anyhow::anyhow!(e)));
 	}
 
 	let (mean_offset, replay_zero_mean) = adjust_offset(replay);

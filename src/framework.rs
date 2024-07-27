@@ -181,6 +181,10 @@ pub async fn run_framework(auth: crate::Auth, discord_bot_token: &str) -> Result
 						return;
 					}
 
+					if let poise::FrameworkError::Command { error, ctx } = &error {
+						let error: &anyhow::Error = error;
+						log::error!("{:?}", error);
+					}
 					if let Err(e) = poise::builtins::on_error(error).await {
 						println!("Error while handling error: {}", e);
 					}
