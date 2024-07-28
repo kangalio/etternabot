@@ -217,7 +217,7 @@ pub async fn send_score_card(ctx: Context<'_>, info: ScoreCard<'_>) -> Result<()
 		})
 		// .thumbnail(format!("https://etternaonline.com/avatars/{}", score.user.avatar)) // takes too much space
 		.description(description)
-		.timestamp(chrono::DateTime::<chrono::Utc>::from_utc(
+		.timestamp(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
 			chrono::NaiveDateTime::parse_from_str(score.datetime.as_str(), "%Y-%m-%d %H:%M:%S")
 				.unwrap(),
 			chrono::Utc,

@@ -7,7 +7,8 @@ use poise::serenity_prelude as serenity;
 use crate::{Context, Error};
 
 fn parsedate(string: &str) -> chrono::NaiveDate {
-	chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d").expect("Invalid date from EO")
+	chrono::NaiveDate::parse_from_str(string.trim(), "%Y-%m-%d %H:%M:%S")
+		.expect("Invalid date from EO")
 }
 
 #[derive(Debug)]
@@ -118,7 +119,7 @@ fn format_name_list(names: &[&str]) -> String {
 async fn generic_download_timelines<T>(
 	ctx: Context<'_>,
 	usernames: &[&str],
-	f: impl Fn(&str, &[etternaonline_api::web::UserScore]) -> T,
+	f: impl Fn(&str, &[eo2::Score]) -> T,
 ) -> Result<Vec<T>, Error> {
 	assert!(usernames.len() >= 1);
 
@@ -135,34 +136,24 @@ async fn generic_download_timelines<T>(
 	#[allow(clippy::needless_lifetimes)] // false positive
 	async fn download_timeline<'a, T>(
 		username: &str,
-		web_session: &etternaonline_api::web::Session,
-		storage: &'a mut Option<etternaonline_api::web::UserScores>,
-		f: impl Fn(&str, &[etternaonline_api::web::UserScore]) -> T,
+		eo2: &eo2::Client,
+		storage: &'a mut Option<Vec<eo2::Score>>,
+		f: impl Fn(&str, &[eo2::Score]) -> T,
 	) -> Result<T, Error> {
-		let user_id = web_session.user_details(&username).await?.user_id;
-		let scores = web_session
-			.user_scores(
-				user_id,
-				..,
-				None,
-				etternaonline_api::web::UserScoresSortBy::Date,
-				etternaonline_api::web::SortDirection::Ascending,
-				true,
-			)
-			.await?;
+		let scores = eo2.scores(username, eo2::ScoresRequest::default()).await?;
 
 		*storage = Some(scores);
 		let scores = storage.as_ref().expect("impossible");
 
-		Ok(f(username, &scores.scores))
+		Ok(f(username, &scores))
 	}
 
 	use futures::{StreamExt, TryStreamExt};
 
-	let mut storages: Vec<Option<etternaonline_api::web::UserScores>> =
+	let mut storages: Vec<Option<Vec<eo2::Score>>> =
 		(0..usernames.len()).map(|_| None).collect::<Vec<_>>();
 	let timelines = futures::stream::iter(usernames.iter().copied().zip(&mut storages))
-		.then(|(username, storage)| download_timeline(username, &ctx.data().web, storage, &f))
+		.then(|(username, storage)| download_timeline(username, &ctx.data().eo2, storage, &f))
 		// uncommenting this borks Rust's async :/
 		// .buffered(3) // have up to three parallel connections
 		.try_collect::<Vec<_>>()
@@ -183,15 +174,12 @@ async fn skillgraph_inner(
 		etterna::SkillTimeline::calculate(
 			scores.iter().filter_map(|score| {
 				if let Some(threshold) = threshold.0 {
-					if score.wifescore < threshold {
+					if score.wife < threshold {
 						return None;
 					}
 				}
 
-				Some((
-					parsedate(&score.date),
-					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
-				))
+				Some((parsedate(&score.datetime), score.skillsets7()))
 			}),
 			false,
 		)
@@ -285,32 +273,22 @@ pub async fn accuracygraph(
 
 	let scores = ctx
 		.data()
-		.web
-		.user_scores(
-			ctx.data().web.user_details(&username).await?.user_id,
-			..,
-			None,
-			etternaonline_api::web::UserScoresSortBy::Date,
-			etternaonline_api::web::SortDirection::Ascending,
-			false, // exclude invalid
-		)
+		.eo2
+		.scores(&username, eo2::ScoresRequest::default())
 		.await?;
 
 	fn calculate_skill_timeline(
-		scores: &etternaonline_api::web::UserScores,
+		scores: &[eo2::Score],
 		threshold: Option<etterna::Wifescore>,
 	) -> etterna::SkillTimeline<&str> {
 		etterna::SkillTimeline::calculate(
-			scores.scores.iter().filter_map(|score| {
+			scores.iter().filter_map(|score| {
 				if let Some(threshold) = threshold {
-					if score.wifescore < threshold {
+					if score.wife < threshold {
 						return None;
 					}
 				}
-				Some((
-					score.date.as_str(),
-					score.validity_dependant.as_ref()?.ssr.to_skillsets7(),
-				))
+				Some((&*score.datetime, score.skillsets7()))
 			}),
 			false,
 		)
@@ -368,7 +346,7 @@ pub async fn scoregraph(
 	let usernames: Vec<&str> = usernames.iter().map(|x| x.as_str()).collect();
 
 	fn calculate_timeline(
-		scores: &[etternaonline_api::web::UserScore],
+		scores: &[eo2::Score],
 		range: std::ops::Range<etterna::Wifescore>,
 	) -> Vec<(chrono::NaiveDate, u32)> {
 		use itertools::Itertools;
@@ -376,8 +354,8 @@ pub async fn scoregraph(
 		let mut num_total_scores = 0;
 		scores
 			.iter()
-			.filter(|s| range.contains(&s.wifescore))
-			.group_by(|s| s.date.as_str())
+			.filter(|s| range.contains(&s.wife))
+			.group_by(|s| s.datetime.as_str())
 			.into_iter()
 			.map(|(day, scores)| {
 				num_total_scores += scores.count() as u32;

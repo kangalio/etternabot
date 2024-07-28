@@ -42,7 +42,7 @@ type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, State, Error>;
 type PrefixContext<'a> = poise::PrefixContext<'a, State, Error>;
 
-trait Warn<T>: Sized {
+pub trait Warn<T>: Sized {
 	#[track_caller]
 	fn warn(self) -> Option<T>;
 

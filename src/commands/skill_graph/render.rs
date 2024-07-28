@@ -80,6 +80,8 @@ fn generic_lines_over_time(
 		.margin(10)
 		.build_cartesian_2d(left_bound..right_bound, 0.0..upper_bound)?;
 
+	dbg!(left_bound, right_bound);
+
 	chart
 		.configure_mesh()
 		.bold_line_style(&WHITE.mix(0.3))

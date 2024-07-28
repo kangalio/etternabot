@@ -1,6 +1,6 @@
 //! All commands that show a list of scores
 
-use crate::{Context, Error};
+use crate::{Context, Error, Warn as _};
 
 #[derive(PartialEq, Eq)]
 pub enum SkillOrAcc {
@@ -78,7 +78,13 @@ async fn respond_score_list(
 	}
 	response += "```";
 
-	let country_code = ctx.data().v1.user_data(&username).await?.country_code;
+	let country_code = ctx
+		.data()
+		.v1
+		.user_data(&username)
+		.await
+		.warn()
+		.map_or(None, |u| u.country_code);
 
 	poise::send_reply(ctx, |m| {
 		m.embed(|e| {
@@ -202,15 +208,26 @@ pub async fn lastsession(
 		None => ctx.data().get_eo_username(ctx.author()).await?,
 	};
 
-	let scores = ctx.data().v2().await?.user_latest_scores(&username).await?;
+	let scores = ctx
+		.data()
+		.eo2
+		.scores(
+			&username,
+			eo2::ScoresRequest {
+				ordering: eo2::ScoresOrdering::DatetimeDescending,
+				limit: Some(10),
+				..Default::default()
+			},
+		)
+		.await?;
 	let scores = scores
 		.into_iter()
 		.map(|s| ScoreEntry {
 			rate: s.rate,
-			scorekey: s.scorekey,
-			song_name: s.song_name,
-			ssr_overall: s.ssr_overall,
-			wifescore: s.wifescore,
+			scorekey: s.key,
+			song_name: s.song.name,
+			ssr_overall: s.overall,
+			wifescore: s.wife,
 		})
 		.collect();
 
