@@ -34,20 +34,23 @@ where
 		.ok_or(serde::de::Error::custom(format!("invalid rate: {}", raw,)))
 }
 
+fn deserialize_stringified_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let raw = String::deserialize(deserializer)?;
+
+	raw.parse().map_err(serde::de::Error::custom)
+}
+
 #[derive(serde::Deserialize)]
 pub struct Score {
 	pub id: u32,
 	#[serde(deserialize_with = "deserialize_scorekey")]
 	pub key: etterna::Scorekey,
 
-	pub overall: f32,
-	pub stream: f32,
-	pub jumpstream: f32,
-	pub handstream: f32,
-	pub jacks: f32,
-	pub chordjacks: f32,
-	pub stamina: f32,
-	pub technical: f32,
+	#[serde(flatten)]
+	pub ssr: Skillsets8,
 	/// Max = 100.0
 	#[serde(deserialize_with = "deserialize_wife")]
 	pub wife: etterna::Wifescore,
@@ -80,7 +83,72 @@ pub struct Score {
 	pub song: Song,
 }
 
-impl Score {
+#[derive(serde::Deserialize)]
+pub struct Song {
+	pub name: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct User {
+	pub username: String,
+	pub bio: String,
+	pub country: String,
+	pub rank: u32,
+	pub skillset_ranks: SkillsetRanks7,
+	#[serde(flatten)]
+	pub skillsets: Skillsets8,
+	pub roles: Vec<String>,
+	pub supporter: bool,
+	pub avatar: String,
+}
+
+impl User {
+	pub fn rank(&self) -> etterna::UserRank {
+		etterna::UserRank {
+			overall: self.rank,
+			stream: self.skillset_ranks.stream,
+			jumpstream: self.skillset_ranks.jumpstream,
+			handstream: self.skillset_ranks.handstream,
+			jackspeed: self.skillset_ranks.jacks,
+			chordjack: self.skillset_ranks.chordjacks,
+			stamina: self.skillset_ranks.stamina,
+			technical: self.skillset_ranks.technical,
+		}
+	}
+}
+
+#[derive(serde::Deserialize)]
+pub struct SkillsetRanks7 {
+	pub stream: u32,
+	pub jumpstream: u32,
+	pub handstream: u32,
+	pub jacks: u32,
+	pub chordjacks: u32,
+	pub stamina: u32,
+	pub technical: u32,
+}
+
+#[derive(serde::Deserialize)]
+pub struct Skillsets8 {
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub overall: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub stream: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub jumpstream: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub handstream: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub jacks: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub chordjacks: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub stamina: f32,
+	#[serde(deserialize_with = "deserialize_stringified_f32")]
+	pub technical: f32,
+}
+
+impl Skillsets8 {
 	pub fn skillsets8(&self) -> etterna::Skillsets8 {
 		etterna::Skillsets8 {
 			overall: self.overall,
@@ -97,9 +165,4 @@ impl Score {
 	pub fn skillsets7(&self) -> etterna::Skillsets7 {
 		self.skillsets8().to_skillsets7()
 	}
-}
-
-#[derive(serde::Deserialize)]
-pub struct Song {
-	pub name: String,
 }

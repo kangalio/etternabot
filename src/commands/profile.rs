@@ -88,20 +88,21 @@ pub async fn profile(
 		None => (ctx.data().get_eo_username(ctx.author()).await?, true),
 	};
 
-	let details = ctx.data().v1.user_data(&eo_username).await?;
-	let ranks = ctx.data().v1.user_ranks(&eo_username).await?;
+	let details = ctx.data().eo2.user(&eo_username).await?;
+	let ranks = details.rank();
 
 	let mut title = eo_username.to_owned();
-	if details.is_moderator {
-		title += " (Mod)";
+	if details.roles.contains(&"admin".into()) {
+		title += " (Admin)";
 	}
-	if details.is_patreon {
+	// This doesn't exist with EO2 yet
+	if details.supporter {
 		title += " (Patron)";
 	}
 
 	let (mut min_ss_rating, mut max_ss_rating) = (f32::INFINITY, f32::NEG_INFINITY);
 	for ss in etterna::Skillset8::iter() {
-		let ss_rating = details.rating.get(ss);
+		let ss_rating = details.skillsets.skillsets8().get(ss);
 		if ss_rating < min_ss_rating {
 			min_ss_rating = ss_rating;
 		}
@@ -126,8 +127,8 @@ pub async fn profile(
 					rating_string += &format!(
 						"{: >10}:   {: >5.2} ({: >+4.2})  #{: <4}\n",
 						skillset.to_string(),
-						details.rating.get(skillset),
-						details.rating.get(skillset) - prev.get(skillset),
+						details.skillsets.skillsets8().get(skillset),
+						details.skillsets.skillsets8().get(skillset) - prev.get(skillset),
 						ranks.get(skillset),
 					)
 				}
@@ -135,7 +136,7 @@ pub async fn profile(
 					rating_string += &format!(
 						"{: >10}:   {: >5.2}  #{: <4}\n",
 						skillset.to_string(),
-						details.rating.get(skillset),
+						details.skillsets.skillsets8().get(skillset),
 						ranks.get(skillset),
 					)
 				}
@@ -146,7 +147,7 @@ pub async fn profile(
 		if overwrite_prev_ratings {
 			// TODO: could create new entry if doesn't already exist to store ratings
 			if let Some(previous_ratings) = previous_ratings {
-				*previous_ratings = Some(details.rating.clone());
+				*previous_ratings = Some(details.skillsets.skillsets8().clone());
 			}
 		}
 
@@ -165,7 +166,7 @@ pub async fn profile(
 						))
 						.icon_url(format!(
 							"https://etternaonline.com/img/flags/{}.png",
-							details.country_code.as_deref().unwrap_or("")
+							Some(&*details.country).as_deref().unwrap_or("")
 						))
 				})
 				.thumbnail(format!(
@@ -173,10 +174,7 @@ pub async fn profile(
 					&details.avatar
 				))
 				.color(crate::ETTERNA_COLOR);
-			if let Some(modifiers) = &details.default_modifiers {
-				embed.field("Default modifiers:", modifiers, false);
-			}
-			if let Some(about_me) = &details.about_me {
+			if let Some(about_me) = Some(&details.bio) {
 				let about_me = html2md::parse_html(about_me);
 				if !about_me.is_empty() {
 					embed.field(

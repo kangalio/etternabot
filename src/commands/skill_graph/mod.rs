@@ -179,7 +179,7 @@ async fn skillgraph_inner(
 					}
 				}
 
-				Some((parsedate(&score.datetime), score.skillsets7()))
+				Some((parsedate(&score.datetime), score.ssr.skillsets7()))
 			}),
 			false,
 		)
@@ -288,7 +288,7 @@ pub async fn accuracygraph(
 						return None;
 					}
 				}
-				Some((&*score.datetime, score.skillsets7()))
+				Some((&*score.datetime, score.ssr.skillsets7()))
 			}),
 			false,
 		)

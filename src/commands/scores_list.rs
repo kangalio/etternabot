@@ -226,7 +226,7 @@ pub async fn lastsession(
 			rate: s.rate,
 			scorekey: s.key,
 			song_name: s.song.name,
-			ssr_overall: s.overall,
+			ssr_overall: s.ssr.overall,
 			wifescore: s.wife,
 		})
 		.collect();

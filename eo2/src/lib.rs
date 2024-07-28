@@ -29,8 +29,8 @@ impl std::error::Error for Error {
 }
 
 #[derive(serde::Deserialize)]
-struct Response {
-	data: Vec<Score>,
+struct Response<T> {
+	data: T,
 }
 
 #[derive(Default)]
@@ -83,19 +83,20 @@ impl Client {
 			.get(url)
 			.send()
 			.await?
-			.json::<Response>()
+			.json::<Response<Vec<Score>>>()
 			.await?
 			.data)
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn it_works() {
-		let result = add(2, 2);
-		assert_eq!(result, 4);
+	pub async fn user(&self, username: &str) -> Result<User, Error> {
+		let url = format!("https://api.etternaonline.com/api/users/{}", username);
+		Ok(self
+			.reqwest
+			.get(url)
+			.send()
+			.await?
+			.json::<Response<User>>()
+			.await?
+			.data)
 	}
 }
